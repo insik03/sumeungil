@@ -105,6 +105,25 @@ _SIDO_SHORT: dict[str, str] = {
 _SUFFIXES = ("특별자치시", "특별자치도", "광역시", "특별시", "시", "군", "구")
 
 
+# --- 부록 Y additive(2026-08-11): 시도(area_cd) 단위 조회용 공용 헬퍼 ---
+# 지역 허브가 "시도 선택 → 그 시도 전체"로 바뀌면서 area_cd 를 받는 엔드포인트가 셋 생겼다
+# (regions/children · places/featured · festivals). 형식 검증과 시도 표기를 **한 곳**에서
+# 하도록 여기에 둔다 — 지역 코드 체계의 소유자가 이 모듈이기 때문이다.
+
+def is_area_cd(value: str | None) -> bool:
+    """시도코드(법정동 2자리 숫자) 형식인가. 실재 여부는 보지 않는다(형식 검사 전용)."""
+    s = (value or "").strip()
+    return len(s) == 2 and s.isdigit()
+
+
+def sido_label(area_cd: str | None) -> str | None:
+    """시도코드 → 짧은 표기(예: '41' → '경기'). 사전에 없으면 None(지어내지 않는다).
+
+    검색 별칭이 쓰는 _SIDO_SHORT 를 그대로 재사용한다 — 화면 표기와 별칭이 갈리지 않게.
+    """
+    return _SIDO_SHORT.get((area_cd or "").strip())
+
+
 def _strip_suffix(name: str) -> str:
     for suf in _SUFFIXES:
         if name.endswith(suf) and len(name) > len(suf):

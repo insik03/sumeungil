@@ -21,6 +21,7 @@ from ..deps import (
     get_summarizer,
     get_weather_provider,
 )
+from ..regions.seed import is_area_cd
 from ..repositories.congestion_repo import CongestionRepository
 from ..repositories.spot_repo import SpotRepository
 from ..schemas.outlook import SeasonalResponse
@@ -114,10 +115,17 @@ async def get_featured(
     # 부록 S additive(2026-08-01): hidden_picks 는 매 요청 무작위 표본이다. seed 를 주면
     # 그 표본이 결정적이 된다(검증·재현용). trending 은 seed 와 무관하게 항상 고정.
     seed: int | None = Query(None, ge=0, le=2_147_483_647),
+    # 부록 Y additive(2026-08-11): 시도 전체 집계. **region_code 가 오면 무시**된다(더 좁은
+    # 지정이 이긴다) → 기존 호출부는 완전 불변. 형식 위반은 조용히 넘기지 않고 400 이다 —
+    # 오타를 무시하면 종전처럼 기본 지역(부산)이 조용히 내려가 이번에 고친 결함이 재발한다.
+    area_cd: str | None = Query(None, description="시도코드 2자리(예: 41=경기). region_code 미지정 시에만 적용"),
     spot_repo: SpotRepository = Depends(get_spot_repository),
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     cache: Cache = Depends(get_cache),
 ):
+    if area_cd is not None and not is_area_cd(area_cd):
+        return _error(400, "INVALID_AREA", "시도코드(area_cd)는 2자리 숫자여야 합니다.")
+
     try:
         return await featured_service.build_featured_response(
             region_code=region_code,
@@ -127,6 +135,7 @@ async def get_featured(
             cache=cache,
             diverse=diverse,
             seed=seed,
+            area_cd=area_cd,
         )
     except Exception:  # noqa: BLE001
         logger.exception("places/featured 처리 중 예기치 못한 오류")

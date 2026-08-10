@@ -4751,3 +4751,91 @@ schema_version 3
 - 비콘 경로는 **클라이언트가 보낸다** — 조작 가능하다. 운영 참고용이지 정산 근거가 아니다.
 - 봇/크롤러도 방문자로 센다(User-Agent 판별을 하지 않는다).
 - `visit_repo.prune` 은 만들었으나 **아직 자동 호출되지 않는다** — 90일 뒤 정리 스케줄 필요.
+
+---
+
+## 부록 Y — 지역 허브 A안: 시도 전체 집계 (2026-08-11)
+
+대표 결정(A안): **시도를 고르면 그 시도 전체 시군구에서 추천을 집계**하고, 시군구 드롭다운으로
+좁힌다. 종전에는 `/regions` 가 시도별 **대표 시군구 1곳**(경기=수원 장안구)만 조회해서
+"경기도인데 왜 수원만 나오냐"가 됐다.
+
+계약은 **전부 additive** 다 — 기존 파라미터·응답 필드의 의미는 하나도 바뀌지 않았다.
+`region_code` 가 오면 언제나 종전 경로를 그대로 탄다(area_cd 는 무시된다).
+
+### Y.1 신규 `GET /api/v1/regions/children?area_cd=41`
+
+| 항목 | 값 |
+|---|---|
+| 성공 | 200 `{"area_cd":"41","label":"경기","items":[{"region_code":"41820","label":"경기도 가평군","spot_count":269}, ...]}` |
+| items | 그 시도 소속이면서 **스팟이 1곳 이상 실재하는** 시군구만. `label` 가나다순 |
+| 0건 | `items: []` + 200 (에러 아님). 예: `area_cd=99` |
+| 형식 위반 | 400 `{"error":{"code":"INVALID_AREA", ...}}` (2자리 숫자가 아닐 때). `area_cd` 누락은 FastAPI 기본 422 |
+| label | 시도 짧은 표기(`_SIDO_SHORT` 재사용). **사전에 없는 코드면 null** — 라벨을 지어내지 않는다 |
+
+- `label` 은 seed 표기 그대로다(예: "경기도 가평군"). 프론트에서 접두 시도명을 떼어 쓰는 건
+  표시 문제이고, 서버는 사전 원문을 그대로 준다.
+- **스팟 0곳인 시군구를 뺀 이유**: 이 목록은 그대로 드롭다운이 되고 선택 즉시 조회로 이어진다.
+  사전에는 있으나 수집분이 없는 시군구가 실재한다(인천 1곳) — 넣으면 고르는 순간 빈 화면이다.
+- `spot_count` 는 로컬 스토어(시드) 기준 개수다. 원천 호출 0.
+
+```mermaid
+flowchart LR
+  A["시도 선택 (area_cd)"] --> B["/regions/children"]
+  B --> C["시군구 드롭다운"]
+  A --> D["/places/featured?area_cd=NN<br/>/festivals?area_cd=NN"]
+  C -->|선택| E["/places/featured?region_code=NNNNN<br/>(종전 경로 그대로)"]
+```
+
+### Y.2 `GET /api/v1/places/featured` — optional `area_cd`
+
+| 규칙 | 내용 |
+|---|---|
+| 우선순위 | `region_code` > `area_cd` > `diverse`. region_code 가 있으면 area_cd 는 **무시** |
+| 형식 위반 | 400 `INVALID_AREA` (조용히 무시하면 종전처럼 기본 지역(부산)이 내려가 결함이 재발한다) |
+| `region` | **null** — 여러 시군구가 섞인 목록에 대표 시군구를 지어내지 않는다(diverse 모드와 같은 규약) |
+| `area` (신규) | `{"area_cd":"41","label":"경기"}`. area_cd 조회일 때만 채워지고 그 외 경로에서는 null |
+| `region_name` | 각 카드에 **반드시** 채워진다(시군구 label) → 프론트가 "가평군 · ○○" 표기에 쓴다 |
+| totals | `trending_total`/`hidden_total` 은 **시도 전체 기준 후보 총수**(의미 동일) |
+
+**혼잡도 원천 호출 방어(중요).** 혼잡도 board 는 시군구 단위 호출이라 경기 44곳을 전부 부르면
+요청 1건이 원천 호출 44건이 된다(2026-07-29 쿼터 실사고와 같은 경로). 그래서 board 는
+concierge 의 도 단위 질문이 쓰던 `province_targets()` **선례를 그대로 재사용**해 *스팟이 많은 순
+상위 6곳*만 호출한다(결정적 → 캐시가 그대로 듣는다).
+
+그 결과 두 섹션의 범위가 다르다 — 이건 의도된 것이다:
+
+| 섹션 | 후보 범위 | 원천 호출 |
+|---|---|---|
+| `trending` | board 를 호출한 **상위 6개 시군구** (혼잡도가 있어야 "지금 뜨는"이 성립) | 최대 6 (캐시 시 0) |
+| `hidden_picks` | **시도 전체 시군구 스팟 풀** | 0 (사진만 종전 예산 = 노출 × 1.5 이하) |
+
+- 이름 매칭은 **시군구 단위**로 한다. 시도 전체 스팟(수천 곳)에 부분일치를 돌리면 다른 시·군의
+  동명 스팟에 잘못 붙는다(원천 board 는 그 시군구 관광지만 담는다).
+- 혼잡도 값도 자기 시군구 board 에서만 가져온다(없으면 미상 → 이름순 안정 정렬).
+- `hidden_picks` 는 **시군구당 상한**을 둬 한 도시로 쏠리지 않게 한다. 상한은
+  `max(2, ceil(필요 개수 / 후보 시군구 수))` — 시군구가 1곳뿐인 시도(세종)에서도 필요 개수를
+  채울 수 있게 용량을 보장한다.
+
+### Y.3 `GET /api/v1/festivals` — optional `area_cd`
+
+- `region_code` 우선. `area_cd` 만 오면 그 시도 전체 축제(= 전국과 시군구의 중간 단계).
+- 필터는 법정동 5자리의 **앞 2자리** 비교다. 우리 지역 사전(REGIONS)은 "스팟이 수집된 지역"이라
+  더 좁아서, 사전 대조로 거르면 사전에 없는 시군구의 축제가 사라진다.
+- 형식 위반은 400 `INVALID_AREA`. `region` 은 시군구 지정일 때만 채워진다(종전과 동일).
+- **원천 호출 증가 0** — 전국 스윕 캐시에 대한 메모리 필터일 뿐이다(region_code 필터와 같은 자리).
+
+### Y.4 실측 검증 (2026-08-11, 로컬 uvicorn + 실데이터)
+
+| 확인 | 결과 |
+|---|---|
+| `children?area_cd=41` | 200, 44곳, 가나다순, 전부 spot_count>0 (가평군 269 …) |
+| `children?area_cd=51 / 36 / 28` | 18곳 / 1곳(세종) / 11곳(스팟 0곳 1개 제외됨) |
+| `children?area_cd=99 / 4 / abc / 41820` | 200 items:[] / 400 / 400 / 400 |
+| `featured?area_cd=41` | trending 8곳이 가평·포천·광주·화성 등 **5개 시·군**에 분산, region_name 100% 채움, totals 106/4386 |
+| `featured?area_cd=41&limit=48` | hidden 48곳이 **28개 시·군**에 분산, 사진 48/48 |
+| `featured?area_cd=36`(세종) | hidden 10곳(시군구 1곳이어도 개수 확보) |
+| `featured?area_cd=41` 응답시간 | 콜드 6.4s(board 6건 + 사진) → **웜 0.10s** |
+| `featured?region_code=26350&area_cd=41` | region_code 승 — 종전 응답과 동일 |
+| 무회귀(HEAD 대비 동일 seed) | featured 4종·festivals 4종·regions/search 3종 **응답 동일**(추가된 키는 `area`(null) 하나뿐) |
+| 오프라인 검증 스위트 | `verify_featured_limit.py` 50/50, `verify_collections_paging.py` 42/42, `verify_recommend_taste_priority.py` 17/17 |

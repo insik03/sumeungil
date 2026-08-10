@@ -1,16 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { readRegionCode } from "../lib/regionQuery";
 import Link from "next/link";
-import { FeaturedResponse, FestivalsResponse, fetchFeatured, fetchFestivals } from "../lib/api";
+import {
+  FeaturedResponse,
+  FestivalsResponse,
+  RegionChild,
+  fetchFeatured,
+  fetchFestivals,
+  fetchRegionChildren,
+} from "../lib/api";
 import { FeaturedCardSkeleton, FeaturedSpotCard } from "./FeaturedSpots";
 import { FestivalCard } from "./FestivalBanner";
 import SidoStrip from "./regions/SidoStrip";
 import { DEFAULT_SIDO_CODE, SIDO_REGIONS } from "./regions/constants";
 
 type FetchStatus = "loading" | "success" | "error";
+
+/** "전체" 옵션의 select value. 실제 시군구 코드(숫자 5자리)와 절대 겹치지 않는다. */
+const ALL_SIGUNGU_VALUE = "__all__";
+
+/**
+ * §47(신규, 지역 허브 A안, 오케스트레이터 지시서 2026-08-11 — 대표 승인) — children API의
+ * "경기도 가평군" 같은 전체 명칭에서 시도 접두("경기도 ")를 떼고 "가평군"만 보여준다. 데이터를
+ * 새로 짓지 않고 서버가 준 문자열을 가공만 한다 — 첫 공백 앞 토큰(시도명)만 제거, 공백이 없으면
+ * (세종처럼 시군구가 없는 케이스) 원문 그대로 둔다.
+ */
+function shortenSigunguLabel(label: string): string {
+  const idx = label.indexOf(" ");
+  if (idx === -1) return label;
+  return label.slice(idx + 1);
+}
 
 const FESTIVAL_LIMIT = 4;
 
@@ -37,13 +59,19 @@ const FEATURED_TIERS = [8, 24, 48];
  * 건 별로"). 테마는 이미 `/themes` 전용 페이지가 전담한다(ThemesContent.tsx, 지역 선택 포함) —
  * 중복 노출을 없애고, 대신 인기/숨은 스팟에 더보기·접기를 붙이고 축제 섹션을 강화했다.
  *
- * 신규 backend 0 원칙 — 전부 기존 계약 재사용:
- * - fetchFeatured(regionCode, limit): trending(지금 많이 찾는 곳) + hidden_picks(숨은 발견,
- *   ★우위 노출) — limit을 8→24→48로 키워가며 "더보기"(§45, FEATURED_TIERS 참고).
- * - fetchFestivals(regionCode, 4): 진행중·예정 축제 프리뷰. 응답의 `total`은 이 4건 미리보기와
- *   무관하게 "필터를 통과한 전체 수"라(festival_service.py 주석) — 4건보다 많으면 "전체 N건
- *   보기" CTA로 지역명을 명시해 `/festivals`로 보낸다(그 페이지가 지역 쿼리를 받지 않아 필터는
- *   유지되지 않지만, 몇 건이 더 있는지는 지어내지 않고 정확히 알려준다).
+ * §47(개편, 지역 허브 A안, 오케스트레이터 지시서 2026-08-11 — 대표 승인) — 시도를 고르면
+ * 대표 시군구 1곳이 아니라 **그 시도 전체**에서 집계한다. 시군구 드롭다운(기본 "전체")으로
+ * 좁힐 수 있다. 신규 backend는 children 엔드포인트 1개뿐, featured/festivals는 기존 계약에
+ * `area_cd`(시도 전체 조회) 파라미터만 additive로 더했다:
+ * - fetchFeatured(regionCode, limit, signal, diverse, areaCd): "전체"면 areaCd만, 특정
+ *   시군구면 regionCode만 넘긴다(계약상 regionCode 우선이라 동시에 보내지 않는다) —
+ *   trending(지금 많이 찾는 곳) + hidden_picks(숨은 발견, ★우위 노출), limit을 8→24→48로
+ *   키워가며 "더보기"(§45, FEATURED_TIERS 참고).
+ * - fetchFestivals(regionCode, 4, signal, { areaCd }): 위와 동일 규약. 응답의 `total`은 이
+ *   4건 미리보기와 무관하게 "필터를 통과한 전체 수"라(festival_service.py 주석) — 4건보다
+ *   많으면 "전체 N건 보기" CTA로 지역명을 명시해 `/festivals`로 보낸다(그 페이지가 지역
+ *   쿼리를 받지 않아 필터는 유지되지 않지만, 몇 건이 더 있는지는 지어내지 않고 정확히 알려준다).
+ * - fetchRegionChildren(areaCd): 드롭다운 옵션(스팟 있는 시군구만, 가나다순).
  *
  * 우위 규율(§3, 06-deep-audit-gap-plan.md) — "숨은 발견" 섹션에 W2(예상 혼잡도 로드밸런싱)를
  * 문구로 명시해, 흡수 화면에도 구석구석에 없는 우리 축을 반드시 노출한다.
@@ -57,22 +85,31 @@ const FEATURED_TIERS = [8, 24, 48];
 export default function RegionsContent() {
   // 2026-08-01(대표 지적 "경기권 보고 전체보기로 나갔는데 부산이 뜬다") — 이 화면이 URL 의
   // `?region_code=` 를 **아예 읽지 않아** 항상 기본 지역(부산)으로 시작했다. 다른 화면들이
-  // 이미 쓰는 readRegionCode 규칙(숫자 5자리)을 그대로 써서 초기 시도를 정한다.
-  // 전달된 시군구 코드가 SIDO_REGIONS 대표값과 달라도 **앞 2자리(시도)로 매칭**한다
-  // (예: 41111 수원 장안 → 경기 41). 매칭 실패 시에만 기본값을 쓴다(지어내지 않는다).
+  // 이미 쓰는 readRegionCode 규칙(숫자 5자리)을 그대로 써서 초기 시도/시군구를 정한다.
+  // 전달된 시군구 코드는 **앞 2자리(시도)로 매칭**한다(예: 41820 경기 가평군 → 경기 41) —
+  // §47(개편) 이후로는 SIDO_REGIONS의 하드코딩 대표값과 일치할 필요가 없다(임의의 실제 시군구
+  // 코드를 그대로 드롭다운 선택값으로 쓴다). 매칭 실패 시에만 기본값(시도 26/전체)을 쓴다.
   const searchParams = useSearchParams();
-  const initialSido = (() => {
+  const { initialSidoCode, initialSigunguCode } = (() => {
     const code = readRegionCode(searchParams.get("region_code"));
-    if (!code) return DEFAULT_SIDO_CODE;
-    const exact = SIDO_REGIONS.find((s) => s.regionCode === code);
-    if (exact) return exact.sidoCode;
+    if (!code) return { initialSidoCode: DEFAULT_SIDO_CODE, initialSigunguCode: null as string | null };
     const bySido = SIDO_REGIONS.find((s) => s.sidoCode === code.slice(0, 2));
-    return bySido ? bySido.sidoCode : DEFAULT_SIDO_CODE;
+    if (!bySido) return { initialSidoCode: DEFAULT_SIDO_CODE, initialSigunguCode: null as string | null };
+    return { initialSidoCode: bySido.sidoCode, initialSigunguCode: code };
   })();
-  const [selectedSidoCode, setSelectedSidoCode] = useState(initialSido);
+  const [selectedSidoCode, setSelectedSidoCode] = useState(initialSidoCode);
+  // null = "전체"(§47 기본값). 시도를 바꾸면 항상 "전체"로 리셋한다(handleSelectSido).
+  const [selectedSigunguCode, setSelectedSigunguCode] = useState<string | null>(initialSigunguCode);
   const selectedSido =
     SIDO_REGIONS.find((s) => s.sidoCode === selectedSidoCode) ?? SIDO_REGIONS[0];
-  const regionCode = selectedSido.regionCode;
+  // "전체" 모드에서 /recommend·/course CTA에 실을 대표 시군구 — 그 두 화면은 여전히 구체적인
+  // sigungu_cd 1개가 필요해(자체 계약, 이번 지시서 범위 밖) 기존 하드코딩 대표값을 그대로
+  // 폴백으로 쓴다. 사용자가 시군구를 직접 골랐으면 그 값이 우선한다(더 구체적이니 더 정확하다).
+  const ctaRegionCode = selectedSigunguCode ?? selectedSido.regionCode;
+
+  // §47 — children(시군구 드롭다운) 옵션. 시도가 바뀔 때만 재조회한다.
+  const [childrenStatus, setChildrenStatus] = useState<FetchStatus>("loading");
+  const [sigunguChildren, setSigunguChildren] = useState<RegionChild[]>([]);
 
   const [featuredStatus, setFeaturedStatus] = useState<FetchStatus>("loading");
   const [featured, setFeatured] = useState<FeaturedResponse | null>(null);
@@ -84,12 +121,43 @@ export default function RegionsContent() {
   const [festivalsStatus, setFestivalsStatus] = useState<FetchStatus>("loading");
   const [festivals, setFestivals] = useState<FestivalsResponse | null>(null);
 
+  /** 시도 칩 클릭 핸들러 — 시도를 바꾸면 시군구 선택은 항상 "전체"로 리셋한다(지시서 요구사항).
+   *  useEffect로 selectedSidoCode 변화를 감시해 리셋하면 한 프레임 동안 "새 시도 + 옛 시군구"라는
+   *  잘못된 조합으로 API를 호출하게 돼, 클릭 핸들러에서 두 상태를 함께 갱신한다. */
+  const handleSelectSido = (code: string) => {
+    setSelectedSidoCode(code);
+    setSelectedSigunguCode(null);
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setChildrenStatus("loading");
+    fetchRegionChildren(selectedSidoCode, controller.signal)
+      .then((res) => {
+        setSigunguChildren(res.items);
+        setChildrenStatus("success");
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        // 실패해도 "전체"는 계속 동작해야 한다(지시서 요구사항) — 드롭다운만 "전체" 단일 옵션으로 남는다.
+        setSigunguChildren([]);
+        setChildrenStatus("error");
+      });
+    return () => controller.abort();
+  }, [selectedSidoCode]);
+
   useEffect(() => {
     const controller = new AbortController();
     setFeaturedStatus("loading");
     setFeaturedTierIdx(0);
     setFeaturedMoreError(false);
-    fetchFeatured(regionCode, FEATURED_TIERS[0], controller.signal)
+    fetchFeatured(
+      selectedSigunguCode ?? undefined,
+      FEATURED_TIERS[0],
+      controller.signal,
+      undefined,
+      selectedSigunguCode ? undefined : selectedSidoCode
+    )
       .then((res) => {
         setFeatured(res);
         setFeaturedStatus("success");
@@ -99,12 +167,14 @@ export default function RegionsContent() {
         setFeaturedStatus("error");
       });
     return () => controller.abort();
-  }, [regionCode]);
+  }, [selectedSidoCode, selectedSigunguCode]);
 
   useEffect(() => {
     const controller = new AbortController();
     setFestivalsStatus("loading");
-    fetchFestivals(regionCode, FESTIVAL_LIMIT, controller.signal)
+    fetchFestivals(selectedSigunguCode ?? undefined, FESTIVAL_LIMIT, controller.signal, {
+      areaCd: selectedSigunguCode ? undefined : selectedSidoCode,
+    })
       .then((res) => {
         setFestivals(res);
         setFestivalsStatus("success");
@@ -114,7 +184,27 @@ export default function RegionsContent() {
         setFestivalsStatus("error");
       });
     return () => controller.abort();
-  }, [regionCode]);
+  }, [selectedSidoCode, selectedSigunguCode]);
+
+  /** §47 — 드롭다운 표시용 라벨. children 목록에서 우선 찾고(정상 경로), 딥링크로 들어온
+   *  코드가 그 시도의 children 목록에 없는 예외 상황(예: 서버 최소 스팟 기준 미달로 목록엔
+   *  빠졌지만 개별 조회는 되는 코드)엔 featured/festivals 응답의 region.region_name으로
+   *  보강한다(§H/§K 계약 — 둘 다 실제 서버 값, 지어내지 않는다). 그마저 없으면 코드 자체를
+   *  보여줘 최소한 선택값이 사라지지는 않게 한다. */
+  const selectedChild =
+    sigunguChildren.find((c) => c.region_code === selectedSigunguCode) ?? null;
+  const fallbackSigunguLabel =
+    featured?.region?.region_code === selectedSigunguCode
+      ? featured.region.region_name
+      : festivals?.region?.region_code === selectedSigunguCode
+        ? festivals.region.region_name
+        : selectedSigunguCode;
+  const selectedSigunguFullLabel = selectedChild?.label ?? fallbackSigunguLabel ?? "";
+
+  const handleSelectSigungu = (e: ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setSelectedSigunguCode(value === ALL_SIGUNGU_VALUE ? null : value);
+  };
 
   const trending = featured?.trending ?? [];
   const hiddenPicks = featured?.hidden_picks ?? [];
@@ -141,7 +231,13 @@ export default function RegionsContent() {
     const nextLimit = FEATURED_TIERS[nextIdx];
     setFeaturedLoadingMore(true);
     setFeaturedMoreError(false);
-    fetchFeatured(regionCode, nextLimit)
+    fetchFeatured(
+      selectedSigunguCode ?? undefined,
+      nextLimit,
+      undefined,
+      undefined,
+      selectedSigunguCode ? undefined : selectedSidoCode
+    )
       .then((res) => {
         setFeatured(res);
         setFeaturedTierIdx(nextIdx);
@@ -187,13 +283,55 @@ export default function RegionsContent() {
           한적한 곳까지 함께 보여드려요.
         </p>
 
-        <SidoStrip selected={selectedSidoCode} onSelect={setSelectedSidoCode} />
+        <SidoStrip selected={selectedSidoCode} onSelect={handleSelectSido} />
 
         <div className="regions-current">
           <h2 className="regions-current__title">{selectedSido.shortName} 여행</h2>
-          <p className="regions-current__caption">
-            지금은 {selectedSido.representativeLabel} 스팟을 중심으로 보여드려요.
-          </p>
+
+          {/* §47(신규) — 시군구 드롭다운. 기본 "전체"(그 시도 전체 집계), 특정 시군구를 고르면
+              기존 region_code 흐름 그대로 좁혀서 보여준다. children 실패 시에도 "전체" 단일
+              옵션으로 계속 동작한다(지시서 요구사항). */}
+          <div className="regions-sigungu-picker">
+            <label htmlFor="regions-sigungu-select" className="regions-sigungu-picker__label">
+              시군구로 좁혀보기
+            </label>
+            <select
+              id="regions-sigungu-select"
+              className="regions-sigungu-select"
+              value={selectedSigunguCode ?? ALL_SIGUNGU_VALUE}
+              onChange={handleSelectSigungu}
+              disabled={childrenStatus === "loading"}
+              aria-label={`${selectedSido.shortName} 시군구 선택`}
+            >
+              <option value={ALL_SIGUNGU_VALUE}>전체</option>
+              {sigunguChildren.map((child) => (
+                <option key={child.region_code} value={child.region_code}>
+                  {shortenSigunguLabel(child.label)}
+                </option>
+              ))}
+              {/* 딥링크로 들어온 코드가 이 시도의 children 목록에 없는 예외 상황에도 선택값을
+                  잃지 않도록 폴백 옵션을 하나 더 둔다(위 selectedSigunguFullLabel 주석 참고). */}
+              {selectedSigunguCode &&
+                !sigunguChildren.some((c) => c.region_code === selectedSigunguCode) && (
+                  <option value={selectedSigunguCode}>
+                    {shortenSigunguLabel(selectedSigunguFullLabel)}
+                  </option>
+                )}
+            </select>
+            {childrenStatus === "error" && (
+              <p className="regions-sigungu-picker__error" role="status">
+                시군구 목록을 불러오지 못했어요 — 전체 보기는 계속 이용할 수 있어요.
+              </p>
+            )}
+          </div>
+
+          {/* §47 — "이 지역은 사실 ○○ 기준" 정직 캡션은 "전체"가 이제 진짜 시도 전체 집계라
+              필요 없어져 뺐다. 특정 시군구를 골랐을 때만, 무엇을 보고 있는지 확인해준다. */}
+          {selectedSigunguCode && (
+            <p className="regions-current__caption">
+              지금은 {selectedSigunguFullLabel} 스팟만 보여드려요.
+            </p>
+          )}
         </div>
       </section>
 
@@ -407,13 +545,13 @@ export default function RegionsContent() {
           <h2 className="regions-cta__title">{selectedSido.shortName} 여행, 이렇게 이어가보세요</h2>
           <div className="regions-cta__row">
             <Link
-              href={`/recommend?region_code=${encodeURIComponent(regionCode)}`}
+              href={`/recommend?region_code=${encodeURIComponent(ctaRegionCode)}`}
               className="btn btn--coral"
             >
               이 지역 맞춤 추천 받기
             </Link>
             <Link
-              href={`/course?region_code=${encodeURIComponent(regionCode)}`}
+              href={`/course?region_code=${encodeURIComponent(ctaRegionCode)}`}
               className="btn btn--outline"
             >
               이 지역 하루 코스 짜기

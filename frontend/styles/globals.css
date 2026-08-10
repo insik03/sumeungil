@@ -4663,7 +4663,61 @@ input:focus-visible,
   letter-spacing: -0.01em;
 }
 .regions-current__caption {
-  margin-top: 4px;
+  margin-top: var(--sp-3);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* §47(신규, 지역 허브 A안, 2026-08-11 대표 승인) — 시군구 드롭다운. .date-input(플래너 폼)과
+   동일 시각 언어(2px n-100 보더, r-md, min-height touch-min)를 그대로 잇는다 — 사이트 전역
+   입력형 컨트롤 톤 통일, 새 색·라운드 값을 만들지 않는다. 화살표는 기존 svg 화살표 아이콘
+   (예: 더보기 버튼)과 동일한 chevron 모양을 배경 이미지로 재사용한다. */
+.regions-sigungu-picker {
+  margin-top: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 280px;
+}
+.regions-sigungu-picker__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.regions-sigungu-select {
+  display: block;
+  width: 100%;
+  min-height: var(--touch-min);
+  border: 2px solid var(--n-100);
+  border-radius: var(--r-md);
+  padding: 0 var(--sp-8) 0 var(--sp-4);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--ink);
+  background-color: var(--white);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%233f5068' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--sp-4) center;
+  background-size: 16px;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.18s;
+}
+.regions-sigungu-select:hover {
+  border-color: var(--g-500);
+}
+.regions-sigungu-select:focus-visible {
+  outline: 3px solid var(--n-500);
+  outline-offset: 1px;
+  border-color: var(--n-500);
+}
+.regions-sigungu-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.regions-sigungu-picker__error {
   font-size: var(--text-xs);
   color: var(--ink-muted);
   font-weight: 600;

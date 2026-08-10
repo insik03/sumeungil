@@ -147,8 +147,21 @@ class FeaturedSpot(BaseModel):
     photo_credit: str | None = None
 
 
+class AreaRef(BaseModel):
+    """시도 1개를 가리키는 최소 식별자 (부록 Y). region(=시군구)과 **다른 층위**다."""
+
+    area_cd: str                # 법정동 시도 2자리
+    label: str | None = None    # 짧은 표기("경기"). 사전에 없으면 null(지어내지 않음)
+
+
 class FeaturedResponse(BaseModel):
+    # 시군구 1곳(region_code)으로 조회했을 때만 채워진다. 시도 집계(area_cd)·diverse 모드에서는
+    # **null** — 여러 시군구가 섞인 목록에 대표 시군구를 지어내지 않는다. 어느 지역 카드인지는
+    # 각 FeaturedSpot.region_name 이 알려준다(종전 diverse 모드와 동일한 규약).
     region: RecommendRegion | None = None
+    # ★ 부록 Y additive(2026-08-11): area_cd 로 조회했을 때 그 시도. 그 외 경로에서는 null.
+    # region 을 시도 의미로 재활용하지 않기 위한 별도 필드다(region 의 계약은 불변).
+    area: AreaRef | None = None
     trending: list[FeaturedSpot] = Field(default_factory=list)      # 지금 뜨는(붐비는 유명 관광지)
     hidden_picks: list[FeaturedSpot] = Field(default_factory=list)  # 오늘의 숨은 스팟(저노출)
     # --- 부록 H.6 additive(2026-08-01): "더보기" 판단용 총 수 ---

@@ -1051,17 +1051,25 @@ export interface FeaturedResponse {
  * 미선택 상태일 때만 true로 넘긴다("홈에 부산만 많다" 대표 피드백 대응) — true면 backend가 여러
  * 지역을 섞어 응답한다(§H 계약 확장, 프론트는 섞는 로직을 갖지 않는다). 기존 3-인자 호출부
  * (ThemeCollections·RegionsContent 등)는 그대로 두면 undefined로 전달돼 기존 동작 100% 유지.
+ *
+ * §47(신규, 지역 허브 A안, 오케스트레이터 지시서 2026-08-11) — `areaCd`(6번째 인자, additive).
+ * 시도 전체 집계 조회용(GET .../featured?area_cd=41). regionCode가 있으면 그쪽이 우선이라고
+ * 오케스트레이터 계약에 명시돼 있어(§확정 API 계약 2) 프론트도 둘을 동시에 보내지 않는다 —
+ * RegionsContent.tsx가 "전체" 선택 시에만 areaCd를, 특정 시군구 선택 시엔 regionCode만 넘긴다.
+ * 기존 5-인자 이하 호출부는 undefined로 전달돼 기존 동작 100% 유지.
  */
 export async function fetchFeatured(
   regionCode?: string,
   limit?: number,
   signal?: AbortSignal,
-  diverse?: boolean
+  diverse?: boolean,
+  areaCd?: string
 ): Promise<FeaturedResponse> {
   const qs = new URLSearchParams();
   if (regionCode) qs.set("region_code", regionCode);
   if (limit) qs.set("limit", String(limit));
   if (diverse) qs.set("diverse", "true");
+  if (areaCd) qs.set("area_cd", areaCd);
   const query = qs.toString();
 
   let res: Response;
@@ -1231,18 +1239,22 @@ export interface FestivalsResponse {
  * month/window_days만 필요한 화면(FestivalsContent)이 opts로 넘긴다:
  * - month: "YYYY-MM" 형식, 서버 계약 그대로 전달(프론트가 가공하지 않는다).
  * - windowDays: 서버 기본값 90/최대 365. 월 필터를 쓸 때만 365로 넉넉히 요청한다(호출부 책임).
+ * - areaCd(§47, 지역 허브 A안) — 시도 전체 축제 조회용(GET .../festivals?area_cd=41).
+ *   regionCode와 동시에 쓰지 않는다(fetchFeatured의 areaCd와 동일 규약, RegionsContent.tsx가
+ *   "전체" 선택 시에만 넘긴다).
  */
 export async function fetchFestivals(
   regionCode?: string,
   limit?: number,
   signal?: AbortSignal,
-  opts?: { month?: string; windowDays?: number }
+  opts?: { month?: string; windowDays?: number; areaCd?: string }
 ): Promise<FestivalsResponse> {
   const qs = new URLSearchParams();
   if (regionCode) qs.set("region_code", regionCode);
   if (limit) qs.set("limit", String(limit));
   if (opts?.month) qs.set("month", opts.month);
   if (opts?.windowDays) qs.set("window_days", String(opts.windowDays));
+  if (opts?.areaCd) qs.set("area_cd", opts.areaCd);
   const query = qs.toString();
 
   let res: Response;
@@ -1262,6 +1274,58 @@ export async function fetchFestivals(
   }
 
   return (await res.json()) as FestivalsResponse;
+}
+
+/* =========================================================================
+ * §47(신규) — 지역 허브 A안(RegionsContent.tsx) 시군구 드롭다운. 오케스트레이터 계약:
+ *   GET /api/v1/regions/children?area_cd={2자리 시도코드}
+ *   → { area_cd, label, items: [{ region_code, label, spot_count }] }
+ * "스팟이 있는 시군구만, 가나다순"으로 이미 서버가 정렬해 준다 — 프론트가 재정렬하지 않는다.
+ * 0건이면 items: []가 정상 200 응답(부록 K festivals와 동일 원칙, 에러 아님).
+ * ========================================================================= */
+
+/** GET /api/v1/regions/children 응답의 시군구 1개. */
+export interface RegionChild {
+  region_code: string;
+  /** 서버가 내려주는 전체 명칭(예: "경기도 가평군") — 프론트는 지어내지 않고 문자열 가공만 한다. */
+  label: string;
+  spot_count: number;
+}
+
+export interface RegionChildrenResponse {
+  area_cd: string;
+  label: string;
+  items: RegionChild[];
+}
+
+/**
+ * 신규(§47) — GET /api/v1/regions/children. area_cd는 필수(2자리 시도 코드).
+ * 백엔드가 아직 미배포/실패면 호출부(RegionsContent.tsx)가 "전체"만 남기고 드롭다운을
+ * 비활성화한다 — children이 없어도 area_cd 기반 featured/festivals 조회 자체는 계속 동작한다.
+ */
+export async function fetchRegionChildren(
+  areaCd: string,
+  signal?: AbortSignal
+): Promise<RegionChildrenResponse> {
+  const qs = new URLSearchParams({ area_cd: areaCd });
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/regions/children?${qs.toString()}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "시군구 목록을 불러오지 못했습니다.");
+  }
+
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "시군구 목록을 불러오지 못했습니다.");
+  }
+
+  return (await res.json()) as RegionChildrenResponse;
 }
 
 /* =========================================================================

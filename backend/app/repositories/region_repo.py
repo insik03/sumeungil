@@ -28,6 +28,11 @@ class RegionRepository(ABC):
     def search(self, q: str, limit: int) -> list[RegionSeed]:
         raise NotImplementedError
 
+    @abstractmethod
+    def by_area(self, area_cd: str) -> list[RegionSeed]:
+        """시도코드(2자리)에 속한 시군구 전부(사전 순서 보존). 없으면 [] (부록 Y)."""
+        raise NotImplementedError
+
 
 class StaticRegionRepository(RegionRepository):
     """seed.py 상수 기반 인메모리 검색. 프로세스 수명 동안 불변."""
@@ -39,6 +44,12 @@ class StaticRegionRepository(RegionRepository):
             (r, [_norm(r.label), *(_norm(a) for a in r.aliases)])
             for r in self._regions
         ]
+
+    def by_area(self, area_cd: str) -> list[RegionSeed]:
+        area = (area_cd or "").strip()
+        if not area:
+            return []
+        return [r for r in self._regions if r.area_cd == area]
 
     def search(self, q: str, limit: int) -> list[RegionSeed]:
         nq = _norm(q)

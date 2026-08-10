@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 
 from ..cache.base import Cache
 from ..deps import get_cache, get_weather_provider
+from ..regions.seed import is_area_cd
 from ..schemas.places import FestivalDetailResponse, FestivalsResponse
 from ..services import festival_detail_service, festival_service
 from ..services.festival_detail_service import FestivalNotFound
@@ -63,6 +64,9 @@ async def get_festivals(
     as_of: str | None = None,
     month: str | None = None,
     window_days: int | None = None,
+    # 부록 Y additive(2026-08-11): 시도 전체 축제. region_code 가 오면 무시된다(더 좁은 지정 우선).
+    # 형식 위반은 400 — 조용히 전국으로 떨어지면 사용자가 "경기 축제"를 본다고 착각한다.
+    area_cd: str | None = None,
     cache: Cache = Depends(get_cache),
 ):
     """축제 목록. 홈 배너(파라미터 없음)와 축제 전용 페이지가 같은 엔드포인트를 쓴다.
@@ -78,6 +82,8 @@ async def get_festivals(
             festival_service.month_bounds(month)
         except ValueError:
             return _error(400, "INVALID_MONTH", "month 는 YYYY-MM 형식이어야 합니다.")
+    if area_cd is not None and not is_area_cd(area_cd):
+        return _error(400, "INVALID_AREA", "시도코드(area_cd)는 2자리 숫자여야 합니다.")
 
     try:
         return await festival_service.build_festivals_response(
@@ -87,6 +93,7 @@ async def get_festivals(
             today=_parse_as_of(as_of),
             month=month,
             window_days=window_days,
+            area_cd=area_cd,
         )
     except Exception:  # noqa: BLE001
         logger.exception("festivals 처리 중 예기치 못한 오류")

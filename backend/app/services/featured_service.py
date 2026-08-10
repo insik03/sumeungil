@@ -17,15 +17,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from datetime import date
 
 from ..cache.base import Cache
 from ..config import settings
 from ..regions.nationwide import REGION_BLOCKS
-from ..regions.seed import REGIONS
+from ..regions.seed import REGIONS, sido_label
 from ..repositories.congestion_repo import CongestionRecord, CongestionRepository
 from ..repositories.spot_repo import SpotRecord, SpotRepository
 from ..schemas.places import (
+    AreaRef,
     FeaturedResponse,
     FeaturedSpot,
     RecommendRegion,
@@ -33,6 +35,7 @@ from ..schemas.places import (
 )
 from ..spots.region_map import get_tourapi_region
 from . import recommend_service, sampling, spot_detail_service
+from .concierge_service import province_targets  # 부록 Y: 시도→시군구 상위 N곳(선례 재사용)
 from .congestion_service import classify_level
 from .photo_service import Photo
 
@@ -110,17 +113,29 @@ async def build_featured_response(
     cache: Cache,
     diverse: bool = False,
     seed: int | None = None,
+    area_cd: str | None = None,
 ) -> FeaturedResponse:
     """seed(부록 S, 2026-08-01): hidden_picks 표본의 난수 시드. None 이면 요청마다 다르다.
     **trending 은 시드와 무관하게 항상 고정**(예상 혼잡도 상위 순위 자체가 정보다).
 
     limit(부록 H.6, 2026-08-01): `None` 이면 기본 8 + 숨은 스팟은 기본 상한 6(종전 동작 그대로).
     **명시하면 hidden_picks 도 그 수까지 늘어난다** — 후보가 모자라면 있는 만큼만(지어내지 않음).
+
+    area_cd(부록 Y, 2026-08-11): 시도 전체 집계. **region_code 가 있으면 무시**된다(더 좁은
+    지정이 이긴다) → 기존 호출부의 동작은 완전히 불변이다. 우선순위는 region_code > area_cd >
+    diverse 순이며, area_cd 형식 검증(2자리 숫자)은 API 레이어가 400 으로 막는다.
     """
     # 명시 여부를 구분해야 "기본값 8"과 "명시적 limit=8"을 다르게 다룰 수 있다
     # (기본 요청의 응답 바이트를 그대로 두기 위한 장치 — 하위호환).
     limit_explicit = limit is not None
     limit = _clamp_limit(limit if limit is not None else LIMIT_DEFAULT)
+
+    # 부록 Y additive(2026-08-11): region_code 가 없고 area_cd 가 있으면 시도 전체를 집계한다.
+    # region_code 분기보다 **뒤**, diverse 분기보다 **앞**이다(둘 다 새 파라미터라 무회귀).
+    if not (region_code or "").strip() and (area_cd or "").strip():
+        return await _build_province_response(
+            area_cd.strip(), limit, limit_explicit, spot_repo, congestion_repo, cache, seed,
+        )
 
     # 부록 Q.4 additive(2026-07-31): diverse=true + region_code 미지정이면 9권역을 훑어
     # **시군구당 최대 1곳**으로 섞는다(홈이 한 지역으로 쏠리던 문제). 기본값 false 라
@@ -450,3 +465,184 @@ async def _build_diverse_response(
     # limit 을 키워도 홈 구성이 달라지지 않아야 하고(무회귀), 총 수를 내려주면 프론트가 눌러도
     # 안 늘어나는 더보기 버튼을 다시 만들게 된다. null = "더보기 없음"으로 읽는다(부록 H.6).
     return FeaturedResponse(region=None, trending=trending, hidden_picks=hidden_picks)
+
+
+# ---------------------------------------------------------------------------
+# 부록 Y — 시도 전체 집계 모드 (area_cd 지정, region_code 미지정) · 2026-08-11
+# 대표 지시(A안): "경기를 고르면 수원 장안구 한 곳만 나오는" 문제를 고친다. 시도를 고르면
+# 그 시도의 **모든 시군구 스팟 풀**에서 뽑고, 각 카드의 region_name 이 어느 시·군인지 밝힌다.
+# 응답 스키마는 additive 한 필드(area) 하나만 늘었고 기존 필드 의미는 불변이다.
+# ---------------------------------------------------------------------------
+
+# 혼잡도 board 를 실제로 호출할 시군구 수 상한 = concierge 의 도 단위 질문과 **같은 규칙**을
+# 재사용한다(스팟 많은 순 상위 PROVINCE_SWEEP_MAX=6곳, 결정적). 경기 44곳·경북 23곳을 전부
+# 부르면 요청 1건이 원천 호출 수십 건이 되어 쿼터를 태운다(2026-07-29 실사고와 같은 경로).
+# 어느 6곳인지가 결정적이라 캐시가 그대로 듣고, hidden_picks 는 애초에 원천을 안 부르므로
+# **시도 전체 풀**에서 뽑힌다 — 즉 "지금 뜨는 곳"만 상위 시·군 기준이고 발견형 목록은 전역이다.
+
+
+def _province_region_codes(area_cd: str, spot_repo: SpotRepository) -> list[str]:
+    """그 시도 소속이면서 스팟이 1곳 이상 실재하는 시군구 코드(사전 순서 보존)."""
+    return [
+        r.region_id
+        for r in REGIONS
+        if r.area_cd == area_cd and spot_repo.by_region(r.region_id, None)
+    ]
+
+
+def _group_cap_for(hidden_n: int, region_count: int) -> int:
+    """숨은 스팟이 한 시·군에 쏠리지 않게 하는 시군구당 상한.
+
+    상한 × 시군구 수 < 필요 개수가 되면 채우지 못해 결과가 줄어든다(세종처럼 시군구가 1곳인
+    시도가 실제로 있다). 그래서 **용량이 항상 필요 개수 이상이 되도록** 올려 잡는다.
+    """
+    if region_count <= 0:
+        return 1
+    return max(2, math.ceil(hidden_n / region_count))
+
+
+async def _build_province_response(
+    area_cd: str,
+    limit: int,
+    limit_explicit: bool,
+    spot_repo: SpotRepository,
+    congestion_repo: CongestionRepository,
+    cache: Cache,
+    seed: int | None = None,
+) -> FeaturedResponse:
+    area = AreaRef(area_cd=area_cd, label=sido_label(area_cd))
+    hidden_n = limit if limit_explicit else min(limit, HIDDEN_PICKS_MAX)
+
+    codes = _province_region_codes(area_cd, spot_repo)
+    if not codes:
+        # 실재하지 않는/스팟 없는 시도 → 빈 목록 + 200(에러 아님). 지어내지 않는다.
+        return FeaturedResponse(
+            region=None, area=area, trending=[], hidden_picks=[],
+            trending_total=0, hidden_total=0,
+        )
+
+    code_set = set(codes)
+    board_codes = [c for c in province_targets((area_cd,), spot_repo) if c in code_set]
+
+    results = await asyncio.gather(
+        *[congestion_repo.get_board(area_cd, c) for c in board_codes],
+        return_exceptions=True,
+    )
+
+    # --- trending: 조회한 시·군의 board 를 각자 자기 지역 스팟과 매칭 → 혼잡도 상위 순 병합 ---
+    # 이름 매칭을 **시·군 단위로** 하는 게 중요하다. 시도 전체 스팟(수천 곳)에 부분일치를 돌리면
+    # 다른 시·군의 동명 스팟에 잘못 붙는다(원천 board 는 그 시군구의 관광지만 담는다).
+    matched_pairs: list[tuple[SpotRecord, SpotCongestion]] = []
+    matched_ids: set[int] = set()
+    cmap_by_region: dict[str, dict[str, float | None]] = {}
+    for code, res in zip(board_codes, results):
+        if isinstance(res, BaseException):
+            logger.info("featured(province) 혼잡도 스킵 area=%s region=%s: %s", area_cd, code, res)
+            continue
+        spots_here = spot_repo.by_region(code, None)
+        cmap_by_region[code] = {
+            recommend_service._norm(r.spot_name): r.congestion_rate
+            for r in res.records
+            if r.spot_name
+        }
+        board_sorted = sorted(
+            res.records,
+            key=lambda r: r.congestion_rate if r.congestion_rate is not None else -1.0,
+            reverse=True,
+        )
+        for rec in board_sorted:
+            match = _match_store(rec.spot_name, spots_here)
+            if match is None or match.id in matched_ids:
+                continue
+            matched_ids.add(match.id)
+            matched_pairs.append((
+                match,
+                SpotCongestion(
+                    index=rec.congestion_rate,
+                    level=classify_level(rec.congestion_rate),
+                    tier="B",
+                ),
+            ))
+
+    # 시도 하나의 목록으로 보이도록 혼잡도 상위 순 재정렬(단일 지역 경로와 같은 기준).
+    matched_pairs.sort(
+        key=lambda p: (-(p[1].index if p[1].index is not None else -1.0), p[0].name)
+    )
+    trending_total = len(matched_pairs)
+    trending_pairs = matched_pairs[:limit]
+    seen_ids: set[int] = {s.id for s, _ in trending_pairs}
+
+    # --- hidden_picks: 시도 **전체** 스팟 풀에서(원천 호출 0) ---
+    all_spots = [s for c in codes for s in spot_repo.by_region(c, None)]
+
+    def _cong_key(s: SpotRecord) -> tuple[float, str]:
+        # 혼잡도는 board 를 부른 시·군에만 있다. 다른 시·군 스팟에 남의 board 이름을 매칭시키면
+        # 오정보가 되므로 자기 지역 cmap 만 본다(없으면 미상=101.0 → 이름순 안정 정렬).
+        cmap = cmap_by_region.get(s.region_code)
+        if not cmap:
+            return (101.0, s.name)
+        c = recommend_service._match_congestion(s.name, cmap)
+        idx = c.index if (c and c.index is not None) else 101.0
+        return (idx, s.name)
+
+    hidden_candidates = [s for s in all_spots if s.is_hidden_gem and s.id not in seen_ids]
+    _hidden_keys = {s.id: _cong_key(s) for s in hidden_candidates}  # 키 선계산(정렬 중 재매칭 방지)
+    hidden_candidates.sort(key=lambda s: _hidden_keys[s.id])
+
+    photo_backfill = [
+        s for s in all_spots if s.image_url and not s.is_hidden_gem and s.id not in seen_ids
+    ]
+    _backfill_keys = {s.id: _cong_key(s) for s in photo_backfill}
+    photo_backfill.sort(key=lambda s: _backfill_keys[s.id])
+
+    # 시군구당 상한을 둬 "숨은 스팟이 전부 한 도시" 를 막는다(시도 단위라 특히 티가 난다).
+    candidate_regions = {s.region_code for s in hidden_candidates}
+    candidate_regions |= {s.region_code for s in photo_backfill}
+    cap = _group_cap_for(hidden_n, len(candidate_regions))
+    hidden_primary, hidden_spares = sampling.sample_with_spares(
+        (
+            [s for s in hidden_candidates if s.image_url],
+            photo_backfill,
+            [s for s in hidden_candidates if not s.image_url],
+        ),
+        hidden_n,
+        sampling.make_rng(seed, f"featured:province:{area_cd}"),
+        has_seed_photo=lambda s: bool(s.image_url),
+        group_key=lambda s: s.region_code,
+        group_cap=cap,
+    )
+    hidden_pool = hidden_primary + hidden_spares
+
+    trending_imgs, hidden_imgs = await asyncio.gather(
+        _images_for([s for s, _ in trending_pairs], cache),
+        _images_for(hidden_pool, cache),
+    )
+
+    trending = [
+        _featured_spot(spot, cong, img, _region_name(spot.region_code))
+        for (spot, cong), img in zip(trending_pairs, trending_imgs)
+    ]
+
+    hidden_with = [(s, i) for s, i in zip(hidden_pool, hidden_imgs) if i.url]
+    hidden_without = [(s, i) for s, i in zip(hidden_pool, hidden_imgs) if not i.url]
+    hidden_final = (hidden_with + hidden_without)[: len(hidden_primary)]
+    hidden_picks = [
+        _featured_spot(
+            spot,
+            recommend_service._match_congestion(
+                spot.name, cmap_by_region.get(spot.region_code) or {}
+            ),
+            img,
+            _region_name(spot.region_code),
+        )
+        for spot, img in hidden_final
+    ]
+
+    return FeaturedResponse(
+        region=None,          # 시군구 1곳이 아니다 — 대표 지역을 지어내지 않는다
+        area=area,            # 대신 어느 시도를 집계했는지 밝힌다(부록 Y additive)
+        trending=trending,
+        hidden_picks=hidden_picks,
+        trending_total=trending_total,
+        hidden_total=len(hidden_candidates) + len(photo_backfill),
+    )

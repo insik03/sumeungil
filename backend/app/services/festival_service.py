@@ -448,10 +448,14 @@ async def build_festivals_response(
     today: date | None = None,
     month: str | None = None,
     window_days: int | None = None,
+    area_cd: str | None = None,
 ) -> FestivalsResponse:
     """region_code 지역의 진행중/예정 축제를 조립. 원천 실패/데이터없음이면 festivals=[] + region.
 
     region_code 를 생략하면 전국 목록을 준다(지역 매칭 실패분도 여기서만 노출).
+    `area_cd`(부록 Y, 2026-08-11)는 그 **중간 단계**다 — 시도 전체 축제. region_code 가 함께
+    오면 무시된다(더 좁은 지정이 이긴다) → 기존 호출부 동작 불변. 원천 호출은 늘지 않는다
+    (전국 스윕 캐시에 대한 메모리 필터일 뿐이다 — region_code 필터와 같은 자리).
     today 는 테스트/`as_of` 주입용(기본 실제 오늘) — 캐시된 전국 목록에 대한 메모리 필터로만 쓴다.
 
     기간 필터(둘 중 하나만 적용된다):
@@ -469,6 +473,7 @@ async def build_festivals_response(
     window = _clamp_window(window_days)
     bounds = month_bounds(month) if month else None
     rc = (region_code or "").strip()
+    ac = (area_cd or "").strip()
 
     region: RecommendRegion | None = None
     if rc:
@@ -477,6 +482,13 @@ async def build_festivals_response(
     entries = await _load_nationwide(cache)
     if rc:
         entries = [e for e in entries if e.region_code == rc]
+    elif ac:
+        # 시도 필터 = 법정동 5자리의 앞 2자리. 우리 사전(REGIONS)에 없는 시군구의 축제도
+        # 살리려면 코드 앞자리로 보는 게 맞다(사전은 "스팟이 수집된 지역"이라 더 좁다).
+        entries = [
+            e for e in entries
+            if e.region_code and len(e.region_code) == 5 and e.region_code[:2] == ac
+        ]
 
     as_of_s = as_of.isoformat()
     horizon = (as_of + timedelta(days=window)).isoformat()
