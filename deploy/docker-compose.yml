@@ -1,0 +1,134 @@
+# 숨은길 단일 호스트 배포 — Oracle Always Free ARM (VM.Standard.A1.Flex, 4 OCPU / 24GB)
+#
+# 서비스 4개를 VM 한 대에 올린다:
+#   nginx    : 유일하게 호스트 80 포트를 여는 엣지. 나머지는 내부 네트워크에서만 접근 가능.
+#   frontend : Next.js 14 (next start)
+#   backend  : FastAPI (uvicorn, 워커 1개 — 인메모리 캐시/레이트리밋 때문)
+#   ollama   : 로컬 LLM 추론(qwen2.5:7b). 모델 파일은 named volume 에 보존.
+#
+# 실행 위치: 이 파일이 있는 deploy/ 디렉터리에서 `docker compose up -d --build`
+# 환경변수:  같은 디렉터리의 `.env` 하나로 전부 처리한다(backend 런타임 + frontend 빌드인자).
+#            → backend/.env.production.example 을 복사해서 만든다. DEPLOY.md (e) 참고.
+#
+# ARM64: 아래 세 이미지(python:3.12-slim / node:20-alpine / nginx:1.27-alpine)와
+#        ollama/ollama 모두 linux/arm64 매니페스트를 제공한다. platform 지정 불필요.
+#
+# 포트 공개 원칙(보안): backend/frontend/ollama 에는 `ports:` 를 두지 않는다.
+#   - ollama 는 인증이 없다. 호스트에 노출되면 누구나 VM 의 CPU 로 추론을 돌릴 수 있다.
+#   - backend 가 직접 노출되면 nginx 가 세팅하는 X-Forwarded-For 를 우회해
+#     레이트 리밋을 무력화할 수 있다(rate_limit.py 신뢰 경계 주석 참고).
+#   디버깅이 필요하면 `docker compose exec` 로 컨테이너 안에서 curl 한다.
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: sumeungil-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # HTTPS 는 도메인 확보 후 (DEPLOY.md 부록) — 그때 443 을 여기에 추가한다.
+      # 2026-08-09 도메인(sumeungil.co.kr) 확보로 HTTPS 개시.
+      # 80 은 ACME 검증과 https 리다이렉트용으로 계속 열어둔다(닫으면 갱신이 깨진다).
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # certbot 과 공유. nginx 는 읽기만 하면 된다.
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - sumeungil
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        # !!! 빌드타임 값 !!! NEXT_PUBLIC_* 는 번들에 인라인된다.
+        # 값을 바꾸면 반드시 `docker compose build frontend` 재빌드가 필요하다.
+        # NEXT_PUBLIC_API_BASE 는 "브라우저가 보는 주소" — nginx 가 /api 를 백엔드로
+        # 넘기므로 프론트와 동일 오리진(http://<VM_IP>)을 넣는다. 컨테이너 이름(backend:8000)을
+        # 넣으면 안 된다(브라우저는 도커 네트워크를 모른다).
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+        NEXT_PUBLIC_TMAP_APP_KEY: ${NEXT_PUBLIC_TMAP_APP_KEY}
+    container_name: sumeungil-frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - sumeungil
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: sumeungil-backend
+    restart: unless-stopped
+    # 런타임 시크릿/설정. 이미지에는 굽지 않는다(.dockerignore 가 .env 제외).
+    # config.py 는 /app/.env 가 없으면 프로세스 환경변수를 그대로 읽는다.
+    env_file:
+      - .env
+    # !!! 사용자 데이터 보존 (부록 R, 2026-08-01) !!!
+    #   후기·공유 코스는 SQLite 파일 하나(/app/data/sumeungil.db)에 저장된다.
+    #   컨테이너 파일시스템은 `up -d --build` 때마다 새로 만들어지므로, 이 볼륨이 없으면
+    #   배포할 때마다 사용자가 쓴 글이 **전부 사라진다**(복구 불가).
+    #   경로를 바꾸려면 .env 의 SQLITE_PATH 와 아래 마운트 지점을 함께 바꿔야 한다.
+    volumes:
+      - sumeungil-data:/app/data
+    expose:
+      - "8000"
+    depends_on:
+      ollama:
+        condition: service_started
+    networks:
+      - sumeungil
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sumeungil-ollama
+    restart: unless-stopped
+    # 모델 가중치(qwen2.5:7b ≈ 4.7GB)를 컨테이너 밖에 보존한다.
+    # 이게 없으면 컨테이너를 다시 만들 때마다 수 GB 를 다시 내려받는다.
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      # 모델을 메모리에 계속 올려둔다(-1 = 무기한). 24GB VM 이라 여유가 있고,
+      # 언로드되면 다음 요청이 모델 로딩 수십 초를 그대로 뒤집어쓴다.
+      # 메모리를 아끼고 싶으면 "30m" 같은 값으로 바꾼다.
+      - OLLAMA_KEEP_ALIVE=-1
+      # 4 OCPU 환경에서 동시 추론을 늘리면 전부 같이 느려진다 — 직렬 처리로 고정.
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+    # 모델 pull 은 compose 에 넣지 않는다(기동마다 실행되면 느리고, 실패 시 부팅이 막힌다).
+    # 최초 1회만 배포 스크립트에서: docker compose exec ollama ollama pull qwen2.5:7b
+    expose:
+      - "11434"
+    networks:
+      - sumeungil
+
+
+  # ---- 인증서 자동 갱신 (2026-08-09) ----
+  # Let's Encrypt 인증서는 90일짜리다. 사람이 기억해서 갱신하면 반드시 놓친다.
+  # 12시간마다 renew 를 돌린다 — 만료 30일 전이 아니면 certbot 이 아무것도 안 한다.
+  # 최초 발급만 `docker compose run --rm certbot certonly ...` 로 한 번 수동 실행한다.
+  certbot:
+    image: certbot/certbot:latest
+    container_name: sumeungil-certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'
+
+
+networks:
+  sumeungil:
+    driver: bridge
+
+volumes:
+  ollama-models:
+  # 후기·공유 코스 SQLite (부록 R). ollama-models 와 달리 **다시 만들 수 없는 데이터**다 —
+  # `docker compose down -v` 는 이 볼륨까지 지운다. 백업 절차는 DEPLOY.md "백업" 항목 참고.
+  sumeungil-data:

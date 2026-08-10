@@ -1,0 +1,4 @@
+# 배포용 실환경 변수 — 시크릿 포함. 절대 커밋 금지.
+# 키 목록은 ../backend/.env.production.example 를 참고한다.
+.env
+.env.*

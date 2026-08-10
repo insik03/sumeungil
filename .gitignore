@@ -1,0 +1,20 @@
+# 시크릿 — 절대 커밋 금지 (.example 템플릿만 허용)
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.pem
+
+# 빌드/의존성
+node_modules/
+.next/
+.venv/
+venv/
+__pycache__/
+*.pyc
+tsconfig.tsbuildinfo
+
+# 로컬 데이터
+*.db
+*.db-shm
+*.db-wal

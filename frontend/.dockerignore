@@ -1,0 +1,14 @@
+# 로컬 산출물 — 이미지 안에서 새로 빌드한다(호스트 .next 를 섞으면 아키텍처/캐시 오염).
+node_modules
+.next
+out
+
+# 시크릿(로컬 개발용). 빌드 값은 Dockerfile ARG 로만 주입한다.
+.env.local
+.env*.local
+
+# 기타
+README.md
+tsconfig.tsbuildinfo
+.DS_Store
+npm-debug.log*

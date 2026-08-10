@@ -1,0 +1,74 @@
+import { OnboardingAxis, OnboardingResult } from "../../lib/api";
+import { RESULT_AXIS_ORDER } from "./constants";
+
+const LOW_CONFIDENCE_THRESHOLD = 0.5; // §B.5-4 — 표시 전용 재량. 스코어링에는 쓰지 않는다(§B.1 confidence 규칙).
+
+interface OnboardingResultViewProps {
+  result: OnboardingResult;
+  axisLabels: Partial<Record<OnboardingAxis, string>>;
+  onEdit: () => void;
+  onConfirm: () => void;
+}
+
+/**
+ * §B.5-4 결과 화면 — tags만으로 렌더한다. tag_vector/scoring_weights는 서버 전용 수치라
+ * 화면에 노출하거나 재계산하지 않는다(§B.5-6). "이렇게 이해했어요" 톤으로 사용자가 확인/정정하게 한다.
+ */
+export default function OnboardingResultView({
+  result,
+  axisLabels,
+  onEdit,
+  onConfirm,
+}: OnboardingResultViewProps) {
+  const visibleAxes = RESULT_AXIS_ORDER.filter((axis) => (result.tags[axis]?.length ?? 0) > 0);
+
+  return (
+    <section className="onboard-section" aria-label="취향 분석 결과">
+      <div className="onboard-card">
+        <div className="onboard-result__head">
+          <h2 className="onboard-result__title">이렇게 이해했어요</h2>
+          <p className="onboard-result__sub">
+            서연님이 알려주신 내용을 AI가 이렇게 정리했어요. 다르면 다시 입력해도 괜찮아요.
+          </p>
+        </div>
+
+        {result.fallback_used && (
+          <p className="onboard-result__fallback">
+            간편 분석 모드로 정리했어요. 칩으로 골라주신 취향은 그대로 반영됐어요.
+          </p>
+        )}
+
+        {visibleAxes.length === 0 && (
+          <p className="onboard-notice">
+            아직 뚜렷하게 읽어낸 취향이 없어요. 조금 더 자세히 적거나 키워드를 선택해보세요.
+          </p>
+        )}
+
+        {visibleAxes.map((axis) => (
+          <div className="onboard-axis-group" key={axis}>
+            <span className="onboard-axis-group__label">{axisLabels[axis] ?? axis}</span>
+            <div className="onboard-tag-row">
+              {result.tags[axis]!.map((tag) => (
+                <span
+                  key={tag.value}
+                  className={`onboard-tag${tag.confidence < LOW_CONFIDENCE_THRESHOLD ? " onboard-tag--low-confidence" : ""}`}
+                >
+                  #{tag.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div className="onboard-result__actions">
+          <button type="button" className="btn btn--mint btn--block btn--lg" onClick={onConfirm}>
+            이 취향으로 계속하기
+          </button>
+          <button type="button" className="btn btn--ghost-text" onClick={onEdit}>
+            다시 입력할게요
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}

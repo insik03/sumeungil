@@ -1,0 +1,6235 @@
+/* ui-ux-pro-max 스킬 typography 도메인 추천("Korean Modern" 페어링) 그대로 적용 — 한국어 사이트
+   대상 웹폰트 실로딩. 03-design-spec.md "ui-ux-pro-max 적용 내역" 참고. */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap");
+@import "./tokens.css";
+
+/* =========================================================================
+   Base reset (variant-B 이식)
+   ========================================================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+/* §28(신규) — 코스 상세 사진 스트립(#course-step-N) 앵커 클릭 시 부드럽게 스크롤한다.
+   프로그래밍 방식 스크롤은 이 사이트에서 Hero.tsx의 캐러셀뿐이고 그건 별도 track.scrollTo로
+   자체 처리해(Hero.tsx §주석 "scrollIntoView 금지") 이 전역 설정과 충돌하지 않는다. */
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+body {
+  font-family: var(--font-base);
+  color: var(--ink);
+  background: var(--white);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+}
+ul {
+  list-style: none;
+  padding: 0;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+button,
+a,
+input,
+[tabindex] {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--n-500);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.page {
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--white);
+  box-shadow: 0 0 60px rgba(5, 14, 27, 0.1);
+  min-height: 100vh;
+  /* 2026-08-01(대표 지적 "헤더 아래 회색 빈 띠") — margin collapse 때문이었다.
+     첫 자식(로그인 인사 문구)의 위쪽 여백 32px 가 이 흰 박스 **밖으로 빠져나가**
+     그 자리에 body 배경(연회색 파랑)이 그대로 드러났다.
+     flow-root 로 블록 서식 문맥을 만들어 자식 여백이 안쪽에 머물게 한다.
+     (로그인 상태에서만 보이던 현상이라 비로그인 화면에서는 재현되지 않았다.) */
+  display: flow-root;
+}
+@media (min-width: 960px) {
+  body {
+    background: var(--n-50);
+  }
+  .page {
+    margin: 0 auto;
+  }
+}
+
+/* =========================================================================
+   GNB
+   ========================================================================= */
+.gnb {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  /* layout에서 .page(480px 컬럼) 밖, body 직속으로 렌더 → width:100%가 곧 브라우저 전체 폭.
+     '좁은 사각형이 따라오는' 문제 해결(가로 스크롤 없음). 내용 정렬은 gnb__inner가 담당. */
+  width: 100%;
+  background: #ffffff;
+  border-bottom: 1px solid var(--n-100);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 6px 16px -12px rgba(15, 23, 42, 0.28);
+  display: flex;
+  justify-content: center;
+  height: 60px;
+}
+/* 헤더 내용(로고·메뉴·액션)은 바 안에서 중앙 정렬 + 최대폭 제한 — 넓은 화면에서 양끝으로 벌어지지 않게. */
+.gnb__inner {
+  width: 100%;
+  max-width: var(--container-1);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-4);
+}
+.gnb__logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-lg);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.gnb__logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--g-500);
+  /* §22 — g-500이 비비드 민트(밝음)에서 딥 포레스트(어두움)로 바뀌어 글자색을 n-900(어두운 잉크)에서
+     흰색으로 뒤집었다. 아래 동일 패턴(버튼/배지/칩)도 전부 같은 이유로 함께 바꿨다. */
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 900;
+}
+.gnb__menu {
+  display: none;
+  gap: var(--sp-6);
+  align-items: center;
+  height: 100%;
+}
+.gnb__menu > a {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  transition: color 0.18s;
+}
+.gnb__menu > a:hover {
+  color: var(--ink);
+}
+.gnb__menu > a.is-active,
+.gnb__dropdown-trigger.is-active {
+  color: var(--g-500);
+}
+
+/* §39(GNB 개편) — 키워드가 겹치는 항목(여행지 추천/AI 여행 경로/혼잡도·시기)의 hover/focus 드롭다운.
+   패널을 트리거 바로 아래(top:100%, 여백 없음)에 붙여 마우스가 항목→패널로 이동할 때 끊기지
+   않게 한다(ui-ux-pro-max ux 도메인 "Hover vs Tap"/이동 경로 근거 — 03-design-spec §39 참고). */
+.gnb__dropdown {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.gnb__dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+  min-height: var(--touch-min);
+  transition: color 0.18s;
+}
+.gnb__dropdown-trigger:hover {
+  color: var(--ink);
+}
+.gnb__dropdown-trigger::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+.gnb__dropdown.is-open .gnb__dropdown-trigger::after {
+  transform: rotate(-135deg);
+  margin-top: 3px;
+}
+.gnb__dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 190px;
+  margin: 0;
+  padding: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--white);
+  border: 1px solid var(--n-100);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.gnb__dropdown.is-open .gnb__dropdown-panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.gnb__dropdown-panel a {
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  transition: background-color 0.18s, color 0.18s;
+}
+.gnb__dropdown-panel a:hover,
+.gnb__dropdown-panel a:focus-visible {
+  background: var(--n-50);
+  color: var(--ink);
+}
+.gnb__dropdown-panel a.is-active {
+  color: var(--g-500);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gnb__dropdown-trigger::after,
+  .gnb__dropdown-panel {
+    transition: none;
+  }
+}
+.gnb__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.gnb__greeting {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* 데모 로그인 모달 */
+.login-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  background: rgba(5, 14, 27, 0.55);
+}
+.login-modal {
+  width: 100%;
+  max-width: 380px;
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-6);
+}
+.login-modal__title {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.login-modal__sub {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+.login-modal__label {
+  display: block;
+  margin-top: var(--sp-5);
+  margin-bottom: var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.login-modal__input {
+  width: 100%;
+  height: 48px;
+  padding: 0 var(--sp-4);
+  border: 1.5px solid var(--n-100);
+  border-radius: var(--r-md);
+  font-size: var(--text-base);
+  font-family: inherit;
+}
+.login-modal__input:focus {
+  outline: none;
+  border-color: var(--g-500);
+}
+.login-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-5);
+}
+.login-modal__note {
+  margin-top: var(--sp-4);
+  font-size: var(--text-xs);
+  color: var(--gray-500); /* 실제 안내 문구 — 대비 4.5:1 확보(ux 도메인 Color Contrast) */
+  line-height: 1.5;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-full);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  letter-spacing: -0.01em; /* 에디토리얼 CTA — 살짝 조인 자간으로 힘 있는 인상 */
+  border: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  white-space: nowrap;
+}
+.btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+.btn:active {
+  transform: translateY(0);
+}
+/* §22 — 클래스명은 "coral"이지만(전 화면 10여 곳의 JSX를 건드리지 않기 위해 selector는 유지)
+   실제 렌더 색은 그린으로 바꿨다. 브랜드 포인트 컬러(그린)를 사이트의 유일한 주요 CTA 색으로
+   통일하기 위한 값 치환이며, 코랄은 이제 혼잡(high) 배지에만 남는다(§22 표 참고). */
+.btn--coral {
+  background: var(--g-500);
+  color: var(--white);
+  box-shadow: 0 6px 16px rgba(47, 122, 84, 0.35);
+}
+.btn--mint {
+  background: var(--g-500);
+  color: var(--white);
+  box-shadow: 0 6px 16px rgba(47, 122, 84, 0.32);
+}
+.btn--white {
+  background: var(--white);
+  color: var(--n-900);
+  box-shadow: var(--shadow-card);
+}
+.btn--white-on-dark {
+  background: var(--white);
+  color: var(--b-900);
+}
+.btn--ghost-text {
+  background: transparent;
+  color: var(--ink-muted);
+  padding: 0 var(--sp-3);
+}
+.btn--ghost-text:hover {
+  color: var(--ink);
+}
+.btn--block {
+  width: 100%;
+}
+.btn--lg {
+  min-height: 52px;
+  padding: 0 var(--sp-6);
+  font-size: var(--text-base);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.gnb__burger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  background: none;
+  border: none;
+}
+.gnb__burger i {
+  display: block;
+  width: 20px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--n-900);
+}
+
+.mobile-nav {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  flex-direction: column;
+  padding: var(--sp-4);
+  /* §22 — 네이비 그라디언트(정보색)를 잉크→딥그린(브랜드 포인트)으로. 전체화면 오버레이라
+     톤이 사이트 전역과 어긋나면 가장 눈에 띄는 자리라 함께 바꿨다. */
+  background: linear-gradient(165deg, var(--ink) 0%, var(--g-700) 55%, var(--g-600) 100%);
+  color: var(--white);
+}
+.mobile-nav.is-open {
+  display: flex;
+}
+.mobile-nav__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mobile-nav__close {
+  width: var(--touch-min);
+  height: var(--touch-min);
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: 26px;
+}
+.mobile-nav__list {
+  margin-top: var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.mobile-nav__list a {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.mobile-nav__list a.is-active,
+.mobile-nav__list a.mobile-nav__group-top.is-active,
+.mobile-nav__list a.mobile-nav__group-child.is-active {
+  color: var(--g-400); /* 어두운 배경 위 강조 텍스트 전용 토큰(tokens.css) 재사용 */
+}
+/* §39 — 드롭다운이 있는 상단 항목(여행지 추천/AI 여행 경로/혼잡도·시기)은 터치 기기에서
+   hover가 없으므로 아코디언 대신 "그룹 제목 + 하위 링크"를 처음부터 펼쳐서 보여준다. */
+.mobile-nav__group {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.mobile-nav__list a.mobile-nav__group-top {
+  border-bottom: none;
+}
+.mobile-nav__group-children {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--sp-3);
+}
+.mobile-nav__list a.mobile-nav__group-child {
+  min-height: 48px;
+  padding-left: var(--sp-4);
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: normal;
+  color: rgba(255, 255, 255, 0.78);
+  border-bottom: none;
+}
+.mobile-nav__cta {
+  margin-top: var(--sp-8);
+}
+
+@media (min-width: 1024px) {
+  .page {
+    max-width: none;
+  }
+  .gnb {
+    height: 76px;
+    /* full-bleed 유지(위 .gnb의 100vw/margin 규칙 계속 적용) — 데스크톱에서 폭 재제한하지 않는다. */
+  }
+  .gnb__inner {
+    padding: 0 var(--sp-10);
+  }
+  .gnb__menu {
+    display: flex;
+  }
+  .gnb__burger {
+    display: none;
+  }
+}
+
+/* =========================================================================
+   HERO — §24 구석구석(한국관광공사 포털) 재구성(2026-07-29) → §43 재정리(2026-08-01)
+   대표 피드백("§22 Acenda 재스킨이 너무 커머스적/부킹 사이트 같다")을 반영해 "풀블리드 사진
+   히어로 + 겹쳐 뜨는 검색 카드"를 걷어내고 다음 구성으로 바꿨다:
+   1) .sr-only h1 + (로그인 시) .hero-greeting 한 줄 — §43(대표 지시 4건)에서 마케팅 카피 3단
+      블록(.hero-intro 등)을 통째로 제거하고 이 자리로 대체했다(Hero.tsx 참고). 확보된 세로
+      공간은 히어로 캐러셀(3번) 확대로 넘어간다.
+   2) .home-search-bar — 부킹형 큰 카드 대신 인라인 컴팩트 검색바(로직은 Hero.tsx가 그대로 재사용)
+   3) .hero-carousel — 컨테인드 라운드 사진 카드 캐러셀(풀블리드 아님, 옆 카드가 살짝 보임)
+   ========================================================================= */
+/* 시각적으로 숨기되 스크린리더/SEO에는 그대로 노출하는 표준 sr-only 레시피(display:none은
+   스크린리더도 건너뛰므로 쓰지 않는다). 접근성 규칙(페이지당 h1 하나, redesign-skill 근거)을
+   지키면서도 대표 지시("멘트는 싹 없애고 사진 자리를 키워라")대로 시각적 자리는 0을 차지한다. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* §43 — 로그인 사용자 전용 한 줄 인사(design-taste-frontend 스킬 §4.7 "히어로 텍스트 요소는
+   최소, 장식적 태그라인 금지" 근거로 마케팅 문장이 아닌 사실 기반 한 줄만 허용). 비로그인
+   사용자는 이 자리 자체가 렌더되지 않는다(Hero.tsx 조건부) — GNB와 검색바 사이 간격은 그때
+   .home-search-bar 자신의 top margin이 그대로 담당한다(아래 §HERO 검색바 주석 참고). */
+.hero-greeting {
+  margin: var(--sp-6) var(--sp-4) 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+@media (min-width: 1024px) {
+  .hero-greeting {
+    max-width: var(--container-1);
+    margin: var(--sp-8) auto 0;
+    padding: 0 var(--sp-10);
+  }
+}
+
+/* 다른 화면(온보딩/추천/코스 소개, CoursePromo)에서도 재사용하는 다크 배경용 이유브로우 —
+   §24는 이 클래스를 더 이상 히어로에 쓰지 않지만(위 .hero-intro__eyebrow로 대체), 다른
+   화면이 계속 쓰므로 정의는 그대로 둔다(변경 없음, 이 화면들은 이번 작업 범위 밖). */
+.hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(6px);
+  color: var(--white);
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+}
+
+.home-search-bar {
+  /* §43 — hero-greeting이 없는 경우(비로그인, 대다수) 이 검색바가 히어로의 첫 요소가 된다.
+     예전엔 .hero-intro의 상단 패딩이 고정 GNB와의 간격을 담당했으나 그 블록이 없어졌으므로,
+     상단 여백을 이 요소가 직접 갖는다(있으면 hero-greeting과의 간격으로도 자연스럽게 쓰인다 —
+     hero-greeting에는 하단 마진이 없어 두 요소 사이 간격은 이 top margin 하나로 결정된다). */
+  margin: var(--sp-6) var(--sp-4) var(--sp-6);
+  padding: var(--sp-4);
+  background: var(--white);
+  border: 1.5px solid var(--n-100);
+  border-radius: var(--r-lg);
+}
+.home-search-bar__label {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: var(--sp-2);
+  display: block;
+}
+@media (min-width: 1024px) {
+  .home-search-bar {
+    max-width: var(--container-1);
+    margin: var(--sp-8) auto var(--sp-8);
+    padding: var(--sp-5) var(--sp-6);
+  }
+}
+.dest-search__box {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 2px solid var(--n-100);
+  border-radius: var(--r-full);
+  padding: 0 var(--sp-2) 0 var(--sp-4);
+  min-height: 52px;
+  transition: border-color 0.18s;
+}
+.dest-search__box:focus-within {
+  border-color: var(--n-500);
+}
+.dest-search__icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--n-500);
+}
+.dest-search__input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+  padding: var(--sp-3) 0;
+}
+.dest-search__input::placeholder {
+  color: var(--gray-400);
+  font-weight: 500;
+}
+.dest-search__clear {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--n-50);
+  color: var(--ink-muted);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.dest-search__quick {
+  margin-top: var(--sp-4);
+}
+.dest-search__quick-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+  letter-spacing: 0.03em;
+  margin-bottom: var(--sp-2);
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.chip {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-full);
+  border: none;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-900);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.chip:hover {
+  transform: translateY(-1px);
+}
+.chip--mint {
+  background: var(--g-500);
+  color: var(--white);
+}
+.chip--azure {
+  background: var(--n-400);
+  color: var(--white);
+}
+/* §22 — 코랄은 혼잡(high) 시맨틱 전용이 됐다. 이 칩은 "강릉"(빠른 목적지 선택) 장식용이라
+   코랄 대신 중립 톤으로 바꿨다 — 클래스명은 유지(JSX 미변경), 렌더 색만 뉴트럴로 치환. */
+.chip--coral {
+  background: var(--gray-100);
+  color: var(--ink);
+}
+.chip--sand {
+  background: var(--b-100);
+}
+/* §27(/festivals) — "전국"(지역 필터 리셋) 칩. 특정 지역색이 아니라 중립 톤이어야
+   "지역을 고른 상태"와 명확히 구분된다 — .chip--coral과 같은 뉴트럴 레시피 재사용. */
+.chip--all {
+  background: var(--gray-100);
+  color: var(--ink);
+}
+.chip.is-active {
+  box-shadow: 0 0 0 2px var(--n-900) inset;
+}
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+/* §30(신규, 03-design-spec.md) — 빠른 추천 여행지 칩 4→17개(시도 1곳씩) 확장에 따른 가로 스크롤
+   변형. 기존 .chip-row(flex-wrap)는 4개 기준이라 17개를 넣으면 여러 줄로 줄바꿈돼 버튼열이
+   세로로 길게 밀린다 — Hero.tsx/RegionPicker.tsx/FestivalRegionFilter.tsx 모두 한 줄 가로
+   스크롤(scroll-snap)로 바꾼다. .board/.featured-scroll과 동일한 관례(overflow-x auto,
+   snap-type x mandatory, 스크롤바 숨김)를 그대로 재사용해 새 시각 언어를 만들지 않는다.
+   칩 자체 min-height는 --touch-min(44px)으로 맞춰 터치 타겟 기준을 지킨다(기존 .chip은 40px). */
+.chip-row--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  /* §33-2 — mandatory(강제 스냅)는 상호작용 후 항상 칩 하나를 컨테이너 경계에 딱 맞춰
+     "여기서 끝"처럼 보이게 정렬해버린다. proximity로 낮춰 마지막으로 보이는 칩이 자연스럽게
+     반쯤 걸친 채로 멈출 수 있게 한다(§33-2 (b), "더 있음"을 암시). */
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 2px var(--sp-2);
+}
+.chip-row--scroll::-webkit-scrollbar {
+  height: 0;
+}
+.chip-row--scroll .chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-height: var(--touch-min);
+}
+/* §33-2 (c) — 데스크톱(마우스/트랙패드) hover·포커스 시에만 얇은 스크롤바를 드러낸다. 터치
+   기기는 (hover:hover)를 만족하지 못해 기존처럼 스크롤바 없이 스와이프만 남는다. */
+@media (hover: hover) and (pointer: fine) {
+  .chip-row--scroll {
+    scrollbar-width: none;
+  }
+  .chip-row--scroll:hover,
+  .chip-row--scroll:focus-within {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gray-300) transparent;
+  }
+  .chip-row--scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: var(--r-full);
+  }
+  .chip-row--scroll:hover::-webkit-scrollbar,
+  .chip-row--scroll:focus-within::-webkit-scrollbar {
+    height: 6px;
+  }
+  .chip-row--scroll:hover::-webkit-scrollbar-thumb,
+  .chip-row--scroll:focus-within::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+  }
+}
+
+/* §33-2(신규, ChipScrollRow.tsx) — (a) 좌우 가장자리 그라데이션 페이드. 스크롤 위치에 따라
+   시작/끝이 아닐 때만 해당 방향이 보인다(js가 chip-row-fade--start/--end를 토글). 배경은
+   흰 카드(.home-search-bar/.spot-region-row 모두 흰 배경 컨텍스트) 위에서만 쓰이므로
+   var(--white)로 고정해도 신규 hex 없이 자연스럽게 섞인다. */
+.chip-row-fade {
+  position: relative;
+}
+.chip-row-fade::before,
+.chip-row-fade::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: var(--sp-2);
+  width: 32px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.chip-row-fade::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--white) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.chip-row-fade::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--white) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.chip-row-fade--start::before {
+  opacity: 1;
+}
+.chip-row-fade--end::after {
+  opacity: 1;
+}
+
+/* 목적지 검색 드롭다운 (부록 A.3) */
+.dest-search__dropdown {
+  position: relative;
+  z-index: 6;
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2);
+  list-style: none;
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.dest-search__dropdown-item {
+  width: 100%;
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-3);
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+}
+.dest-search__dropdown-item:hover,
+.dest-search__dropdown-item:focus-visible {
+  background: var(--n-50);
+}
+.dest-search__dropdown-empty {
+  padding: var(--sp-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.dest-search__notice {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--b-dark);
+}
+
+.dest-search__status {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  margin-top: var(--sp-2);
+}
+
+/* =========================================================================
+   히어로 캐러셀 — §24 구석구석 재구성. "컨테인드 라운드 사진 카드 캐러셀"(풀블리드 아님).
+   트랙 좌우에 padding을 줘 이웃 카드가 살짝 보이게 하고 scroll-snap-align:center로 정렬한다.
+   자동 순환(Hero.tsx, 5초)·인디케이터·일시정지 버튼은 여기서 스타일만 담당한다.
+   ========================================================================= */
+.hero-carousel {
+  position: relative;
+  margin: 0 0 var(--sp-8);
+}
+.hero-carousel__track {
+  display: flex;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  padding: 0 8vw;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-carousel__track {
+    scroll-behavior: auto;
+  }
+}
+.hero-carousel__track::-webkit-scrollbar {
+  height: 0;
+}
+.hero-carousel__card {
+  position: relative;
+  flex: 0 0 82%;
+  aspect-ratio: 4 / 3;
+  scroll-snap-align: center;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  color: var(--white);
+  box-shadow: var(--shadow-md);
+  background-image: linear-gradient(180deg, rgba(5, 14, 27, 0) 42%, rgba(5, 14, 27, 0.82) 100%),
+    var(--slide-photo);
+  background-size: cover;
+  background-position: center;
+}
+.hero-carousel__card--noimg,
+.hero-carousel__card--fallback {
+  background-image: linear-gradient(160deg, var(--ink) 0%, var(--g-700) 55%, var(--g-600) 100%);
+}
+.hero-carousel__card--skeleton {
+  background-image: none;
+  background: linear-gradient(90deg, var(--n-50) 25%, var(--n-100) 37%, var(--n-50) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-carousel__card--skeleton {
+    animation: none;
+  }
+}
+.hero-carousel__overlay {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--sp-5);
+}
+.hero-carousel__title {
+  font-size: var(--text-xl);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+.hero-carousel__meta {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+.hero-carousel__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.hero-carousel__dots {
+  display: flex;
+  gap: 4px;
+}
+.hero-carousel__dot {
+  width: var(--touch-min);
+  height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.hero-carousel__dot::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gray-300);
+  transition: all 0.15s ease;
+}
+.hero-carousel__dot.is-active::after {
+  background: var(--g-500);
+  width: 20px;
+  border-radius: var(--r-full);
+}
+.hero-carousel__pause {
+  width: var(--touch-min);
+  height: var(--touch-min);
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--gray-300);
+  background: var(--white);
+  color: var(--ink-muted);
+}
+.hero-carousel__pause:hover {
+  color: var(--ink);
+  border-color: var(--gray-400);
+}
+@media (min-width: 640px) {
+  .hero-carousel__card {
+    flex-basis: 60%;
+    aspect-ratio: 16 / 9;
+  }
+}
+@media (min-width: 1024px) {
+  .hero-carousel {
+    max-width: var(--container-1);
+    margin: 0 auto var(--sp-10);
+    padding: 0 var(--sp-10);
+  }
+  .hero-carousel__track {
+    padding: 0 6%;
+  }
+  .hero-carousel__card {
+    flex-basis: 56%;
+    /* §43 — .hero-intro 제거로 확보된 세로 공간을 사진 캐러셀로 옮긴다(대표 지시 원문 2).
+       고정 aspect-ratio(16:9) 대신 뷰포트 높이 기반 clamp로 바꿔 "창 크기에 따라 커지고
+       줄어드는"(대표 지시 원문 3) 요구를 폭뿐 아니라 높이 축에서도 만족시킨다 — 컨테이너 폭이
+       1120→1920px(§43 컨테이너 스텝)로 넓어지면 flex-basis(56%)가 곧 폭도 함께 키운다.
+       min 360px(짧은 노트북 창에서도 카드가 과하게 눌리지 않음) ~ 46vh(대부분의 데스크톱에서
+       체감상 "커졌다"고 느낄 실제 확대폭) ~ max 640px(세로로 아주 긴 창에서 캐러셀이 화면을
+       과점하지 않도록 상한). aspect-ratio는 명시적 height와 함께 쓰면 무시되므로 auto로
+       되돌려 height가 유일한 세로 축 기준이 되게 한다. */
+    aspect-ratio: auto;
+    height: clamp(360px, 46vh, 640px);
+  }
+}
+
+/* =========================================================================
+   서비스 퀵메뉴 — §24 구석구석 재구성(ServiceQuickMenu.tsx, 신규).
+   히어로 바로 아래 8개 핵심 기능을 한 화면에서 훑어볼 수 있게 한다("한눈에 안 들어옴" 해결 핵심).
+   ========================================================================= */
+.quick-menu {
+  padding: var(--sp-6) var(--sp-4) var(--sp-4);
+}
+.quick-menu__title {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--sp-4);
+}
+/* §38(2026-07-31) — 타일이 8→10개가 되면서 4열이면 마지막 줄에 2개만 남아 어색하다.
+   5열로 바꿔 5×2 균형을 되찾는다(모바일 폭에서도 타일이 아이콘+짧은 라벨이라 5열이 들어간다.
+   라벨은 아래 nowrap+ellipsis 로 이미 한 줄 고정이라 줄 수 편차로 높이가 갈리지 않는다). */
+.quick-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-3) 2px;
+}
+.quick-menu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-min);
+  padding: var(--sp-2) 2px;
+  border-radius: var(--r-md);
+  text-align: center;
+  transition: background 0.15s ease;
+}
+.quick-menu__item:hover,
+.quick-menu__item:focus-visible {
+  background: var(--g-50);
+}
+.quick-menu__icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--g-50);
+  color: var(--g-500);
+}
+.quick-menu__icon svg {
+  width: 22px;
+  height: 22px;
+}
+.quick-menu__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  line-height: 1.3;
+  /* §38 — 5열/10열로 타일이 좁아져 "출발일 플래너" 같은 긴 라벨이 두 줄로 접히면 타일 높이가
+     제각각이 된다(이 코드베이스 반복 버그). 한 줄 고정 + 말줄임으로 높이를 통일한다. */
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 640px) {
+  /* §38 — 8→10 타일. 넓은 화면에서는 한 줄에 10개를 그대로 편다(기존 8열 규칙의 연장). */
+  .quick-menu__grid {
+    grid-template-columns: repeat(10, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .quick-menu {
+    max-width: var(--container-1);
+    margin: 0 auto;
+    padding: var(--sp-10) var(--sp-10) var(--sp-2);
+  }
+  .quick-menu__icon {
+    width: 56px;
+    height: 56px;
+  }
+  .quick-menu__icon svg {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+/* =========================================================================
+   공통 섹션
+   ========================================================================= */
+.section {
+  padding: var(--sp-10) var(--sp-4) var(--sp-8);
+}
+.section--mint {
+  background: var(--g-50);
+}
+/* §24 — ServiceQuickMenu의 "예상 혼잡"/"축제" 타일이 앵커(#board/#festival)로 이 두 섹션까지
+   스크롤 이동시킨다. 고정 GNB(모바일 60px/데스크톱 76px) 아래로 섹션 상단이 가려지지 않도록
+   여유를 둔다. */
+#board,
+#festival {
+  scroll-margin-top: 76px;
+}
+.eyebrow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 5px 13px;
+  border-radius: var(--r-full);
+}
+/* §22 — 클래스명은 "coral"이지만(여러 화면 JSX 미변경 원칙) 렌더 색은 중립 톤으로 바꿨다.
+   이 변형은 CongestionBoard/FeaturedSpots(트렌딩)/CompareContent/TipsContent 등에서
+   순수 장식용 라벨로 쓰여 왔다 — 코랄은 이제 "혼잡(high)" 배지에만 남는다(§22). */
+.eyebrow-pill--coral {
+  background: var(--gray-100);
+  color: var(--ink);
+}
+.eyebrow-pill--azure {
+  background: var(--n-400);
+  color: var(--white);
+}
+.section__title {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  /* 에디토리얼 원칙(스킬 style 도메인 "Bold Typography") — 이유브로우 배지와 헤드라인
+     사이 여백을 넉넉히 둬 섹션 진입부의 리듬을 살린다. */
+  margin-top: var(--sp-4);
+  margin-bottom: var(--sp-2);
+  line-height: 1.3;
+  color: var(--ink);
+}
+@media (min-width: 1024px) {
+  /* §22 — Acenda 레퍼런스의 헤드라인 리듬(32~40px)을 참고해 32px→36px로 소폭 상향, 상한에 가깝게.
+     §43(2026-08-01) — 고정 36px 대신 clamp로 바꿔 컨테이너가 1120→1920px로 넓어질 때 제목도
+     같이 커지게 한다(대표 지시 "타이포·간격을 유동 스케일로"). 36px는 유동 구간의 하한으로
+     보존(기존 룩 유지), 상한은 42px로 과하지 않게 제한(§22의 "48px는 과장" 판단 승계). */
+  .section__title {
+    font-size: clamp(36px, 2vw, 42px);
+  }
+}
+.sample-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--n-700);
+  background: var(--n-100);
+  padding: 3px 12px;
+  border-radius: var(--r-full);
+  margin-bottom: var(--sp-5);
+}
+@media (min-width: 1024px) {
+  .section {
+    max-width: var(--container-1);
+    margin: 0 auto;
+    /* §43 — 상하 패딩을 clamp로: 컨테이너가 넓어질수록(=대체로 모니터도 크다) 섹션 사이 여백도
+       비례해 넉넉해진다. 하한(64px = 기존 --sp-16)은 보존해 1024~1439 구간 룩은 그대로다. */
+    padding: clamp(64px, 5vw, 96px) var(--sp-10);
+  }
+}
+
+/* =========================================================================
+   §43(2026-08-01, 03-design-spec.md) — 컨테이너 폭 스텝 확장. 34인치(2560~3440px) 모니터에서
+   위 1024px 브레이크포인트가 고정한 1120px 컨테이너 하나로는 화면 대부분이 빈 여백이 된다는
+   대표 피드백 대응. 같은 컨테이너 클래스 그룹(.gnb__inner/.home-search-bar/.hero-carousel/
+   .hero-greeting/.quick-menu/.section)이 화면 폭에 따라 1440→1680→1920px로 단계적으로
+   넓어진다 — 토큰 정의·해상도별 표는 tokens.css §컨테이너 폭 스텝, 03-design-spec.md §43 참고.
+   이 셀렉터들은 GNB(전 페이지 공통)와 .section(대부분의 화면이 쓰는 공통 클래스)을 포함하므로
+   홈뿐 아니라 사이트 전역에 자동 적용된다("반응형 전면 적용", 대표 지시 원문 3). 카드 그리드의
+   열 수 증가는 각 그리드 셀렉터(.featured-scroll 등)에서 auto-fill/minmax로 별도 대응한다.
+   ========================================================================= */
+@media (min-width: 1440px) {
+  .gnb__inner,
+  .home-search-bar,
+  .hero-carousel,
+  .hero-greeting,
+  .quick-menu,
+  .section,
+  .footer__cta,
+  .footer__columns,
+  .footer__copyright,
+  .compare-section {
+    max-width: var(--container-2);
+  }
+}
+@media (min-width: 1680px) {
+  .gnb__inner,
+  .home-search-bar,
+  .hero-carousel,
+  .hero-greeting,
+  .quick-menu,
+  .section,
+  .footer__cta,
+  .footer__columns,
+  .footer__copyright,
+  .compare-section {
+    max-width: var(--container-3);
+  }
+}
+@media (min-width: 1920px) {
+  .gnb__inner,
+  .home-search-bar,
+  .hero-carousel,
+  .hero-greeting,
+  .quick-menu,
+  .section,
+  .footer__cta,
+  .footer__columns,
+  .footer__copyright,
+  .compare-section {
+    max-width: var(--container-4);
+  }
+}
+
+/* §43 보정(2026-08-01, 오케스트레이터 실측) — 34"급 초광폭(3440px)에서 1920px 캡은 화면의
+   56%만 사용해 대표가 지적한 "많이 비었다"가 그대로 남는다. 2200px 이상에서 한 단계 더 넓힌다.
+   카드 그리드는 auto-fill 이라 열 수만 늘고 카드 크기는 그대로다(균일 규칙 불변). */
+@media (min-width: 2200px) {
+  .gnb__inner,
+  .home-search-bar,
+  .hero-carousel,
+  .hero-greeting,
+  .quick-menu,
+  .section,
+  .footer__cta,
+  .footer__columns,
+  .footer__copyright,
+  .compare-section {
+    max-width: var(--container-5);
+  }
+}
+
+/* 2026-08-01(대표 지적) — 상세 화면 폭. 두 번의 실패를 거쳐 정한 값이다.
+     1차: `.section` 기본값(최대 2400px) → 본문은 왼쪽 끝, 사진은 오른쪽 끝. 가운데가 텅 빔.
+     2차: 1180px 고정 → 34"에서 양옆 공백이 2260px. 사진이 혼자 떠 보임.
+   원인은 폭이 아니라 **사진이 고정폭(440px)이라 컨테이너가 커져도 안 자란 것**이었다.
+   그래서 (1) 컨테이너는 화면을 적당히 쓰고 (2) 사진 열을 **비율(%)** 로 잡아 같이 커지게 한다.
+   → 어느 화면에서든 본문:사진 비율이 같아 "일정하게" 보인다. */
+.section.spot-detail,
+.section.festival-detail,
+.section.compare-section {
+  max-width: min(2000px, 94vw);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* §42(2026-08-01) — 전광판 헤더 행: RegionDropdown + "지금 보는 지역" 상태 태그를 한 줄에 나란히
+   둔다. 좁은 화면에서는 wrap되어 태그가 다음 줄로 내려간다. */
+.board-header-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.board-header-row .sample-tag {
+  margin-bottom: 0;
+}
+
+/* 지역 드롭다운(03-design-spec.md §42) — 클릭하면 트리거 바로 아래로 목록이 펼쳐지는 listbox.
+   .dest-search__dropdown(RegionPicker.tsx)과 동일한 카드 그림자·radius 레시피를 재사용한다. */
+.region-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+.region-dropdown__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-min);
+  padding: 6px var(--sp-4);
+  background: var(--white);
+  border: 1.5px solid var(--n-100);
+  border-radius: var(--r-full);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--n-700);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+.region-dropdown__trigger:hover {
+  border-color: var(--g-500);
+}
+.region-dropdown__trigger.is-open {
+  border-color: var(--g-500);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+.region-dropdown__pin {
+  flex-shrink: 0;
+}
+.region-dropdown__chevron {
+  width: 6px;
+  height: 6px;
+  margin-top: -2px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+.region-dropdown__trigger.is-open .region-dropdown__chevron {
+  transform: rotate(-135deg);
+  margin-top: 2px;
+}
+.region-dropdown__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--sp-2);
+  list-style: none;
+  background: var(--white);
+  border: 1px solid var(--n-100);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+}
+.region-dropdown__item {
+  width: 100%;
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+}
+.region-dropdown__item:hover,
+.region-dropdown__item:focus-visible {
+  background: var(--n-50);
+}
+.region-dropdown__item.is-active {
+  color: var(--g-500);
+  font-weight: 900;
+}
+.region-dropdown__check {
+  flex-shrink: 0;
+  color: var(--g-500);
+}
+@media (prefers-reduced-motion: reduce) {
+  .region-dropdown__chevron,
+  .region-dropdown__trigger {
+    transition: none;
+  }
+}
+
+/* =========================================================================
+   실시간 전광판
+   ========================================================================= */
+.board {
+  display: flex;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding-bottom: var(--sp-2);
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.board::-webkit-scrollbar {
+  height: 0;
+}
+/* §24 — "예상 혼잡 전광판(컴팩트)" 원칙: 카드 폭·패딩·순위 숫자 크기를 줄여 한 화면에
+   더 많은 지역이 보이게 했다(156px→136px, 패딩 축소, 순위 숫자 52px→40px). */
+.board-card {
+  position: relative;
+  overflow: hidden;
+  scroll-snap-align: start;
+  flex: 0 0 136px;
+  background: var(--white);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.board-card__ranknum {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  font-size: 40px;
+  font-weight: 900;
+  color: var(--n-50);
+  z-index: 0;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  user-select: none;
+}
+.board-card__rank {
+  position: relative;
+  z-index: 1;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+  letter-spacing: 0.03em;
+}
+.board-card__name {
+  position: relative;
+  z-index: 1;
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.board-card__date {
+  position: relative;
+  z-index: 1;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.badge {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 5px 11px;
+  border-radius: var(--r-full);
+  color: var(--n-900);
+  align-self: flex-start;
+}
+.badge__icon {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  background: currentColor;
+}
+.badge--hot {
+  background: var(--level-high);
+}
+.badge--hot .badge__icon {
+  border-radius: 50%;
+}
+.badge--mid {
+  background: var(--level-mid);
+  color: var(--white);
+}
+.badge--mid .badge__icon {
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  background: var(--white);
+}
+.badge--calm {
+  background: var(--level-low);
+  /* §22 — level-low가 이제 딥 포레스트라 기본 .badge 잉크색(n-900)으로는 거의 안 보인다. */
+  color: var(--white);
+}
+.badge--calm .badge__icon {
+  border-radius: 3px;
+}
+.badge--unknown {
+  background: var(--level-unknown);
+  color: var(--ink-muted);
+}
+.badge--unknown .badge__icon {
+  border-radius: 3px;
+}
+
+/* §40(신규) — 별점·리뷰 표시(RatingBadge.tsx). 스팟/축제 카드 공용 단일 소스. 배지(.badge)와
+   같은 텍스트 크기를 쓰되 배경 없는 무채색 텍스트로 둬 "혼잡도 배지"와 시맨틱이 다름을
+   구분한다(둘 다 색 있는 pill이면 혼잡도처럼 오독될 수 있다). 데이터가 없을 때도("-", 0)
+   항상 같은 자리를 차지해 카드 높이가 데이터 유무로 달라지지 않는다. */
+.rating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.rating-badge svg {
+  flex: 0 0 auto;
+}
+
+/* 로딩 스켈레톤 */
+.board-card--skeleton {
+  gap: var(--sp-2);
+}
+.skeleton-bar {
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--n-50) 25%, var(--n-100) 37%, var(--n-50) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
+  }
+}
+
+/* 전광판 상태 배너/에러 */
+.board-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--b-700);
+  background: var(--b-50);
+  border: 1px solid var(--b-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.board-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  background: var(--white);
+  border: 1px solid var(--b-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-card);
+}
+.board-error__msg {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.board-error__hint {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.board-source-note {
+  margin-top: var(--sp-4);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* §31(신규) — 전광판 하단 "한적한 날 예보" 상세 유도 1줄. board-source-note와 같은 레시피를
+   쓰되(신규 색 없음) g-700(브랜드 포인트 잉크)로 살짝 강조해 안내 문구임을 구분한다. */
+.board-forecast-hint {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--g-700);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* =========================================================================
+   홈 발견 섹션(신규) — "숨은길 PICK" / "지금 뜨는 여행지" (§46 순서, FeaturedSpots.tsx)
+   모바일: 가로 스크롤 캐러셀(.board와 동일 패턴, scroll-snap). 720px↑: 그리드로 전환해
+   한 화면에서 더 많이 훑어볼 수 있게(카드 자체는 동일, 컨테이너만 바뀜).
+   ========================================================================= */
+.featured-section {
+  padding-top: var(--sp-8);
+}
+.featured-scroll {
+  display: flex;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding-bottom: var(--sp-2);
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.featured-scroll::-webkit-scrollbar {
+  height: 0;
+}
+/* §24 — "얕은 섹션 다발"(스크롤당 정보량↑) 원칙에 맞춰 카드 폭/사진 높이를 축소했다
+   (200px→168px, 사진 132px→104px) — 한 화면에 더 많은 카드가 보이게 해 "사진 스트립"에
+   가깝게 만든다(포털 문법). ThemeCollections/FestivalBanner도 이 클래스를 공유해 함께 축소된다. */
+.featured-card-link {
+  display: block;
+  flex: 0 0 168px;
+  scroll-snap-align: start;
+  border-radius: var(--r-md);
+}
+.featured-card {
+  height: 100%;
+  background: var(--white);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.featured-card-link:hover .featured-card,
+.featured-card-link:focus-visible .featured-card {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+/* §33-4(2026-07-29) — 고정 px 높이(104px) 대신 고정 aspect-ratio로 통일했다. 720px↑에서
+   .featured-scroll이 flex(가로 스크롤)→grid(3~4열)로 바뀌면 카드 폭이 늘어나는데, 높이만
+   고정이면 사진 비율이 브레이크포인트마다 달라져(좁고 김↔넓고 낮음) 눌리거나 늘어져 보였다.
+   aspect-ratio는 폭이 바뀌어도 비율이 유지돼 어느 화면에서도 동일한 크롭으로 보인다(원래
+   168/104 ≈ 1.6:1 비율을 8/5로 그대로 보존, 시각적 변화 없음). */
+.featured-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  background: var(--n-50);
+  flex: 0 0 auto;
+  /* 어떤 원본 비율(세로 사진 포함)이 와도 미디어 박스가 8/5를 넘지 못하게 이중 안전장치. */
+  overflow: hidden;
+}
+/* 혼잡도 없는 카드의 높이 예약용 고스트 뱃지 — 화면·스크린리더 모두에 안 보이고 자리만 차지.
+   ("정보없음" 문구는 신뢰성을 해친다는 대표 지시로 미표기.) */
+.featured-card__congestion--ghost {
+  visibility: hidden;
+}
+.featured-card__img {
+  /* 축제 카드와 동일한 방탄 처리 — 이미지를 흐름에서 빼 박스가 비율(8/5)로만 정해지게. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.featured-card__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.featured-card__placeholder--mint {
+  background: var(--g-100);
+  color: var(--g-500);
+}
+.featured-card__placeholder--sand {
+  background: var(--b-100);
+  color: var(--b-500);
+}
+.featured-card__placeholder--azure {
+  background: var(--n-100);
+  color: var(--n-500);
+}
+.featured-card__badge {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 1;
+}
+/* §34(신규, 부록 H.3) — 사진 우하단 저작권 출처 표기. 반투명 흰 배경 위에 회색 텍스트를 올려
+   어느 사진 위에서도(밝든 어둡든) 최소한의 대비를 확보한다(거의 불투명한 흰 배경이라 사진 색에
+   거의 영향받지 않음 — gray-500 on white 4.6:1, ui-ux-pro-max Color Contrast 근거를 좁은
+   배경에도 재사용). 좌상단 "숨은 스팟" 배지와 반대 코너라 서로 겹치지 않는다. */
+.featured-card__credit {
+  position: absolute;
+  right: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 1;
+  max-width: calc(100% - var(--sp-4));
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--gray-500);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.featured-card__media-skeleton {
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  border-radius: 0;
+}
+.featured-card__body {
+  flex: 1;
+  padding: var(--sp-3) var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.featured-card--skeleton .featured-card__body {
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+}
+.featured-card__category {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--n-500);
+  letter-spacing: 0.03em;
+}
+.featured-card__name {
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  /* 카드 높이 균일(하드 제약, 반복 회귀 지점) — 이름이 1줄인 카드("애니멀빌리지")와 2줄인 카드
+     ("[강릉 바우길 3구간] 어명을 받은 소나무길")가 섞이면 같은 행에서 288px vs 313px 로 갈린다
+     (실측, 2026-08-01 반응형 개편 후 재발). **2줄 고정**: 넘치면 말줄임, 모자라면 빈 줄로 자리를
+     지켜 어떤 이름이 와도 같은 높이가 되게 한다. 축제 카드(.festival-card__title)와 동일 처방. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.35em * 2);
+  line-height: 1.35;
+}
+.featured-card__region {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+/* §40(신규) — 혼잡도 배지 + 별점·리뷰(RatingBadge)를 한 행에 담는 wrapper. 기존에는
+   .featured-card__congestion 자체가 margin-top:auto로 바닥에 붙었으나, 이제 그 역할을
+   wrapper가 맡는다(배지는 행 안의 한 아이템일 뿐). flex-shrink:0을 양쪽에 줘서 폭이
+   모자라도 배지 텍스트가 줄바꿈되며 행 높이를 늘리는 일이 없게 한다 — 대신 넘치는 부분은
+   .featured-card의 overflow:hidden으로 조용히 잘린다(카드 높이 불변이 최우선, 대표 지시). */
+.featured-card__meta-row {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1);
+  overflow: hidden;
+}
+.featured-card__congestion {
+  flex-shrink: 0;
+}
+.featured-card__meta-row .rating-badge {
+  flex-shrink: 0;
+}
+@media (min-width: 720px) {
+  .featured-scroll {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    overflow: visible;
+    scroll-snap-type: none;
+    padding-bottom: 0;
+    /* 대표 리포트(엣지993·원시학 박스 길쭉): 기본 stretch는 한 카드가 커지면 같은 줄
+       전체를 늘린다 — start로 고정해 카드 높이가 서로에게 전염되지 않게 한다. */
+    align-items: start;
+  }
+  .featured-card-link {
+    flex: none;
+  }
+}
+@media (min-width: 1100px) {
+  /* §43 — 고정 4열 대신 auto-fill/minmax로 바꿔 컨테이너가 1120→1920px(§43 컨테이너 스텝)로
+     넓어질수록 열이 자동으로 늘어난다(대표 지시 "그리드 열 수를 화면 폭에 따라 증가"). 카드
+     최소폭 230px는 §33-4가 정한 8:5 사진비율에서 글자가 뭉개지지 않는 하한을 그대로 썼다.
+     계산상 1100→4열, 1440→5열, 1680→6열, 1920→7열로 늘어난다(03-design-spec.md §43 표 참고). */
+  .featured-scroll {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+}
+
+/* =========================================================================
+   테마 컬렉션 그룹 (Phase 3, ThemeCollections.tsx) — 테마마다 반복되던 이유브로우를
+   섹션당 한 번(부모 .section__title)으로 통합하고, 각 테마는 h3 소제목 + 카드 행만 갖는다.
+   ========================================================================= */
+.theme-collections__group {
+  margin-top: var(--sp-6);
+}
+.theme-collections__group:first-of-type {
+  margin-top: var(--sp-2);
+}
+.theme-collections__group-title {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--sp-3);
+}
+/* §44(신규, 03-design-spec.md — 대표 지시 "테마별 여행 더보기 + 전체 N곳 표기") — 제목과
+   "전체 N곳"을 한 행에 놓는다. 헤드 자체가 margin-bottom을 가지므로 안의 제목은 0으로
+   덮어쓴다(두 배 여백 방지, 신규 hex 없음 — 기존 --ink-muted/--text-xs 재사용). */
+/* 대표 지시(2026-08-01) — 더보기를 제목 옆에 둔다. 제목은 왼쪽에서 남는 폭을 먹고,
+   "전체 N곳"과 "더보기"는 오른쪽에 붙는다(제목이 길어도 버튼이 밀려나지 않게 shrink 금지). */
+.theme-collections__group-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.theme-collections__group-head .theme-collections__group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.theme-collections__count {
+  margin-left: auto;
+}
+.theme-collections__group-head .theme-collections__group-title {
+  margin-bottom: 0;
+}
+.theme-collections__count {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+/* 제목 옆 텍스트 링크형 더보기(카드 아래 큰 버튼 → 헤더 인라인으로 이동, 대표 지시).
+   기존 .festival-section__cta 와 같은 "텍스트+화살표" 문법을 재사용해 신규 시각 언어를
+   만들지 않는다. 터치 타겟은 44px 를 지킨다. */
+.theme-collections__more-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--g-600);
+  white-space: nowrap;
+  border-radius: var(--r-sm);
+}
+.theme-collections__more-btn:hover:not(:disabled),
+.theme-collections__more-btn:focus-visible {
+  color: var(--g-700);
+  text-decoration: underline;
+}
+.theme-collections__more-btn:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+}
+.theme-collections__load-error {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* =========================================================================
+   지역 축제 (Phase 3, FestivalBanner.tsx) — 실데이터 연동으로 정적 배너 1건에서
+   가로 스크롤 카드 목록으로 교체됐다. .featured-scroll(§홈 발견 섹션) 셸을 그대로 재사용하고
+   카드 내부만 축제 전용(기간·D-day/진행중 배지)으로 새로 짰다. 신규 CDN·폰트 없음.
+   ========================================================================= */
+.festival-section {
+  padding-top: var(--sp-8);
+}
+/* §36(신규) — 카드 클릭 이동을 위해 Link(.festival-card-link)가 .festival-card를 감싸면서, 가로
+   스크롤 치수 지정(flex-basis/scroll-snap-align)을 실제 flex 아이템인 이 래퍼로 옮겼다
+   (.featured-card-link와 동일 구조 — 링크가 flex 치수를, 안쪽 article이 시각적 카드 껍데기를 맡는다). */
+.festival-card-link {
+  display: block;
+  flex: 0 0 220px;
+  /* min-width:0 필수 — flex 아이템 기본 min-width:auto 는 nowrap 주소/기간의 콘텐츠 폭이
+     flex-basis(220px)를 밀어내 카드 폭이 제각각이 되게 한다(대표 실측 회귀, 2026-07-31.
+     Link 래퍼 도입 전에는 .festival-card 의 overflow:hidden 이 이 역할을 대신했었다). */
+  min-width: 0;
+  scroll-snap-align: start;
+}
+@media (min-width: 720px) {
+  .festival-card-link {
+    flex: none;
+  }
+}
+.festival-card {
+  background: var(--white);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 래퍼(.festival-card-link)가 그리드에서 stretch 로 균일해져도 안쪽 카드가 auto 높이면
+     내용량에 따라 시각 높이가 갈라진다 — 래퍼를 꽉 채워 카드 높이를 통일한다(대표 지시). */
+  height: 100%;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.festival-card-link:hover .festival-card,
+.festival-card-link:focus-visible .festival-card {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+/* §33-4(2026-07-29) — featured-card__media와 동일 이유로 고정 px 높이(110px) 대신 고정
+   aspect-ratio(2:1, 기존 220/110 비율 그대로 보존)로 통일한다. */
+.festival-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  flex: 0 0 auto;
+  overflow: hidden;
+  /* §22 — 코랄/브라운 그라디언트(장식용)를 무채색 잉크 계열로 바꿨다(대표 지시 "코랄은
+     혼잡 시맨틱 전용" 원칙). 사진이 없을 때 대체 배경이라 브랜드 색이 아니어도 무방하다. */
+  background: linear-gradient(135deg, var(--ink) 0%, var(--g-700) 100%);
+}
+.festival-card__img {
+  /* 대표 리포트(축제 카드 길쭉): 세로 포스터가 aspect-ratio 박스를 밀어 키우는 것을
+     원천 차단 — 이미지를 흐름에서 빼면 박스 높이는 순수하게 비율로만 정해진다. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.festival-card__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.75);
+}
+.festival-badge {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+}
+/* "진행중" — mint(여유/긍정 시맨틱과 동일 톤). g-500이 딥 포레스트로 바뀌어 글자색은
+   흰색으로 뒤집었다(§22, .chip--mint/.badge--calm과 동일 이유). */
+.festival-badge--live {
+  background: var(--g-500);
+  color: var(--white);
+}
+/* "D-N" — white bg + b-dark text(.dest-search__notice와 동일하게 이미 쓰이는 조합 재사용). */
+.festival-badge--upcoming {
+  background: var(--white);
+  color: var(--b-dark);
+}
+.festival-card__body {
+  padding: var(--sp-3) var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.festival-card__title {
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  /* 카드 크기 통일(대표 지시): 제목을 항상 2줄 블록으로 고정 — 1줄짜리든 3줄짜리든
+     카드 높이가 제목 길이에 따라 달라지지 않는다. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.55em * 2);
+}
+/* §40(신규) — 기간(period) + 별점·리뷰(RatingBadge)를 한 행에. period가 min-width:0으로
+   줄어들 수 있어야 text-overflow:ellipsis가 실제로 동작한다(표준 flex+ellipsis 조합).
+   RatingBadge는 flex-shrink:0으로 항상 제 크기를 유지 — 폭이 모자라면 period 쪽만 "..."로
+   줄어든다(카드 높이 불변이 최우선, 대표 지시). */
+.festival-card__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.festival-card__meta-row .festival-card__period {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.festival-card__meta-row .rating-badge {
+  flex-shrink: 0;
+}
+.festival-card__period {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--b-dark);
+  /* 카드 크기 통일: 기간·주소가 길어도 1줄 말줄임 — 줄바꿈으로 카드 높이가 달라지지 않게. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.festival-card__address {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* festivals:[] (정상 빈 지역) 전용 안내 카드 — .board-error와 동일한 카드 관례 재사용. */
+.festival-empty {
+  background: var(--white);
+  border: 1px solid var(--b-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-card);
+}
+.festival-empty__msg {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.festival-empty__hint {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+/* 섹션 하위 CTA — Hero의 주요 CTA(.btn--coral)보다 시각적으로 낮은 위계(텍스트 링크)로
+   두어 "화면당 주요 CTA 하나" 원칙(ui-ux-pro-max `primary-action`)을 지킨다. */
+.festival-section__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--touch-min);
+  margin-top: var(--sp-4);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-700);
+  transition: color 0.15s ease;
+}
+.festival-section__cta:hover {
+  color: var(--n-900);
+}
+.festival-section__cta svg {
+  transition: transform 0.15s ease;
+}
+.festival-section__cta:hover svg {
+  transform: translateX(2px);
+}
+/* §27(/festivals) — 홈 축제 배너 하단에 CTA가 두 개(지역 스팟 더 보기 / 전국 축제 모두 보기)로
+   늘어 한 행에 나란히 두되 좁은 화면에서는 자연스럽게 줄바꿈되도록 wrap을 허용한다. */
+.festival-section__cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-6);
+}
+.festival-section__cta-row .festival-section__cta {
+  margin-top: var(--sp-4);
+}
+
+/* =========================================================================
+   전국 축제 페이지 (신규, `/festivals` — 03-design-spec.md §27)
+   FestivalBanner의 카드 문법(.festival-card, FestivalCard 컴포넌트)을 그대로 재사용하고
+   컨테이너만 가로 스크롤(.featured-scroll)에서 반응형 그리드로 바꿨다 — 화면 전체가 이
+   목록 하나에 집중하는 전용 페이지라 스크롤 없이 한 번에 더 많이 훑어볼 수 있어야 한다
+   (지시서: "모바일 1~2열, 데스크톱 3~4열"). §36 — 카드 치수 지정(flex: 0 0 220px)은 이제
+   .festival-card-link(그리드/스크롤 공용 flex 아이템)에 있고, flex 전용 속성이라 grid
+   컨테이너 안에서는 적용되지 않고 그리드 컬럼 폭을 그대로 따른다(부작용 없음, 기존과 동일).
+   ========================================================================= */
+.festivals-page__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.festivals-page__count {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink-muted);
+}
+.festivals-filter-bar {
+  margin-top: var(--sp-2);
+  padding-bottom: var(--sp-6);
+  border-bottom: 1px solid var(--gray-100);
+}
+.festivals-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+@media (min-width: 560px) {
+  .festivals-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 900px) {
+  .festivals-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1200px) {
+  /* §43 — 고정 4열 대신 auto-fill/minmax(전 페이지 컨테이너 스텝 확장과 동일 원칙, 03-design-spec.md
+     §43). 260px는 이 그리드의 16:9 사진 + 제목/기간/주소 텍스트가 뭉개지지 않는 하한. */
+  .festivals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+/* 그리드 안에서는 카드가 가로 스크롤 카드보다 눈에 더 오래 머무르므로 사진 영역을 살짝 키운다
+   (.festival-card__media 기본 2:1 → 이 컨텍스트에서만 16:9, 다른 화면 영향 없음). §33-4 —
+   고정 px 높이(148px)였던 이전 값은 그리드 컬럼 폭이 1~4열로 바뀔 때마다 비율이 들쭉날쭉해져
+   aspect-ratio로 교체했다(모바일 1열의 넓은 폭에서도 16:9로 일관된 크롭 유지). */
+.festivals-grid .festival-card__media {
+  aspect-ratio: 16 / 9;
+}
+
+/* =========================================================================
+   AI 코스 홍보 — 다크 풀블리드 "얕은 밴드" (§22 신설 → §24에서 높이 축소)
+   §22가 Acenda "EXPLORE MALDIVES" 문법(꽉 찬 어두운 사진 배너 + 굵은 헤드라인 + CTA)을
+   흡수했고, §24(구석구석 재구성)는 그 세로 높이만 줄였다 — "얕은 섹션 다발" 원칙(포털은
+   스크롤당 정보량이 높아야 한다)에 맞춰 다크 배너가 화면을 통째로 차지하지 않게 했다.
+   좌우로 꽉 채우는 풀블리드 구성·사진 데이터(hidden_picks)·폴백 그라디언트는 §22 그대로.
+   ========================================================================= */
+.course-promo {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  background: linear-gradient(135deg, var(--ink) 0%, var(--g-700) 45%, var(--g-600) 100%);
+  background-size: cover;
+  background-position: center;
+}
+/* §33-1(2026-07-29) — 정적 배경 1장을 무작위 사진 크로스페이드로 바꾸면서, 배경을 section
+   자체의 background-image가 아니라 겹쳐진 두 레이어(course-promo__photo-layer)로 분리했다.
+   opacity 전환만 쓴다(scroll/transform 계열 API 없음) — Hero.tsx 캐러셀의 scrollIntoView가
+   페이지 세로 스크롤까지 끌고 간 버그 교훈을 그대로 승계해, 이 컴포넌트는 애초에 스크롤에
+   영향을 줄 수 있는 요소를 하나도 쓰지 않는다. */
+.course-promo--photo {
+  background: var(--ink);
+}
+.course-promo__photos {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.course-promo__photo-layer {
+  position: absolute;
+  inset: 0;
+  background-image: var(--course-promo-photo);
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.course-promo__photo-layer--visible {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .course-promo__photo-layer {
+    transition: none;
+  }
+}
+.course-promo__overlay {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    100deg,
+    rgba(5, 14, 27, 0.82) 0%,
+    rgba(5, 14, 27, 0.62) 45%,
+    rgba(5, 14, 27, 0.4) 100%
+  );
+}
+.course-promo__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  padding: var(--sp-8) var(--sp-4);
+  margin: 0 auto;
+}
+@media (min-width: 1024px) {
+  .course-promo__inner {
+    max-width: 720px;
+    padding: var(--sp-10) var(--sp-10);
+    margin: 0;
+  }
+}
+.course-promo__title {
+  margin-top: var(--sp-3);
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--white);
+}
+.course-promo__sub {
+  margin-top: var(--sp-3);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.82);
+  max-width: 460px;
+  line-height: 1.6;
+}
+.course-promo__cta {
+  margin-top: var(--sp-5);
+}
+
+/* =========================================================================
+   온보딩 (MVP-3, 01-interface-contract.md 부록 B)
+   ========================================================================= */
+/* §22 — 온보딩/추천/코스 소개 화면이 공유하는 다크 헤더. 네이비(정보색) 그라디언트는 "AI 티"의
+   대표 offender라 킬 대상이었다 — 이 3개 화면은 구조를 다시 그리지 않는 대신(스코프 제약),
+   같은 그라디언트 "모양"은 유지하고 색상 정지값만 잉크→딥그린(브랜드 포인트)으로 바꿔
+   홈과 톤을 맞췄다(재구성 아님, 토큰 치환). */
+.onboard-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--ink) 0%, var(--g-700) 55%, var(--g-600) 100%);
+  padding: var(--sp-8) var(--sp-4) var(--sp-10);
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+}
+.onboard-hero__title {
+  font-size: var(--text-3xl);
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--white);
+  margin-top: var(--sp-4);
+}
+.onboard-hero__sub {
+  margin-top: var(--sp-3);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.82);
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+.onboard-section {
+  padding: var(--sp-6) var(--sp-4) var(--sp-10);
+}
+.onboard-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+}
+.onboard-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: var(--sp-2);
+}
+.onboard-textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 2px solid var(--n-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  font-size: var(--text-base);
+  font-family: inherit;
+  color: var(--ink);
+  resize: vertical;
+  transition: border-color 0.18s;
+}
+.onboard-textarea:focus {
+  outline: none;
+  border-color: var(--n-500);
+}
+.onboard-textarea::placeholder {
+  color: var(--gray-400);
+}
+.onboard-textarea__count {
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  margin-top: var(--sp-1);
+}
+.onboard-axis {
+  margin-top: var(--sp-6);
+}
+.onboard-axis__label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+  margin-bottom: var(--sp-2);
+}
+.onboard-axis__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.onboard-chip {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-full);
+  border: 2px solid var(--n-100);
+  background: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.onboard-chip:hover {
+  border-color: var(--n-400);
+}
+.onboard-chip.is-selected {
+  background: var(--g-500);
+  border-color: var(--g-500);
+  color: var(--white);
+  font-weight: 800;
+}
+.onboard-notice {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--b-dark);
+  margin-bottom: var(--sp-2);
+}
+.onboard-submit {
+  margin-top: var(--sp-8);
+}
+.onboard-validation {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--b-dark);
+}
+
+/* 로딩(§B.5-3): ~24초 추론 동안 이탈을 막는 진행 표시 */
+.onboard-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--sp-12) var(--sp-4);
+  gap: var(--sp-4);
+}
+.onboard-loading__spinner {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 5px solid var(--n-100);
+  border-top-color: var(--g-500);
+  animation: onboard-spin 1s linear infinite;
+}
+@keyframes onboard-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.onboard-loading__title {
+  font-size: var(--text-xl);
+  font-weight: 900;
+  color: var(--ink);
+}
+.onboard-loading__msg {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 700;
+  min-height: 20px;
+}
+.onboard-loading__bar {
+  width: 100%;
+  max-width: 280px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--n-100);
+  overflow: hidden;
+}
+.onboard-loading__bar-fill {
+  height: 100%;
+  background: var(--g-500);
+  border-radius: var(--r-full);
+  transition: width 0.4s ease;
+}
+.onboard-loading__elapsed {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 300px;
+}
+.onboard-loading__cancel {
+  margin-top: var(--sp-1);
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-3);
+  background: none;
+  border: none;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* 결과(§B.5-4) */
+.onboard-result__head {
+  text-align: center;
+  margin-bottom: var(--sp-6);
+}
+.onboard-result__title {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  color: var(--ink);
+}
+.onboard-result__sub {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.onboard-result__fallback {
+  margin-bottom: var(--sp-4);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--g-700);
+  background: var(--g-50);
+  border: 1px solid var(--g-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+}
+.onboard-axis-group {
+  margin-bottom: var(--sp-5);
+}
+.onboard-axis-group__label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+  margin-bottom: var(--sp-2);
+}
+.onboard-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.onboard-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+  background: var(--g-50);
+  border: 1px solid var(--g-100);
+  color: var(--g-700);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+.onboard-tag--low-confidence {
+  opacity: 0.6;
+}
+.onboard-result__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-8);
+}
+
+/* =========================================================================
+   추천 화면 (MVP-4, 01-interface-contract.md 부록 C)
+   ========================================================================= */
+.recommend-cta-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  background: var(--g-50);
+  border: 1px solid var(--g-100);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+  margin: var(--sp-4) 0;
+}
+.recommend-cta-banner__text {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--g-700);
+  flex: 1 1 200px;
+}
+
+.spot-region-row {
+  margin-top: var(--sp-5);
+}
+.spot-region-row__quick-label {
+  margin-top: var(--sp-4);
+}
+/* §23 — 필터 3그룹(카테고리/유형/정렬)이 sp-4(16px)로 다닥다닥 붙어 "폼처럼" 보였다. sp-6(24px)로
+   늘려 그룹 간 여백 리듬을 확보한다(홈 섹션 간 여백처럼 그룹을 시각적으로 분리). */
+.spot-category-row {
+  margin-top: var(--sp-6);
+}
+
+.filter-chip {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-full);
+  border: 2px solid var(--n-100);
+  background: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.filter-chip:hover {
+  border-color: var(--n-400);
+}
+/* §23(2026-07-29, 내부 화면 2차 폴리시) — 선택 상태는 "정보"가 아니라 "사용자의 능동적 선택"이라
+   .onboard-chip.is-selected(온보딩 취향 칩, g-500)와 같은 시맨틱이어야 한다. 이전엔 애저(n-500)라
+   같은 화면 안에서 "칩을 눌러 고른 상태"가 두 가지 색으로 갈려 있었다(온보딩=그린, 추천 필터=애저) —
+   그린 단일 포인트 원칙에 맞춰 통일한다(새 hex 없음, 기존 g-500 재사용). */
+.filter-chip.is-selected {
+  background: var(--g-500);
+  border-color: var(--g-500);
+  color: var(--white);
+  font-weight: 800;
+}
+
+.spot-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+@media (min-width: 720px) {
+  .spot-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-5);
+  }
+}
+@media (min-width: 1100px) {
+  /* §43 — 고정 3열 대신 auto-fill/minmax. 280px는 스팟 카드(이름+카테고리+평점+혼잡 배지 4줄)가
+     좁아져 줄바꿈이 늘지 않는 하한으로 잡았다(다른 카드보다 텍스트 밀도가 높아 더 넓게 잡음). */
+  .spot-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+.spot-card-link {
+  display: block;
+}
+.spot-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.spot-card-link:hover .spot-card,
+.spot-card-link:focus-visible .spot-card {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.spot-card--skeleton {
+  gap: var(--sp-3);
+}
+.spot-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  /* 우측 상단 저장 하트(.spot-card__save, 44px)와 겹치지 않게 그 폭만큼 비워둔다. */
+  padding-right: calc(var(--touch-min) + var(--sp-1));
+}
+.spot-card__category {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--n-500);
+  letter-spacing: 0.03em;
+}
+.badge--hidden-gem {
+  background: var(--g-500);
+  color: var(--white); /* §22 — g-500이 어두워져 기본 .badge 잉크색 대신 흰 글자로 */
+}
+/* 인기명소(숨은 스팟 아님) — 초록(숨은 스팟)·코랄(혼잡)과 구분되는 앰버/골드(featured 느낌). */
+.badge--popular {
+  background: #f2a93d;
+  color: var(--n-900);
+}
+.spot-card__name {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.spot-card__address {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.spot-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.theme-badge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+  background: var(--n-100);
+  color: var(--n-700);
+}
+.theme-badge--unknown {
+  background: var(--gray-100);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+}
+
+.spot-card__score {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.spot-card__score-label {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+}
+.spot-card__score-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--n-100);
+  overflow: hidden;
+}
+.spot-card__score-bar > div {
+  height: 100%;
+  background: var(--g-500);
+  border-radius: var(--r-full);
+}
+.spot-card__score-value {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--g-700);
+  flex: 0 0 auto;
+}
+
+.spot-card__reasons {
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--gray-100);
+}
+.spot-card__reasons-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+  margin-bottom: var(--sp-2);
+}
+.spot-card__reason-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reason-chip {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+  background: var(--n-50);
+  color: var(--n-700);
+}
+.reason-chip--signal {
+  background: var(--b-50);
+  color: var(--b-dark);
+}
+
+/* =========================================================================
+   추천 화면 지도 (MVP-6, 01-interface-contract.md 부록 E)
+   모바일(<1024px): 리스트 상단 토글로 접이식 지도(기본 접힘 — 데이터 절약·리스트가 정본).
+   데스크톱(1024px+): 좌 지도(sticky)·우 리스트 2컬럼.
+   ========================================================================= */
+.recommend-map-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-5);
+  margin-top: var(--sp-4);
+  border-radius: var(--r-full);
+  border: 2px solid var(--n-100);
+  background: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-700);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+/* §23 — 지도 토글도 "펼침"이라는 사용자 액션 상태라 필터 칩과 같은 그린으로 통일(위 .filter-chip.is-selected와 동일 근거). */
+.recommend-map-toggle[aria-expanded="true"] {
+  background: var(--g-500);
+  border-color: var(--g-500);
+  color: var(--white);
+}
+
+.recommend-layout {
+  margin-top: var(--sp-2);
+}
+.recommend-layout__map {
+  display: none;
+  border-radius: var(--r-lg);
+}
+.recommend-layout__map.is-open {
+  display: block;
+  height: 260px;
+  margin-top: var(--sp-3);
+}
+.recommend-layout__list {
+  margin-top: var(--sp-5);
+}
+@media (min-width: 1024px) {
+  .recommend-map-toggle {
+    display: none;
+  }
+  .recommend-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 420px) 1fr;
+    gap: var(--sp-6);
+    align-items: start;
+    margin-top: var(--sp-5);
+  }
+  .recommend-layout__map {
+    display: block;
+    height: auto;
+    min-height: 520px;
+    height: calc(100vh - 76px - var(--sp-10));
+    position: sticky;
+    top: calc(76px + var(--sp-5));
+    margin-top: 0;
+  }
+  .recommend-layout__list {
+    margin-top: 0;
+  }
+}
+
+.spot-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--n-50);
+  box-shadow: var(--shadow-card);
+}
+.spot-map__canvas {
+  width: 100%;
+  height: 100%;
+}
+.spot-map__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+.spot-map--fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6);
+  text-align: center;
+  min-height: 220px;
+}
+.spot-map__fallback-msg {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+}
+.spot-map__fallback-hint {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.spot-map--placeholder {
+  min-height: 220px;
+}
+
+/* Tmap InfoWindow 내부 콘텐츠 — SpotMap.tsx가 DOM으로 조립해 outerHTML로 주입한다. */
+.spot-map-popup {
+  min-width: 200px;
+  max-width: 240px;
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-base);
+}
+.spot-map-popup__name {
+  font-size: var(--text-sm);
+  font-weight: 900;
+  color: var(--ink);
+  margin: 0;
+}
+.spot-map-popup__category {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--n-500);
+  margin: 0;
+}
+.spot-map-popup__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+.spot-map-popup__match {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  background: var(--n-100);
+  color: var(--n-700);
+}
+.spot-map-popup__match--muted {
+  background: var(--gray-100);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+}
+.spot-map-popup__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  margin-top: 4px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-full);
+  background: var(--g-500);
+  color: var(--white);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+/* =========================================================================
+   AI 추천 코스 화면 (/course) — 순서 있는 세로 타임라인.
+   .recommend-layout/.recommend-map-toggle/.spot-map 등 지도+리스트 2컬럼 레이아웃과
+   지도 폴백은 추천 화면(MVP-6)과 완전히 동일 패턴이라 그대로 재사용한다(신규 CSS 없음).
+   ========================================================================= */
+.course-timeline {
+  list-style: none;
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.course-timeline__item {
+  display: flex;
+  gap: var(--sp-3);
+}
+.course-timeline__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  flex: 0 0 auto;
+}
+/* §23 — 순서 번호(1,2,3...)는 "AI가 짠 코스"라는 브랜드 액션의 결과물이라 애저(정보색) 대신
+   그린으로 통일한다 — 상단 .onboard-hero(잉크→딥그린)와 아래 .course-timeline__slot-badge(이미 g-700/g-100)는
+   진작 그린이었는데 정작 번호 배지만 애저로 남아 있어 페이지 안에서 톤이 갈렸다. */
+.course-timeline__node {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--g-500);
+  color: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.course-timeline__node--skeleton {
+  background: var(--gray-100);
+}
+.course-timeline__rail-line {
+  width: 2px;
+  flex: 1;
+  min-height: var(--sp-8);
+  margin-top: 4px;
+  background: var(--gray-300);
+}
+.course-timeline__content {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: var(--sp-5);
+}
+.course-timeline__slot-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--g-700);
+  background: var(--g-100);
+  padding: 4px 13px;
+  border-radius: var(--r-full);
+  margin-bottom: var(--sp-2);
+}
+.course-leg {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--sp-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+/* §23 — 이탤릭은 "정보없음" 문장 전체에 걸면 무게가 과해 보여 뺐다(다른 정보없음 상태,
+   .spot-detail__overview--empty 등과도 톤을 맞춤 — 사이트 전체에서 정보없음은 색으로만 표시). */
+.course-leg--unknown {
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  font-weight: 600;
+}
+/* 도보/차 구간 정보(CourseLegInfo) — 이모지(🚶/🚗) 대신 인라인 SVG 아이콘 + 텍스트.
+   ui-ux-pro-max 체크리스트 "No emojis as icons(use SVG)" 근거. */
+.course-leg__part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* §23 — 도보/차 아이콘은 브랜드 액션도, 정보 시맨틱도 아닌 순수 유틸리티 표기라 애저 대신
+   본문과 같은 ink-muted로 낮춰 "정돈"했다 — 이동 정보 한 줄 안에서 아이콘만 튀지 않게. */
+.course-leg__part svg {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+}
+.course-leg__sep {
+  color: var(--gray-300);
+}
+
+/* =========================================================================
+   §28(신규, 06-deep-audit-gap-plan §2-B 대응) — 코스 상세 "읽는 경험" 업그레이드.
+   신규 hex 없음(기존 토큰만 재사용). 대응 항목: B-2(감성 제목)·B-3(총거리)·B-5(프린트)·
+   B-9(스텝 사진 스트립)·B-10(스텝별 사진+설명). B-6(메타카드 3개)·B-8(지도 번호 마커,
+   CourseMap.tsx에 이미 구현됨)·B-4(좋아요·조회수, 흡수 불가)는 이번 스코프 밖 —
+   03-design-spec.md §28 참고.
+   ========================================================================= */
+
+/* 앵커 클릭(사진 스트립 → 타임라인 스텝) 시 고정 GNB에 상단이 가려지지 않게 여유를 둔다.
+   #board/#festival(76px)과 동일 원칙이나, 스텝 항목 위 시각적 리듬(순번 노드) 여유분을 더했다. */
+.course-timeline__item {
+  scroll-margin-top: 96px;
+}
+
+/* 헤드라인(ai_title) + 메타(지역·스팟수·총거리) + 인쇄 버튼. */
+.course-result-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  margin-bottom: var(--sp-2);
+}
+.course-result-head__title {
+  font-size: var(--text-xl);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.course-result-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.course-result-head__meta-item + .course-result-head__meta-item::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--gray-300);
+}
+/* 인쇄 버튼 — .recommend-map-toggle과 같은 "보더+흰배경 보조 액션" 문법(신규 색 없음). */
+.course-print-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-4);
+  margin-top: 2px;
+  border-radius: var(--r-full);
+  border: 2px solid var(--n-100);
+  background: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-700);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.course-print-btn:hover {
+  border-color: var(--g-500);
+  color: var(--g-700);
+}
+
+/* 스텝 사진 스트립(B-9) — 코스 전체를 사진으로 훑는 가로 스크롤. 지도가 실패해도(SDK 로드 실패)
+   항상 동작한다(타임라인이 정본이라는 사이트 원칙, CourseStepPhotoStrip.tsx 주석 근거). */
+.course-photo-strip {
+  display: flex;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding: var(--sp-1) 2px var(--sp-3);
+  margin-bottom: var(--sp-2);
+  -webkit-overflow-scrolling: touch;
+}
+.course-photo-strip__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  width: 76px;
+  text-align: center;
+}
+.course-photo-strip__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--g-500);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 900;
+}
+.course-photo-strip__thumb {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  border: 2px solid var(--white);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.course-photo-strip__item:hover .course-photo-strip__thumb,
+.course-photo-strip__item:focus-visible .course-photo-strip__thumb {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.course-photo-strip__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.course-photo-strip__placeholder {
+  width: 100%;
+  height: 100%;
+}
+.course-photo-strip__name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* 스텝 카드(B-10) — 사진 + 기존 RecommendSpotCard(혼잡/숨은 뱃지·매칭도, 우위 노출 유지) +
+   blurb 발췌 2줄. 안쪽 .spot-card는 자체 그림자/배경을 끄고 이 카드 하나로 통합한다(카드 속
+   카드 이중 그림자 방지) — /recommend 화면의 .spot-card 자체 스타일은 건드리지 않는다
+   (셀렉터가 .course-step-card 안에 중첩된 경우로 한정, 특이도로만 재정의). */
+.course-step-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.course-step-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--gray-100);
+}
+.course-step-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.course-step-card__placeholder {
+  width: 100%;
+  height: 100%;
+}
+/* §34(신규, 부록 H.3) — 사진 바로 아래 저작권 출처 표기(오버레이 대신 캡션, 근거는 CourseStepCard.tsx
+   주석 참고). 카드 배경(흰색) 위라 별도 반투명 처리 없이 gray-500 텍스트만으로 4.6:1 대비를 그대로
+   확보한다. blurb과 같은 좌우 여백(sp-5)을 써서 아래 본문과 정렬을 맞춘다. */
+.course-step-card__credit {
+  margin: 0;
+  padding: 6px var(--sp-5) 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.course-step-card__body .spot-card {
+  box-shadow: none;
+  border-radius: 0;
+}
+.course-step-card__blurb {
+  margin: 0 var(--sp-5) var(--sp-5);
+  padding-top: var(--sp-1);
+  border-top: 1px solid var(--gray-100);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 500;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* =========================================================================
+   §25(신규) — 커스텀 코스("내가 고른 코스", CourseContent.tsx 모드 전환 + 담은 스팟 목록).
+   신규 hex 없음 — 아래 근거 참고. 스팟 상세/저장 카드의 "코스에 담기" 토글 스타일은 §25
+   (spot-detail__actions .btn.is-in-cart / spot-card__cart-toggle) 쪽 주석 참고.
+   ========================================================================= */
+/* 모드 전환 세그먼트 — filter-chip(그린 필 채움)과 일부러 다른 문법을 쓴다. filter-chip은
+   "데이터를 거르는 선택"이고 이 탭은 "화면 전체를 바꾸는 상태 전환"이라 트랙+흰 알약(iOS 세그먼트
+   컨트롤 관용구) 톤으로 구분했다 — 그린 필 남용을 피하는 목적도 있다("알약 남발 금지" taste-skill 원칙). */
+.course-mode-switch {
+  display: inline-flex;
+  padding: 4px;
+  background: var(--gray-100);
+  border-radius: var(--r-full);
+  gap: 2px;
+  margin-bottom: var(--sp-5);
+  max-width: 100%;
+  overflow-x: auto;
+}
+.course-mode-switch__tab {
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-full);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink-muted);
+  background: transparent;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.course-mode-switch__tab.is-active {
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+.course-mode-switch__tab:focus-visible {
+  outline: 3px solid var(--g-500);
+  outline-offset: 2px;
+}
+
+/* 담은 스팟 목록 — 순서를 아직 정하지 않은 상태(backend가 arrange로 정해준다)라 번호를 매기지
+   않는다(course-timeline__node의 순번 뱃지와 시각적으로 구분해 "이건 아직 순서가 아니다"를 알림). */
+.course-cart-list {
+  list-style: none;
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.course-cart-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--white);
+  border: 1.5px solid var(--n-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  box-shadow: var(--shadow-card);
+}
+.course-cart-list__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.course-cart-list__category {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--n-500);
+  letter-spacing: 0.03em;
+}
+.course-cart-list__name {
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.course-cart-list__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: 50%;
+  color: var(--ink-muted);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.course-cart-list__remove:hover {
+  color: var(--b-dark);
+  background: var(--b-50);
+}
+.course-cart-hint {
+  margin-top: var(--sp-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--b-dark); /* dest-search__notice와 동일 레시피 재사용 */
+}
+.course-cart-arrange-btn {
+  margin-top: var(--sp-4);
+}
+
+/* =========================================================================
+   §26(신규, 2026-07-29 재작업) — "내 코스 만들기" 검색창(SpotSearchBox.tsx). 신규 hex 없음 —
+   dest-search__*(RegionPicker.tsx 전국 검색과 동일 톤)와 badge--hidden-gem(RecommendSpotCard.tsx)를
+   그대로 재사용하고, 드롭다운 항목 레이아웃만 "이름+카테고리 / 지역명+숨은스팟뱃지" 두 그룹으로
+   넓혔다(.dest-search__dropdown-item 뒤에 정의해 같은 특이도에서 이 파일 내 선언 순서로 오버라이드).
+   ========================================================================= */
+.spot-search-box {
+  margin-bottom: var(--sp-5);
+}
+.spot-search-box__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  height: auto;
+  min-height: 56px;
+  padding: var(--sp-2) var(--sp-3);
+}
+.spot-search-box__item:disabled {
+  opacity: 0.5;
+}
+.spot-search-box__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.spot-search-box__item-category {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--n-500);
+  letter-spacing: 0.03em;
+}
+.spot-search-box__item-name {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spot-search-box__item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.spot-search-box__item-region {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* "담김" 표시 — g-500은 이 사이트에서 "능동적으로 선택/담은 상태"의 유일한 시맨틱(§25.2 근거,
+   filter-chip.is-selected/recommend-map-toggle[aria-expanded=true]와 동일 재사용). */
+.spot-search-box__item-added {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--g-500);
+  white-space: nowrap;
+}
+
+/* =========================================================================
+   Footer — §22(03-design-spec.md, 2026-07-29) Acenda 재스킨.
+   "다크 푸터 + 뉴스레터형 CTA 카드"를 흡수해 "다크 푸터 + 온보딩 유도 카드"로 재해석했다.
+   ========================================================================= */
+.footer {
+  padding: var(--sp-10) var(--sp-4) var(--sp-8);
+  background: var(--ink);
+  color: rgba(255, 255, 255, 0.7);
+}
+@media (min-width: 1024px) {
+  .footer {
+    padding: var(--sp-16) var(--sp-10) var(--sp-8);
+  }
+}
+.footer__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  background: var(--g-700);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6) var(--sp-5);
+  margin-bottom: var(--sp-10);
+}
+@media (min-width: 720px) {
+  .footer__cta {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-6);
+  }
+}
+@media (min-width: 1024px) {
+  .footer__cta {
+    max-width: var(--container-1);
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+.footer__cta-title {
+  font-size: var(--text-xl);
+  font-weight: 900;
+  color: var(--white);
+  letter-spacing: -0.01em;
+}
+.footer__cta-sub {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.5;
+}
+.footer__cta .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.footer__columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  padding-bottom: var(--sp-8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+@media (min-width: 720px) {
+  .footer__columns {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: var(--sp-10);
+  }
+}
+@media (min-width: 1024px) {
+  .footer__columns {
+    max-width: var(--container-1);
+    margin: 0 auto;
+    padding-bottom: var(--sp-10);
+  }
+}
+.footer__col--brand {
+  max-width: 280px;
+}
+.footer__logo {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  color: var(--white);
+}
+.footer__tag {
+  margin-top: 6px;
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.footer__col-title {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: var(--sp-3);
+}
+.footer__links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.footer__links a {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+  min-height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.15s ease;
+}
+.footer__links a:hover {
+  color: var(--white);
+}
+.footer__copyright {
+  margin-top: var(--sp-6);
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  text-align: center;
+}
+@media (min-width: 1024px) {
+  .footer__copyright {
+    max-width: var(--container-1);
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+  }
+}
+
+/* =========================================================================
+   비교 화면 — 핫플 vs 숨은길 (MVP-5, 01-interface-contract.md 부록 D)
+   핵심 난제: 375px에서 좌우 2컬럼 비교표는 깨진다.
+   → 모바일: 상단 요약 스코어카드 + 지표별 행 스택(각 행 안에서만 2컬럼).
+   → 1024px↑: hotspot·hidden 완전 대칭 2컬럼 카드로 전환(§D.7-2).
+   ========================================================================= */
+.compare-section {
+  padding: var(--sp-6) var(--sp-4) var(--sp-10);
+}
+@media (min-width: 1024px) {
+  .compare-section {
+    max-width: var(--container-1);
+    margin: 0 auto;
+    padding: var(--sp-10);
+  }
+}
+.compare-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink-muted);
+}
+.compare-back:hover {
+  color: var(--ink);
+}
+
+.compare-summary {
+  margin-top: var(--sp-4);
+  /* §22 — 네이비 그라디언트 → 잉크/딥그린(.onboard-hero/.mobile-nav와 동일 원칙) */
+  background: linear-gradient(135deg, var(--ink) 0%, var(--g-700) 55%, var(--g-600) 100%);
+  color: var(--white);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6) var(--sp-5);
+  box-shadow: var(--shadow-md);
+}
+.compare-summary--skeleton {
+  background: var(--n-50);
+  box-shadow: none;
+  padding: var(--sp-5);
+}
+.compare-summary__headline {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+.compare-summary__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 6px 13px;
+  border-radius: var(--r-full);
+}
+.delta-badge--calm {
+  background: var(--g-500);
+  color: var(--white); /* §22 — g-500 다크 그린 전환에 맞춘 글자색 반전 */
+}
+.delta-badge--hot {
+  background: var(--b-500);
+  color: var(--n-900);
+}
+.delta-badge--neutral {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--white);
+}
+.delta-badge--fit {
+  background: var(--white);
+  color: var(--n-700);
+}
+
+/* 모바일 지표행 스택 */
+.compare-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+}
+.compare-column-heads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-1);
+}
+.compare-column-heads__side {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.compare-column-heads__side--hotspot {
+  color: var(--b-dark);
+}
+.compare-column-heads__side--hidden {
+  color: var(--g-700);
+  text-align: right;
+}
+
+.compare-row {
+  background: var(--white);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-4);
+}
+.compare-row__label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+  margin-bottom: var(--sp-2);
+}
+.compare-row__values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+.compare-cell {
+  min-width: 0;
+}
+.compare-cell--hidden {
+  text-align: right;
+}
+.compare-cell--hidden .compare-value {
+  align-items: flex-end;
+}
+
+.compare-value {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.compare-value--empty {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+}
+.compare-value--calm-text {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--g-700);
+}
+.compare-value__tier {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.compare-value__fit-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--n-100);
+  overflow: hidden;
+}
+.compare-value__fit-bar > div {
+  height: 100%;
+  background: var(--g-500);
+  border-radius: var(--r-full);
+}
+.compare-value__fit-pct {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--g-700);
+}
+.compare-value__reason-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.compare-cell--hidden .compare-value__reason-tags {
+  justify-content: flex-end;
+}
+
+/* 데스크톱 2컬럼 대칭 카드 */
+.compare-cards {
+  display: none;
+  margin-top: var(--sp-6);
+}
+@media (min-width: 1024px) {
+  .compare-rows {
+    display: none;
+  }
+  .compare-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-6);
+    align-items: start;
+  }
+}
+.compare-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  border-top: 4px solid transparent;
+}
+.compare-card--hotspot {
+  border-top-color: var(--b-500);
+}
+.compare-card--hidden {
+  border-top-color: var(--g-500);
+}
+.compare-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+/* §23 — role 라벨이 텍스트 색만 있던 걸 소프트 배지(§3.1 배지 명세의 -100/-700 라이트 톤 조합,
+   새 hex 없음)로 바꿔 카드 위쪽 4px 띠와 짝을 맞췄다. 카드 전체를 색으로 물들이는 대신(중첩된
+   reason-chip--signal이 b-50 배경과 겹쳐 안 보이게 될 위험, §22 배지 원칙 참고) 라벨 하나만
+   배지화해 "vs" 대비를 안전하게 강화한다. */
+.compare-card__role {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+}
+.compare-card--hotspot .compare-card__role {
+  color: var(--b-dark);
+  background: var(--b-100);
+}
+.compare-card--hidden .compare-card__role {
+  color: var(--g-700);
+  background: var(--g-100);
+}
+.compare-card__name {
+  font-size: var(--text-xl);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.compare-card__category {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+.compare-card__section {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--gray-100);
+}
+.compare-card__section-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+  margin-bottom: var(--sp-2);
+}
+
+/* =========================================================================
+   MVP-7 (부록 F) — 분산/날씨 rerank 배너, 저장 토글, 저장한 코스, 여행 팁
+   ========================================================================= */
+
+/* 세 번째 eyebrow-pill 변형(카테고리 다양성용) — B안 기존 mint 토큰 재사용, 신규 CDN·폰트 없음. */
+.eyebrow-pill--mint {
+  background: var(--g-100);
+  color: var(--g-700);
+}
+
+/* 파트1(F.1-7)·파트4(F.4-7) rerank 배너. 서버 notice를 텍스트 노드로만 렌더한다. */
+.rerank-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.5;
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.rerank-banner__detail {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  opacity: 0.85;
+}
+/* 분산 대안을 실제로 적용했을 때 — "여유" 시맨틱(mint)으로 긍정적 안내 톤 */
+.rerank-banner--balance {
+  color: var(--g-700);
+  background: var(--g-50);
+  border: 1px solid var(--g-100);
+}
+/* 대안이 없어 손대지 못했을 때(no_alternative) — board-banner와 같은 경고 톤(coral) */
+.rerank-banner--warn {
+  color: var(--b-700);
+  background: var(--b-50);
+  border: 1px solid var(--b-100);
+}
+/* 날씨 실내 우선 배너 — 정보 시맨틱(azure) */
+.rerank-banner--weather {
+  color: var(--n-700);
+  background: var(--n-50);
+  border: 1px solid var(--n-100);
+}
+
+/* 날씨 데이터가 없을 때(F.4-7-2) 정직 배지 — theme-badge--unknown과 동일 회색 톤 재사용 */
+.weather-status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--r-full);
+  background: var(--gray-100);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  margin-bottom: var(--sp-4);
+}
+
+/* 파트2(F.2-6) 저장 토글 — 카드 위 오른쪽 상단에 겹쳐 그린다(별도 히트영역, Link 내비게이션과 분리). */
+.spot-card-wrap {
+  position: relative;
+}
+.spot-card__save {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-card);
+  color: var(--ink-muted);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.spot-card__save:hover {
+  transform: scale(1.06);
+}
+/* §22 — 코랄은 혼잡(high) 전용이 됐다. "저장(찜)"은 옆 버튼 "방문 인증"(is-stamped, g-700)과
+   같은 화면에 나란히 있어 서로 구분돼야 해서(SpotDetailContent.tsx) 그린 대신 애저(n-500,
+   이미 spot-card__category 등에서 검증된 안전한 텍스트색)를 썼다 — 새 hex 없음. */
+.spot-card__save.is-saved {
+  color: var(--n-500);
+}
+
+/* §25(신규) — 저장 카드 전용 두 번째 플로팅 버튼("코스에 담기"). 저장 하트 왼쪽에 나란히 놓는다 —
+   spot-card__head가 기본으로 비워두는 폭(버튼 1개분, 44px)만으로는 겹치므로 이 변형 클래스가
+   붙은 카드에서만 폭을 버튼 2개분으로 늘린다(다른 화면의 spot-card__head는 영향 없음). */
+.spot-card--with-cart-toggle .spot-card__head {
+  padding-right: calc(var(--touch-min) * 2 + var(--sp-2) + var(--sp-1));
+}
+.spot-card__cart-toggle {
+  position: absolute;
+  top: var(--sp-2);
+  right: calc(var(--sp-2) + var(--touch-min) + var(--sp-2));
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-card);
+  color: var(--ink-muted);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.spot-card__cart-toggle:hover {
+  transform: scale(1.06);
+}
+/* g-500 — "능동적으로 담긴 상태"의 사이트 공통 시맨틱(filter-chip.is-selected와 동일 근거, 위 §25 주석 참고). */
+.spot-card__cart-toggle.is-in-cart {
+  color: var(--g-500);
+}
+/* 8개 초과 시도 안내 — 카드 하단에 잠깐 떴다 사라지는 토스트(2.6초, SavedSpotCard.tsx). */
+.spot-card__cart-full-toast {
+  position: absolute;
+  left: var(--sp-2);
+  right: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 3;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--n-100);
+  border-radius: var(--r-md);
+  padding: 6px 10px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--b-dark);
+  box-shadow: var(--shadow-card);
+}
+
+/* 저장한 코스(F.2-6) */
+.saved-content__intro {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-5);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 480px;
+}
+.saved-spot-card__meta {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* 여행 팁(F.3-6) */
+.tips-intro {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-6);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 480px;
+}
+.tips-group {
+  margin-bottom: var(--sp-8);
+}
+.tips-group__label {
+  margin-bottom: var(--sp-4);
+}
+/* §23 — 이전엔 카테고리마다 eyebrow-pill--azure/mint/coral을 뒤섞어 썼는데(혼잡=애저, 교통=민트,
+   날씨=애저, 반려동물=코랄, 안전=코랄) 색이 의미를 담지 못하고 그냥 번갈아 칠해진 상태였다
+   (실제 혼잡도 danger/warning/success 시맨틱과도 무관, 코랄은 §22부터 혼잡 전용이라 더 안 맞음).
+   장식용 색 배정을 걷어내고 카테고리 라벨 전부를 밑줄 하나짜리 중립 톤으로 통일했다 —
+   eyebrow-pill(칩) 형태 대신 얇은 하단 룰 라벨로 바꿔 "탭 여러 개"가 아니라 "본문 소제목"처럼 읽히게
+   해서 taste-skill의 eyebrow 남용 경고(§4.7)에도 걸리지 않게 했다. */
+.tips-category-label {
+  display: inline-block;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--gray-300);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.tips-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+@media (min-width: 720px) {
+  .tips-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-5);
+  }
+}
+.tip-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.tip-card__title {
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.tip-card__body {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
+
+/* =========================================================================
+   관광지 상세(신규) — B안 톤 재사용(신규 CDN·폰트 없음). compare-section의
+   1열 세로 레이아웃(모바일 우선)을 그대로 승계하고, 카드형 대신 섹션 스택으로 구성한다
+   (상세 정보는 카드보다 읽기 흐름이 우선이라는 판단 — 03-design-spec.md 근거 참고).
+   ========================================================================= */
+.spot-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+.spot-detail__hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--gray-100);
+}
+/* 2026-08-01(대표 지시 "사진을 저리로 옮기자") — 넓은 화면에서는 **정보 왼쪽 / 사진 오른쪽**.
+   사진을 폭 100% 배너로 깔면 화면을 다 먹고(실측 1040×780), 억지로 높이를 깎으면 잘린다.
+   열을 나누면 사진 폭이 고정돼 4:3 원래 비율 그대로도 한눈에 들어온다.
+   좁은 화면(1024px 미만)에서는 기존처럼 세로로 쌓인다 — 모바일 무회귀. */
+/* 2026-08-01(대표 지적) — 사진을 **페이지 오른쪽 열 전체**로 둔다.
+   종전엔 hero 안에만 있어 hero 아래(소개·이런 분께 추천)가 사진 옆으로 못 올라와
+   34" 에서 큰 빈칸이 생겼다. 그리드를 `.spot-detail` 로 올리고 사진이 여러 행을 span 하면
+   아래 내용이 자연스럽게 옆을 채운다. 좁은 화면(1024px 미만)은 기존 세로 스택 그대로. */
+@media (min-width: 1024px) {
+  .spot-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 46%);
+    column-gap: var(--sp-6);
+    align-items: start;
+  }
+  /* 뒤로가기 링크는 두 열을 가로질러 맨 위에. */
+  .spot-detail > .compare-back {
+    grid-column: 1 / -1;
+  }
+  .spot-detail > * {
+    grid-column: 1;
+    min-width: 0;
+  }
+  /* 2026-08-01(대표 지시 "빨간 선처럼 쭉 늘어나게") — 사진 옆을 채우는 건 hero 와 소개까지고,
+     그 아래(이런 분께 추천 · 액션 버튼 · 후기)는 **전체 폭**을 쓴다. 왼쪽 열에 갇혀 있으면
+     오른쪽 절반이 통째로 비어 보인다. */
+  .spot-detail__hero { grid-row: 2; }
+  .spot-detail__block--intro { grid-row: 3; }
+  .spot-detail__wide {
+    grid-column: 1 / -1 !important;  /* 위의 `.spot-detail > * { grid-column: 1 }` 를 이긴다 */
+  }
+  .spot-detail__photo {
+    grid-column: 2;
+    grid-row: 2 / span 2;   /* hero + 소개 옆까지만. 그 아래는 전체 폭 블록이 이어받는다 */
+    margin-bottom: 0;
+    /* 2026-08-01(대표 지시) — 스크롤을 따라오지 않는다. sticky 를 뺀다. */
+    width: calc(100% - 30px);
+    margin-left: auto;
+    transform: translateX(-20px);
+  }
+  /* 본문도 가운데 쪽으로 20px */
+  .spot-detail > *:not(.spot-detail__photo):not(.compare-back) {
+    padding-left: 20px;
+  }
+  /* 2열에서는 왼쪽 열 카드들의 640px 상한을 모두 풀어 열을 꽉 채운다(대표 지시:
+     "이런 분께 추천 창도 사진만큼 늘어나고 줄어들고"). 좁은 화면에서는 상한이 그대로라
+     한 줄이 지나치게 길어지지 않는다. */
+  .spot-detail .visit-tip-card,
+  .spot-detail .ai-summary,
+  .spot-detail .spot-detail__overview {
+    max-width: none;
+  }
+  /* 액션 버튼 줄은 사진 아래까지 내려가지 않게 왼쪽 열에 그대로 둔다. */
+  .spot-detail__actions {
+    grid-column: 1;
+  }
+}
+.spot-detail__hero-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+/* §23 — 스팟 이름은 지금까지 .section__title(다른 화면의 일반 섹션 헤딩과 동일한 26~36px)을
+   그대로 썼다. 목적지 자체가 이 페이지의 주인공인데 "여행지 추천" 같은 리스트 헤딩과 같은
+   크기라 에디토리얼 무게가 없었다 — 히어로(--text-5xl, 사진 위 전용)보다는 작지만 section__title보다는
+   확실히 큰 --text-4xl(36~46px)로 올리고 자간을 더 좁혀 표제지 같은 존재감을 준다. */
+.spot-detail__title {
+  margin-top: var(--sp-4);
+  font-size: var(--text-4xl);
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.spot-detail__badges {
+  margin-top: var(--sp-3);
+}
+.spot-detail__block-title {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-bottom: var(--sp-3);
+}
+/* §23 — 다른 본문(카드 메타 등)과 같은 16px본문 크기를 쓰고 있었는데, 이 문단은 페이지에서
+   유일하게 "쭉 읽는" 리드 문단이다. tokens.css §1.2가 정의한 18px(--text-lg, "리드 문단")
+   용도 그대로 적용해 에디토리얼 리듬을 살렸다(신규 크기 계산 없음, 기존 스케일 재사용). */
+.spot-detail__overview {
+  font-size: var(--text-lg);
+  color: var(--ink-muted);
+  line-height: 1.75;
+  max-width: 640px;
+  white-space: pre-line;
+}
+.spot-detail__overview--empty {
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  font-weight: 600;
+}
+.spot-detail__recommend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.spot-detail__recommend-chip {
+  font-size: var(--text-sm);
+  padding: 8px 15px;
+}
+.spot-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--gray-100);
+}
+.spot-detail__actions .btn {
+  flex: 1 1 200px;
+}
+.spot-detail__actions .btn.is-saved {
+  color: var(--n-500); /* §22 — 코랄→애저(위 .spot-card__save.is-saved와 동일 근거) */
+}
+.spot-detail__compare-note {
+  font-size: var(--text-sm);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  font-weight: 600;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--gray-100);
+}
+
+/* =========================================================================
+   Phase 2(신규) — AI 3줄 요약 블록 + overview 더보기/접기 (SpotDetailContent.tsx).
+   azure(navy-400 계열)는 이미 course 페이지에서 "AI 추천 코스" eyebrow-pill로 쓰인 톤이라
+   그대로 재사용한다(새 hex 계산 없음, "AI 생성 콘텐츠"라는 시각 언어를 사이트 전체에서 통일).
+   ========================================================================= */
+/* §23 — 이전엔 위에 eyebrow-pill--azure 칩("AI 3줄 요약")을 얹은 밋밋한 사각 박스였다. 칩을
+   빼고(이 페이지에서 이유브로우가 하나 줄어드는 효과도 있음) 왼쪽 강조선 + 스파클 아이콘 라벨로
+   바꿔 "AI가 요약한 콘텐츠"라는 신호를 더 또렷하게, 그러나 배경/보더 색(n-50/n-100, 정보 시맨틱)은
+   그대로 재사용해 새 색을 만들지 않았다. */
+.ai-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--n-50);
+  border: 1px solid var(--n-100);
+  border-left: 3px solid var(--n-400);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-4);
+  max-width: 640px;
+}
+.ai-summary__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--n-700);
+}
+.ai-summary__label svg {
+  flex: 0 0 auto;
+}
+.ai-summary__text {
+  font-size: var(--text-base);
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.spot-detail__overview-details {
+  margin-top: var(--sp-1);
+}
+.spot-detail__overview-details .spot-detail__overview {
+  margin-top: var(--sp-3);
+}
+.spot-detail__overview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--touch-min);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-500);
+  cursor: pointer;
+  list-style: none;
+}
+.spot-detail__overview-toggle::-webkit-details-marker {
+  display: none;
+}
+.spot-detail__overview-toggle::after {
+  content: "▼";
+  font-size: 10px;
+}
+.spot-detail__overview-details[open] .spot-detail__overview-toggle::after {
+  content: "▲";
+}
+.spot-detail__overview-toggle:focus-visible {
+  outline: 3px solid var(--n-500);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* =========================================================================
+   Phase 4(신규) — 방문 스탬프(개인정보 0, 셀프 체크인) + 여행 팁 이용 가이드.
+   B안 팔레트를 그대로 재사용한다(신규 hex 없음) — g-500/g-100(민트, "기록/수집" 긍정 시맨틱),
+   b-600(브라운, 브론즈 대용), gray-500(대비 확보된 뮤티드, 실버 대용), marker-mid(#f2a93d,
+   badge--popular와 동일한 골드 대용) 4가지 모두 tokens.css에 이미 있는 값이다.
+   ========================================================================= */
+
+/* 상세 페이지 스탬프 토글 버튼 — 저장 토글(.is-saved)과 동일한 "흰 배경 + 텍스트색만 변경" 레시피,
+   색만 coral(b-500) 대신 mint(g-700)로 바꿔 "저장(좋아함)"과 "방문 기록"을 시각적으로 구분한다. */
+.spot-detail__actions .btn.is-stamped {
+  color: var(--g-700);
+}
+
+/* =========================================================================
+   §25(신규) — 커스텀 코스("내가 고른 코스", /course 모드 전환 + courseCartStorage.ts).
+   신규 hex 없음 — 브랜드 포인트(g-500, 필터 칩 선택 상태와 동일 시맨틱: "사용자가 담은 상태")와
+   기존 notice 색 레시피(b-dark, .dest-search__notice와 동일)만 재사용한다.
+   ========================================================================= */
+/* 코스 담기 토글 — is-saved(n-500 애저)·is-stamped(g-700)와 나란히 있어 셋이 구분돼야 한다.
+   g-500은 이 사이트에서 "능동적으로 선택/담은 상태"의 유일한 시맨틱(filter-chip.is-selected,
+   recommend-map-toggle[aria-expanded=true]와 동일 근거)이라 "코스 계획에 담긴 상태"에도 그대로 쓴다. */
+.spot-detail__actions .btn.is-in-cart {
+  color: var(--g-500);
+}
+.spot-detail__cart-notice {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--b-dark); /* dest-search__notice와 동일 레시피 재사용 */
+}
+
+/* =========================================================================
+   §31(신규) — "방문 타이밍" 카드(VisitTipCard.tsx, 스팟 상세 예상 혼잡도 뱃지 바로 아래).
+   신규 hex 없음 — best는 level-low(g-500 계열, "여유/한산" 시맨틱), worst는 level-high(b-500 계열,
+   "혼잡" 시맨틱)를 그대로 재사용해 badge--calm/badge--hot과 색 언어를 통일한다. 카드 자체는
+   ai-summary와 같은 "왼쪽 강조선 없는 솔리드 서페이스 카드" 레시피(불투명, 무장애 대비 우선 —
+   03-design-spec.md §0 Glassmorphism 기각 근거 승계)를 쓰되 보더만 g-100으로 옅게 준다.
+   ========================================================================= */
+.visit-tip-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  margin-top: var(--sp-4);
+  max-width: 640px;
+  box-shadow: var(--shadow-card);
+}
+.visit-tip-card__eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+}
+.visit-tip-card__stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+@media (min-width: 480px) {
+  .visit-tip-card__stats {
+    flex-direction: row;
+  }
+  .visit-tip-card__stat {
+    flex: 1 1 0;
+  }
+}
+.visit-tip-card__stat {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+}
+/* level-low(여유) 시맨틱 재사용 — badge--calm과 동일 색 언어("한적함"). */
+.visit-tip-card__stat--best {
+  background: var(--g-50);
+  border-color: var(--g-100);
+  color: var(--g-700);
+}
+/* level-high(혼잡) 시맨틱 재사용 — badge--hot과 동일 색 언어("붐빔"). */
+.visit-tip-card__stat--worst {
+  background: var(--b-50);
+  border-color: var(--b-100);
+  color: var(--b-dark);
+}
+.visit-tip-card__stat-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.visit-tip-card__stat-label {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.visit-tip-card__stat-value {
+  font-size: var(--text-sm);
+  font-weight: 900;
+  flex: 1 1 auto;
+}
+.visit-tip-card__footnote {
+  font-size: var(--text-xs);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* 주간 예보 미니 차트 — 라이브러리 없이 div 막대. 색은 badge와 동일 시맨틱(--level-*),
+   색만으로 의미 전달하지 않도록 best/worst 막대는 마커(●/▲)를 함께 표시하고 모든 막대에
+   수치가 담긴 aria-label/title(툴팁)을 붙인다(색맹 대응, ui-ux-pro-max dataviz 체크리스트). */
+.visit-tip-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 72px;
+  padding-top: var(--sp-4); /* 마커(●/▲)가 막대 위에 얹힐 공간 */
+  overflow-x: auto;
+}
+.visit-tip-chart__col {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+.visit-tip-chart__bar {
+  width: 100%;
+  max-width: 22px;
+  border-radius: 3px 3px 0 0;
+  min-height: 3px;
+}
+.visit-tip-chart__bar--low {
+  background: var(--level-low);
+}
+.visit-tip-chart__bar--mid {
+  background: var(--level-mid);
+}
+.visit-tip-chart__bar--high {
+  background: var(--level-high);
+}
+.visit-tip-chart__bar--unknown {
+  background: var(--level-unknown);
+}
+.visit-tip-chart__marker {
+  position: absolute;
+  top: -2px;
+  font-size: 9px;
+  line-height: 1;
+}
+.visit-tip-chart__marker--best {
+  color: var(--g-500);
+}
+.visit-tip-chart__marker--worst {
+  color: var(--b-500);
+}
+.visit-tip-chart__daylabel {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+}
+.visit-tip-chart--skeleton {
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+.visit-tip-chart__skeletonbar {
+  flex: 1 1 0;
+  height: 40px;
+  border-radius: 3px 3px 0 0;
+}
+
+/* 저장 화면(SavedContent) 하위 — 방문 스탬프 섹션 */
+.stamp-intro {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-5);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 480px;
+}
+
+.stamp-region-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-6);
+}
+.stamp-region-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+  background: var(--g-100);
+  color: var(--g-700);
+}
+
+.stamp-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-8);
+}
+.stamp-milestone {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.stamp-milestone__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid var(--gray-300);
+  background: var(--white);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  font-size: var(--text-xs);
+  font-weight: 900;
+}
+.stamp-milestone__label {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+}
+.stamp-milestone.is-achieved .stamp-milestone__label {
+  color: var(--ink);
+}
+/* 잠김/달성을 색만으로 구분하지 않는다 — 아이콘 자체가 다르다(잠김: 숫자, 달성: 체크, VisitStampsSection.tsx). */
+.stamp-milestone--bronze.is-achieved .stamp-milestone__icon {
+  border-color: var(--b-600);
+  background: var(--b-600);
+  color: var(--white);
+}
+.stamp-milestone--silver.is-achieved .stamp-milestone__icon {
+  border-color: var(--gray-500);
+  background: var(--gray-500);
+  color: var(--white);
+}
+.stamp-milestone--gold.is-achieved .stamp-milestone__icon {
+  border-color: var(--marker-mid);
+  background: var(--marker-mid);
+  color: var(--n-900);
+}
+.stamp-milestones__caption {
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+
+/* 스탬프 카드 — .spot-card/.spot-card-wrap/.spot-card__head/.spot-card__category/.spot-card__name
+   (F.2-6 저장 카드에서 이미 검증된 규칙)을 그대로 재사용하고, 체크 배지·메타·해제 버튼만 신규다. */
+.stamp-card__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--g-500);
+  color: var(--white); /* §22 — 체크 아이콘이 currentColor를 쓰므로 g-500 다크 전환에 맞춰 반전 */
+}
+.stamp-card__meta {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+/* .spot-card__save와 동일한 "카드 우상단 원형 플로팅 버튼" 포지셔닝 레시피 재사용, 아이콘·의미만 다르다. */
+.stamp-card__remove {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-card);
+  color: var(--ink-muted);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.stamp-card__remove:hover {
+  color: var(--b-500);
+  transform: scale(1.06);
+}
+
+/* 팁 화면(TipsContent) — 이용 가이드 섹션. .tips-intro와 동일 레시피(관례상 섹션마다 클래스 분리). */
+.guide-intro {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-6);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 480px;
+}
+.guide-section {
+  margin-top: var(--sp-10);
+  padding-top: var(--sp-8);
+  border-top: 1px solid var(--gray-100);
+}
+/* <ol> — 순서가 의미 있는 콘텐츠라 카드 그리드 대신 세로 스텝 목록을 쓴다(스크린리더 순서 보존). */
+.guide-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+}
+/* §23 — course-timeline__node와 동일 근거(순서 번호=브랜드 액션 진행 표시)로 그린 통일. */
+.guide-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--g-500);
+  color: var(--white);
+  font-size: var(--text-base);
+  font-weight: 900;
+}
+.guide-step__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.guide-step__title {
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.guide-step__body-text {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
+/* .festival-section__cta와 동일한 "낮은 위계 텍스트 링크 + 호버 시 화살표 이동" 레시피 재사용(§20.4). */
+.guide-step__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--touch-min);
+  margin-top: 4px;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-700);
+  transition: color 0.15s ease;
+}
+.guide-step__cta:hover {
+  color: var(--n-900);
+}
+.guide-step__cta svg {
+  transition: transform 0.15s ease;
+}
+.guide-step__cta:hover svg {
+  transform: translateX(2px);
+}
+
+/* =========================================================================
+   §28(신규) — 코스 상세 인쇄(window.print, .course-print-btn 클릭). 지도/헤더/필터/입력류를
+   숨기고 타임라인(스텝 카드)만 종이에 남긴다 — 06-deep-audit-gap-plan §2-B B-5 대응.
+   ========================================================================= */
+@media print {
+  .gnb,
+  .footer,
+  .onboard-hero,
+  .course-mode-switch,
+  .recommend-cta-banner,
+  .board-banner,
+  .spot-region-row,
+  .spot-search-box,
+  .course-cart-list,
+  .course-cart-hint,
+  .course-cart-arrange-btn,
+  .recommend-map-toggle,
+  .recommend-layout__map,
+  .course-print-btn,
+  .course-photo-strip {
+    display: none !important;
+  }
+  .recommend-layout {
+    display: block !important;
+  }
+  .recommend-layout__list {
+    margin-top: 0 !important;
+  }
+  .course-timeline__item,
+  .course-step-card {
+    break-inside: avoid;
+  }
+  .course-step-card {
+    box-shadow: none;
+    border: 1px solid var(--gray-300);
+  }
+  body {
+    background: var(--white);
+  }
+}
+
+/* =========================================================================
+   §29(신규) — 지역 허브 `/regions` (RegionsContent.tsx, SidoStrip.tsx).
+   구석구석 `/main/area.do`(시도 원형 스트립 + 인기 여행지 그리드) 흡수, 03-design-spec.md §29·
+   06-deep-audit-gap-plan.md Phase B 근거. 기존 .featured-scroll(모바일 가로 스크롤 → 720px↑
+   그리드 자동 전환)·.featured-card·.festival-card·.theme-collections__group을 그대로
+   재사용하고, 이 섹션은 그 조합에 없던 것만 추가한다: 시도 원형 스트립, 선택 지역 캡션,
+   빈 지역 안내 카드, CTA 박스, 보조 버튼(.btn--outline).
+   ========================================================================= */
+
+/* 2차 CTA 색 — 지금까지 .btn 변형(coral/mint/white)은 전부 채워진 배경이었다. /regions
+   CTA 2개 중 하나를 시각적으로 낮은 위계(테두리만)로 둬야 "화면당 주요 CTA 하나" 원칙을
+   지키면서도 두 목적지 모두 실제로 누를 수 있게 보인다 — 새 배경색을 만들지 않고 기존
+   브랜드 그린(--g-500) 테두리 + 흰 배경 조합만 추가한다(신규 토큰 없음). */
+.btn--outline {
+  background: var(--white);
+  color: var(--g-500);
+  border: 1.5px solid var(--g-500);
+  box-shadow: none;
+}
+.btn--outline:hover {
+  background: var(--g-50);
+}
+
+.regions-hero__sub {
+  margin-top: var(--sp-2);
+  max-width: 56ch;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* 시도 원형 스트립 — 가로 스크롤(모바일·데스크톱 공통, 17개가 한 화면에 다 들어오지 않아도
+   된다 — quick-menu의 "그리드로 다 펼침"과 달리 "훑어보기" 목적이라 스크롤이 자연스럽다). */
+.region-strip {
+  margin-top: var(--sp-6);
+}
+.region-strip__list {
+  display: flex;
+  gap: var(--sp-4);
+  overflow-x: auto;
+  padding: 4px 2px var(--sp-2);
+  -webkit-overflow-scrolling: touch;
+}
+.region-strip__list::-webkit-scrollbar {
+  height: 0;
+}
+.region-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 56px;
+  min-height: var(--touch-min);
+  background: transparent;
+  border: none;
+}
+.region-chip__circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-lg);
+  font-weight: 900;
+  color: var(--ink);
+  background: var(--n-50);
+  border: 1.5px solid var(--gray-100);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.region-chip__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.region-chip.is-active .region-chip__circle {
+  background: var(--g-500);
+  border-color: var(--g-500);
+  color: var(--white);
+  transform: scale(1.06);
+  box-shadow: var(--shadow-card);
+}
+.region-chip.is-active .region-chip__label {
+  color: var(--ink);
+  font-weight: 900;
+}
+.region-chip:hover .region-chip__circle,
+.region-chip:focus-visible .region-chip__circle {
+  border-color: var(--g-500);
+}
+
+.regions-current {
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--gray-100);
+}
+.regions-current__title {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.regions-current__caption {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* §45(신규) — "지금 많이 찾는 곳"/"숨은 발견" 제목 옆 더보기·접기 배치(대표 지시, /themes의
+   "더보기는 제목 옆" 패턴과 동일 배치). .theme-collections__group-head(§44)와 같은 레시피지만
+   그 클래스를 h2.section__title에 그대로 붙이면 폰트 크기가 text-lg로 줄어든다(그룹 소제목용
+   크기라 이 화면의 섹션 제목엔 안 맞음) — 그래서 레이아웃만 복제한 별도 클래스로 분리했다.
+   더보기/접기 버튼 자체는 .theme-collections__more-btn을 그대로 재사용한다(신규 시각 언어 없음). */
+.regions-section__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+}
+.regions-section__head .section__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.regions-section__head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* trending·hidden_picks가 모두 빈 지역(세종 선례) 안내 카드 — .board-error/.festival-empty와
+   동일한 "화이트 카드 + 좌측 정렬 텍스트" 레시피를 재사용해 새 시각 언어를 만들지 않는다. */
+.regions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-card);
+}
+.regions-empty__msg {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.regions-empty__hint {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* "숨은길 PICK" 섹션 전용 우위 문구(§3 우위 규율 — 흡수 화면에 우리 우위를 반드시 노출). */
+.regions-advantage {
+  margin-top: 4px;
+  margin-bottom: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 60ch;
+}
+
+.regions-cta__box {
+  background: var(--g-50);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+@media (min-width: 720px) {
+  .regions-cta__box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.regions-cta__title {
+  font-size: var(--text-lg);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.regions-cta__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+/* =========================================================================
+   §32(신규) — AI 여행 문답 컨시어지(ConciergeSection.tsx, 홈 ServiceQuickMenu 바로 아래).
+   부록 N 계약. 신규 hex 없음 — 입력 폼은 온보딩 입력(.onboard-*)과 완전히 같은 시각 언어를
+   쓴다(같은 "AI가 텍스트를 읽고 태그를 뽑는다" 개념이라 서로 다른 스타일을 쓰면 사용자가
+   다른 기능으로 오인한다). 답변 카드는 .ai-summary(azure 강조선, "AI 생성 콘텐츠" 시맨틱),
+   에러/빈 상태는 .board-error, 안내문은 .dest-search__notice 레시피를 그대로 재사용한다.
+   ========================================================================= */
+.concierge__lead {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-5);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 60ch;
+}
+.concierge-card {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+}
+.concierge__examples {
+  margin-top: var(--sp-4);
+}
+.concierge__submit-row {
+  margin-top: var(--sp-6);
+}
+@media (min-width: 560px) {
+  /* 데스크톱에서는 버튼이 폭 100%로 늘어질 필요가 없다 — btn--block을 이 폭에서만 해제. */
+  .concierge__submit-row .btn--block {
+    width: auto;
+    min-width: 220px;
+  }
+}
+
+/* 로딩(부록 N §N.6·N.8) — cold 11초/warm 4~7초. onboard-loading__spinner와 동일 레시피를
+   더 작은 크기로 재사용해(전면 로딩이 아니라 카드 안에 이어 붙는 인라인 로딩이라 sp-12 풀페이지
+   패딩은 과함) 홈 스크롤 중에도 부담 없이 보이게 했다. */
+.concierge__loading {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+  padding: var(--sp-4);
+  background: var(--n-50);
+  border-radius: var(--r-md);
+}
+.concierge__loading-spinner {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 4px solid var(--n-100);
+  border-top-color: var(--g-500);
+  animation: onboard-spin 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .concierge__loading-spinner {
+    animation: none;
+  }
+}
+.concierge__loading-text {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.concierge__result {
+  margin-top: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.concierge__footnote {
+  font-size: var(--text-xs);
+  color: var(--gray-500); /* .login-modal__note와 동일 대비 확보 레시피(4.5:1 이상) */
+  font-weight: 600;
+}
+.concierge__region-badge {
+  align-self: flex-start;
+  margin-top: var(--sp-2);
+  margin-bottom: 0; /* .sample-tag 기본 margin-bottom(sp-5)을 이 컨텍스트에 맞게 무력화 */
+}
+.concierge__understood {
+  margin-top: var(--sp-3);
+}
+.concierge__understood-title {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: var(--sp-3);
+}
+.concierge__notice {
+  margin-top: var(--sp-1);
+}
+.concierge__spots {
+  margin-top: var(--sp-4);
+}
+.concierge__spots-heading {
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: var(--sp-3);
+}
+.concierge__cta {
+  margin-top: var(--sp-5);
+  align-self: flex-start;
+}
+
+/* =========================================================================
+   §33-3(신규, 2026-07-29) — 홈 컴팩트 AI 문답 진입창(ConciergeSection.tsx). 결과 렌더가
+   `/ask`(AskContent.tsx)로 옮겨가면서 홈에는 한 줄 입력창 + 전송 버튼 + 예시 칩만 남는다.
+   입력 박스는 Hero.tsx의 목적지 검색(.dest-search__box/.dest-search__input)과 완전히 같은
+   레시피를 재사용해 "이 사이트에서 검색창이 어떻게 생겼는지"에 대한 학습을 새로 시키지 않는다.
+   ========================================================================= */
+.concierge-quick {
+  margin-top: var(--sp-2);
+}
+.concierge-quick__box {
+  background: var(--white);
+}
+.concierge-quick__submit {
+  width: var(--touch-min);
+  height: var(--touch-min);
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: var(--g-500);
+  color: var(--white);
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.concierge-quick__submit:hover:not(:disabled) {
+  background: var(--g-600);
+  transform: translateY(-1px);
+}
+.concierge-quick__submit:disabled {
+  background: var(--gray-300);
+  color: var(--white);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =========================================================================
+   §36(신규, 03-design-spec.md) — 공용 사진 슬라이더(PhotoCarousel.tsx). 스팟 상세 히어로 +
+   축제 상세 공용. 컨테인드 라운드 카드(§24 이후 전역 원칙 — 풀블리드 아님), 신규 hex 없음.
+   ========================================================================= */
+.photo-carousel {
+  position: relative;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.photo-carousel--static {
+  display: block;
+}
+.photo-carousel__track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.photo-carousel__track::-webkit-scrollbar {
+  display: none;
+}
+/* 이미지 균일화 규칙(반복 버그 방지): 슬라이드 박스는 4:3 고정 비율(Hero.tsx의
+   .hero-carousel__card와 동일 값 재사용), img는 흐름에서 빼 absolute inset:0 + object-fit:cover로
+   어떤 원본 비율이 와도 박스를 밀어 늘리지 못하게 이중 안전장치를 둔다. */
+.photo-carousel__slide {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  /* 2026-08-01 — 한때 16:10 + max-height 로 눌렀다가 되돌렸다. 폭이 1040px 인 채로 높이만
+     깎으니 좌우가 크게 잘려 사진이 망가졌다(대표 지적 "비율 개망해서 다 짤렸다").
+     크기 문제는 **비율이 아니라 폭**이었으므로, 상세 화면에서 사진을 오른쪽 열(폭 고정)로
+     옮겨서 푼다(.spot-detail__hero 참고). 비율은 원래대로 4:3 을 유지한다. */
+  aspect-ratio: 4 / 3;
+  scroll-snap-align: start;
+  overflow: hidden;
+  background: var(--n-50);
+}
+.photo-carousel__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.photo-carousel__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* mint/sand/azure는 featured-card__placeholder-*와 동일 톤 재사용(신규 hex 없음). */
+.photo-carousel__placeholder--mint {
+  background: var(--g-100);
+  color: var(--g-500);
+}
+.photo-carousel__placeholder--sand {
+  background: var(--b-100);
+  color: var(--b-500);
+}
+.photo-carousel__placeholder--azure {
+  background: var(--n-100);
+  color: var(--n-500);
+}
+/* festival-card__placeholder와 동일 그라디언트 재사용(축제 상세 전용 톤). */
+.photo-carousel__placeholder--festival {
+  background: linear-gradient(135deg, var(--ink) 0%, var(--g-700) 100%);
+  color: rgba(255, 255, 255, 0.75);
+}
+/* 사진 우하단 저작권 출처 — .featured-card__credit과 동일 레시피 재사용(§34 근거 승계). */
+.photo-carousel__credit {
+  position: absolute;
+  right: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 1;
+  max-width: calc(100% - var(--sp-4));
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--gray-500);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 좌우 화살표 — .hero-carousel__pause와 동일한 44x44 원형 버튼 레시피 재사용(터치 타겟 기준 충족,
+   ui-ux-pro-max Touch Target Size 근거). 사진 위 오버레이라 항상 보이는 반투명 흰 배경으로 대비 확보. */
+.photo-carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+  transition: background-color 0.15s ease;
+}
+.photo-carousel__arrow:hover {
+  background: var(--white);
+}
+.photo-carousel__arrow--prev {
+  left: var(--sp-3);
+}
+.photo-carousel__arrow--next {
+  right: var(--sp-3);
+}
+/* 하단 도트 — .hero-carousel__dot과 동일 레시피 재사용(44x44 히트 영역 + 8px 도트, 활성 시 알약형). */
+.photo-carousel__dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--sp-1);
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.photo-carousel__dot {
+  width: var(--touch-min);
+  height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.photo-carousel__dot::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(5, 14, 27, 0.15);
+  transition: all 0.15s ease;
+}
+.photo-carousel__dot.is-active::after {
+  background: var(--white);
+  width: 20px;
+  border-radius: var(--r-full);
+}
+
+/* 스팟 상세 히어로 사진 — .spot-detail__hero 위쪽에 첫 요소로 얹는다. */
+.spot-detail__photo {
+  margin-bottom: var(--sp-2);
+}
+
+/* =========================================================================
+   §36(신규) — 축제 상세 페이지(`/festival/[id]`, FestivalDetailContent.tsx). .spot-detail의
+   1열 세로 섹션 스택 레이아웃을 그대로 승계한다(신규 레이아웃 발명 금지).
+   ========================================================================= */
+.festival-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+.festival-detail__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+/* .spot-card__badges와 동일 레시피(flex wrap + sp-2 gap)를 재사용하되, 이 화면은 배지 하나만
+   올라오는 헤드 최상단이라 margin-top 없는 별도 클래스로 둔다. */
+.festival-detail__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.festival-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+}
+/* 진행 배지 — FestivalBanner의 .festival-badge--live/--upcoming 색 레시피만 재사용하고(로직은
+   computeBadge를 그대로 호출), 카드 오버레이용 position:absolute는 빼서 정적 배치로 쓴다. */
+.festival-detail__badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+  width: fit-content;
+}
+
+/* "방문 타이밍"/"날씨" 카드 — .visit-tip-card와 동일한 "솔리드 서페이스 카드" 레시피 재사용
+   (§31 근거 승계, 신규 시각 언어 없음). 콘텐츠 형태만 달라 별도 클래스를 둔다. */
+.festival-timing-card,
+.festival-weather-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  box-shadow: var(--shadow-card);
+}
+.festival-timing-card__eyebrow,
+.festival-weather-card__eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+}
+.festival-timing-card__status {
+  display: flex;
+}
+/* d-day 캡슐 — 상태별 색만 다르고 나머지는 동일 레시피(신규 hex 없음). */
+.festival-timing-card__dday {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  font-weight: 900;
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+}
+.festival-timing-card__dday--ongoing {
+  background: var(--g-50);
+  color: var(--g-700);
+  border: 1px solid var(--g-100);
+}
+.festival-timing-card__dday--upcoming {
+  background: var(--white);
+  color: var(--b-dark);
+  border: 1px solid var(--b-100);
+}
+.festival-timing-card__dday--ended {
+  background: var(--gray-100);
+  color: var(--gray-500);
+  border: 1px solid var(--gray-100);
+}
+.festival-timing-card__tip {
+  font-size: var(--text-base);
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+.festival-weather-card__text {
+  font-size: var(--text-base);
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+/* 날씨 정보 미확보 시 — .spot-detail__overview--empty와 동일한 "정보없음" 톤 재사용(대비 4.5:1). */
+.festival-weather-card__text--muted {
+  color: var(--gray-500);
+  font-weight: 600;
+}
+
+/* =========================================================================
+   §36.8(신규, 대표 피드백 후속) — "축제 소개" 6줄 클램프 + 더보기/접기.
+   .festival-card__title의 2줄 클램프 문법(-webkit-line-clamp)을 6줄로 재사용(신규 시각 언어 없음).
+   본문 자체는 .spot-detail__overview를 그대로 재사용(FestivalDescription.tsx에서 클래스 합성).
+   ========================================================================= */
+.festival-description__text--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* .spot-detail__overview-toggle과 동일 레시피(44px 히트, n-500, ▼/▲) — <details> 대신 controlled
+   button이라 클래스만 새로 두고 값은 그대로 복사했다(aria-expanded로 상태를 대신 표현). */
+.festival-description__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--touch-min);
+  margin-top: var(--sp-1);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-500);
+  cursor: pointer;
+}
+.festival-description__toggle::after {
+  content: "▼";
+  font-size: 10px;
+}
+.festival-description__toggle[aria-expanded="true"]::after {
+  content: "▲";
+}
+
+/* =========================================================================
+   §37(신규, 03-design-spec.md, 2026-07-31) — 대표 지시 4건(전국 날씨 보드/출발일 플래너/
+   계절 여행 섹션/홈 지역 다양성). 신규 hex 없음 — 전부 기존 색 토큰·카드 레시피 재조합.
+   ========================================================================= */
+
+/* --- §37.1 전국 날씨 보드(WeatherBoard.tsx, /tips 상단) ---
+   대표 지시(카드 크기 균일 필수 — "텍스트 줄 수 편차·nowrap이 카드를 밀어낸다"는 이 코드베이스
+   반복 버그): 헤드 라인(라벨)은 1줄 말줄임, tip/notice는 line-clamp 2줄로 높이를 고정한다.
+   grid item에도 min-width:0을 둬(§33-2 교훈과 동일 원칙) 긴 라벨이 트랙 폭을 밀어내지 못하게
+   막는다(이 카드는 Link가 아니라 <article>이라 링크-특유의 flex 축소 버그는 없지만, grid item도
+   기본 min-width:auto라 내용이 트랙을 밀어낼 수 있어 동일하게 방어한다). */
+.weather-board {
+  padding-top: var(--sp-8);
+}
+.weather-board__asof {
+  margin-top: -4px;
+  margin-bottom: var(--sp-5);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.weather-board-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+}
+@media (min-width: 640px) {
+  .weather-board-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  /* §43 — 고정 4열 대신 auto-fill/minmax. 날씨 카드는 아이콘+기온 위주로 밀도가 낮아 180px까지
+     좁혀도 읽힌다(다른 그리드보다 하한을 낮게 잡은 이유). */
+  .weather-board-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+.weather-card {
+  min-width: 0;
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.weather-card--unavailable {
+  background: var(--gray-100);
+  box-shadow: none;
+}
+.weather-card__head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.weather-card__label {
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 900;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weather-card__metrics {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+.weather-card__tip {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+  line-height: 1.5;
+  /* 2줄 고정 — tip 길이가 달라도 카드 높이가 흔들리지 않게(대표 지시 핵심). */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.5em * 2);
+}
+.weather-card__tip--notice {
+  color: var(--gray-500);
+}
+
+/* --- §37.2 출발일 플래너(DeparturePlanner.tsx, 홈) --- */
+.planner__lead {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-5);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  max-width: 62ch;
+  line-height: 1.6;
+}
+.planner-form {
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.planner-form__date {
+  max-width: 260px;
+}
+/* 온보딩 텍스트영역(.onboard-textarea)과 동일 시각 언어(2px n-100 보더, r-md, n-500 포커스) —
+   "AI가 입력을 읽는다"는 개념은 아니지만 사이트 전역 입력 필드 톤을 그대로 잇는다. */
+.date-input {
+  display: block;
+  width: 100%;
+  min-height: var(--touch-min);
+  border: 2px solid var(--n-100);
+  border-radius: var(--r-md);
+  padding: 0 var(--sp-4);
+  font-size: var(--text-base);
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--white);
+  transition: border-color 0.18s;
+}
+.date-input:focus {
+  outline: none;
+  border-color: var(--n-500);
+}
+.planner-form__submit {
+  align-self: flex-start;
+}
+.plan-result {
+  margin-top: var(--sp-6);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+}
+@media (min-width: 640px) {
+  .plan-result {
+    /* 혼잡도는 180일까지 항상 채워지는 "주인공" 정보라 더 넓게 잡는다. 날씨는 예보 범위 밖이면
+       muted 보조 카드로 접혀 옆에서 작게 보인다(2026-07-31 대표 지시 반영). */
+    grid-template-columns: 3fr 2fr;
+    align-items: start;
+  }
+}
+.plan-card {
+  min-width: 0;
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.plan-card--weather.plan-card--muted {
+  background: var(--gray-100);
+  box-shadow: none;
+  padding: var(--sp-4);
+  gap: var(--sp-2);
+}
+.plan-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.plan-card__title {
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.plan-card__metrics {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--ink);
+}
+.plan-card__summary {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  line-height: 1.6;
+}
+.plan-card__empty {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* "정보 출처(basis)" 배지 — 예보/평년/작년 통계를 시각적으로 구분한다(대표 지시 핵심 원칙:
+   예측과 통계를 혼동하면 안 된다). forecast는 .sample-tag와 동일 톤(n-100/n-700, "정보성 라벨"
+   기존 관례), 통계 기준(last_year)은 .board-banner와 동일 톤(b-50/b-700, 기존 "고지성 안내"
+   관례)을 그대로 재사용한다 — 신규 hex 없음. */
+.basis-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+.basis-badge--forecast {
+  background: var(--n-100);
+  color: var(--n-700);
+}
+.basis-badge--stat {
+  background: var(--b-50);
+  color: var(--b-700);
+}
+.basis-badge--none {
+  background: var(--gray-100);
+  color: var(--ink-muted);
+}
+
+/* --- §37.3 계절 여행 섹션(SeasonalSection.tsx, 홈) ---
+   탭은 .onboard-chip(단일 선택)을 그대로 재사용(새 탭 컴포넌트 없음), 카드행은
+   .theme-collections__group + .featured-scroll을 그대로 재사용(신규 카드 컴포넌트 금지 원칙). */
+.season-tabs {
+  margin-top: var(--sp-4);
+  margin-bottom: var(--sp-2);
+}
+.seasonal__notice {
+  margin-top: 2px;
+  margin-bottom: var(--sp-4);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.seasonal__empty {
+  margin-top: var(--sp-4);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* =========================================================================
+   §41(신규) — 후기(리뷰) · 코스 공유(데모). 01-interface-contract.md 부록 R.
+   신규 hex 없음 — 전부 tokens.css 기존 값 재사용(별점 채움색은 g-500, "능동적으로 선택/담긴
+   상태"의 사이트 공통 시맨틱, .spot-card__cart-toggle.is-in-cart와 동일 근거 — 지도 마커 전용
+   앰버(--marker-mid)는 "혼잡 보통"이라는 별개 의미가 이미 있어 재사용하지 않았다).
+   ========================================================================= */
+.review-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.review-section__write-btn {
+  flex: 0 0 auto;
+}
+
+.review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  align-items: center;
+  max-width: 640px;
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+  box-shadow: var(--shadow-card);
+  margin-bottom: var(--sp-4);
+}
+.review-summary__avg {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: 0 0 auto;
+}
+.review-summary__avg-value {
+  font-size: var(--text-4xl);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1;
+}
+.review-summary__count {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+.review-summary__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+.review-summary__bar-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.review-summary__bar-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.review-summary__bar-track {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--gray-100);
+  overflow: hidden;
+}
+.review-summary__bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--g-500);
+  border-radius: var(--r-full);
+}
+.review-summary__bar-count {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 700;
+  text-align: right;
+}
+
+/* 읽기 전용 별점 표시(요약 평균·개별 후기 별점) — 회색(비활성) / g-500(채움)만 쓴다. */
+.static-stars {
+  display: inline-flex;
+  gap: 2px;
+}
+.static-stars svg {
+  width: 16px;
+  height: 16px;
+  color: var(--gray-300);
+}
+.static-stars svg.is-filled {
+  color: var(--g-500);
+}
+.static-stars--sm svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 별점 선택 입력(StarRatingInput.tsx) — role="radio" 버튼 5개, 터치 타겟은 --touch-min 확보. */
+.star-rating-input {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 4px;
+  margin-bottom: var(--sp-4);
+}
+.star-rating-input__star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gray-300);
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+.star-rating-input__star:hover {
+  transform: scale(1.08);
+}
+.star-rating-input__star.is-filled {
+  color: var(--g-500);
+}
+.star-rating-input__star:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.review-form {
+  max-width: 640px;
+  background: var(--n-50);
+  border: 1px solid var(--n-100);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.review-form__comment-label {
+  margin-top: 0;
+}
+.review-form__textarea {
+  min-height: 90px;
+}
+.review-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.review-section__toast {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--g-700);
+  margin-bottom: var(--sp-3);
+}
+
+.review-empty {
+  max-width: 640px;
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-muted);
+  background: var(--gray-100);
+  border-radius: var(--r-md);
+  margin-bottom: var(--sp-4);
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+}
+.review-item {
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.review-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.review-item__nickname {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+}
+.review-item__date {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.review-item__comment {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.review-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+.review-item__action-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  background: none;
+  border: none;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--ink-muted);
+  transition: color 0.15s ease;
+}
+.review-item__action-btn:hover {
+  color: var(--ink);
+}
+.review-item__action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.review-item__action-btn--muted {
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+}
+.review-item__reported-note {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--gray-500);
+}
+.review-item__report-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.review-more-btn {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.review-section__notice {
+  max-width: 640px;
+  font-size: var(--text-xs);
+  color: var(--gray-500); /* 대비 4.5:1 확보(.login-modal__note와 동일 레시피) */
+  line-height: 1.6;
+}
+
+/* --- 코스 공유(부록 R.7) --- */
+.course-result-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+/* .course-print-btn과 동일 "보더+흰배경 보조 액션" 레시피(신규 색 없음) — 클래스는 분리해 둔다. */
+.course-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-4);
+  margin-top: 2px;
+  border-radius: var(--r-full);
+  border: 2px solid var(--n-100);
+  background: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--n-700);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.course-share-btn:hover {
+  border-color: var(--g-500);
+  color: var(--g-700);
+}
+
+/* 공유 모달 — .login-modal 레시피를 그대로 재사용(신규 배경/그림자 없음), 폭만 살짝 넓힌다. */
+.share-course-modal {
+  max-width: 420px;
+}
+.share-course-modal__link-row {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  align-items: center;
+}
+.share-course-modal__link-input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+/* "내가 공유한 코스" 목록(/saved, SharedCoursesSection.tsx) */
+.shared-course-list {
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+}
+.shared-course-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.shared-course-list__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shared-course-list__title:hover {
+  color: var(--g-700);
+}
+.shared-course-list__date {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+/* 다른 사람 코스 피드(/courses, CoursesFeedContent.tsx) — .festivals-grid와 동일 반응형 컬럼 규칙,
+   사진이 없는 목록이라 카드는 .plan-card와 동일한 "흰 서페이스" 레시피를 쓴다. */
+.shared-course-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+@media (min-width: 560px) {
+  .shared-course-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 900px) {
+  .shared-course-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1200px) {
+  /* §43 — 고정 4열 대신 auto-fill/minmax. 280px는 코스 카드(제목+요약+스팟 수 등)가 좁아져도
+     줄바꿈이 늘지 않는 하한. */
+  .shared-course-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+.shared-course-card {
+  display: block;
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-5);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.shared-course-card:hover,
+.shared-course-card:focus-visible {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.shared-course-card__title {
+  font-size: var(--text-base);
+  font-weight: 900;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.shared-course-card__meta {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+.shared-course-card__date {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--gray-500); /* 대비 4.5:1 확보 */
+  font-weight: 600;
+}
+
+/* §41 보정(2026-08-01, 오케스트레이터) — 추천 목록 카드는 폭이 좁아(실측 185px) 배지가 한 줄에
+   하나씩 쌓인다. 별점을 그냥 붙이면 줄이 하나 늘어 카드가 커져(실측 +34px) 대표 지시("카드 크기
+   불변")를 어긴다. 혼잡도 배지 + 별점을 한 줄짜리 서브행으로 묶고, 넘치면 혼잡도 쪽이 말줄임되게
+   해 **행 수를 늘리지 않는다**. 홈 카드(.featured-card)·축제 카드는 이미 통과했으므로 무관. */
+.spot-card__congestion-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.spot-card__congestion-badge {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 부록 D.7(2026-08-01) — 전광판 하단 "대신 갈 곳" CTA 행.
+   기존 .board-header-row 와 같은 간격 언어를 쓰되 섹션 끝에 붙으므로 위쪽 여백만 준다. */
+.board-cta-row {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--sp-4);
+}
+
+/* 부록 U.3(2026-08-01) — 전국 지도 아래 "예상 혼잡 현황판"의 가로 순환 띠.
+   목록을 두 벌 이어 붙이고 -50% 까지 움직여 이음매 없이 무한 반복한다.
+   재생 시간은 컴포넌트가 카드 수에 비례해 인라인으로 준다(속도 일정). */
+.board-marquee {
+  overflow: hidden;
+  position: relative;
+  /* 양끝을 서서히 사라지게 해 잘린 카드가 덜 거슬리게 한다. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.board-marquee__track {
+  display: flex;
+  gap: var(--sp-3);
+  width: max-content;
+  animation-name: board-marquee-slide;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.board-marquee:hover .board-marquee__track,
+.board-marquee:focus-within .board-marquee__track {
+  animation-play-state: paused; /* 읽고 싶을 때 붙잡을 수 있게 */
+}
+.board-marquee__track > * {
+  flex: 0 0 auto;
+}
+@keyframes board-marquee-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+/* 움직임을 줄이도록 설정한 사용자에게는 애니메이션 대신 직접 스크롤을 준다. */
+@media (prefers-reduced-motion: reduce) {
+  .board-marquee { overflow-x: auto; }
+  .board-marquee__track { animation: none; }
+}
+.board-subtitle {
+  margin: 0 0 var(--sp-2);
+  font-size: 0.95rem;
+  color: var(--c-text-sub, #5c7686);
+}
+
+/* 전국 모드 현황판 카드 — 누르면 그 지역이 선택된다(버튼이라 기본 스타일을 지운다). */
+.board-card--clickable {
+  appearance: none;
+  border: 1px solid rgba(47, 87, 72, 0.12);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.board-card--clickable:hover,
+.board-card--clickable:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(61, 90, 108, 0.16);
+}
+
+/* 부록 D.8(2026-08-01) — 비교 카드 사진. 두 카드가 대칭이어야 하므로 높이를 고정한다. */
+.compare-card__photo {
+  display: block;
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: var(--sp-2) 0 0;
+  background: #eef3f7;
+}
+.compare-card__photo--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8ba0ad;
+  font-size: 0.85rem;
+  background: linear-gradient(135deg, #eef5f9, #e3edf3);
+}
+.compare-card__credit {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  color: #8ba0ad;
+}
+
+/* ==========================================================================
+   관리자 콘솔 (/admin) — 03-admin-console-design.md
+   일반 서비스와 **시각적으로 확실히 갈라놓는다**: 운영 화면인 줄 모르고 조작하는 사고를
+   구조적으로 줄이기 위해서다. 새 폰트·새 팔레트를 들이지 않고 tokens.css 의 다크 배경
+   전용 강조색(--n-400 / --g-400 / --b-400)을 재사용한다.
+   ========================================================================== */
+.admin,
+.admin-auth,
+.admin-boot {
+  --admin-bg: var(--n-900);
+  --admin-surface: var(--n-700);
+  --admin-raised: #10294c;
+  --admin-border: rgba(255, 255, 255, 0.12);
+  --admin-text: var(--white);
+  --admin-muted: var(--n-100);
+  --admin-faint: rgba(255, 255, 255, 0.56);
+  --admin-accent: var(--n-400);
+  --admin-positive: var(--g-400);
+  --admin-danger: var(--b-400);
+  --admin-danger-strong: var(--b-500);
+  --admin-warn: #f2a93d;
+  --admin-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  min-height: 100vh;
+  background: var(--admin-bg);
+  color: var(--admin-text);
+}
+
+.admin { padding: 0 0 64px; }
+
+/* --- 부팅 / 로그인 --- */
+.admin-boot { display: grid; place-items: center; }
+.admin-boot__spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--admin-accent);
+  animation: admin-spin 0.9s linear infinite;
+}
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+
+.admin-auth { display: grid; place-items: center; padding: 24px; }
+.admin-auth__card {
+  width: min(420px, 100%);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 24px;
+  padding: 32px 28px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.admin-auth__title { margin: 0; font-size: 22px; font-weight: 700; }
+.admin-auth__sub { margin: 0; color: var(--admin-faint); font-size: 14px; }
+.admin-auth__msg { margin: 0; color: var(--admin-muted); font-size: 15px; }
+.admin-auth__notice {
+  margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13px;
+  background: rgba(255, 255, 255, 0.06); color: var(--admin-muted);
+}
+.admin-auth__hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--admin-faint); }
+.admin-auth__error { margin: 0; font-size: 13.5px; color: var(--admin-danger); }
+.admin-auth__submit { width: 100%; }
+
+.admin-field { display: flex; flex-direction: column; gap: 6px; }
+.admin-field__label { font-size: 13px; color: var(--admin-muted); font-weight: 600; }
+.admin-field__input {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-size: 15px;
+}
+.admin-field__input:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 1px; }
+
+/* --- 상단바 --- */
+.admin-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+.admin-bar__brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+/* 사이트 로고를 재사용하지 않는다 — 쓰면 "이것도 일반 화면"이라는 착시가 생긴다. */
+.admin-bar__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--admin-accent); }
+.admin-bar__right { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.admin-bar__who { font-size: 13px; color: var(--admin-faint); }
+
+/* --- 통계 --- */
+.admin-stats {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-stat { font-size: 14px; color: var(--admin-muted); }
+.admin-stat b { font-size: 18px; color: var(--admin-text); }
+.admin-stat--pill {
+  padding: 7px 14px; border-radius: 999px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--admin-border); background: transparent; color: var(--admin-muted);
+}
+.admin-stat--pill.is-warn {
+  background: var(--admin-warn); border-color: var(--admin-warn); color: var(--n-900);
+}
+.admin-stats__meta {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--admin-faint);
+}
+
+/* --- 탭 --- */
+.admin-tabs {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 14px 20px 0;
+}
+.admin-tab {
+  padding: 9px 16px; border-radius: 10px 10px 0 0; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  color: var(--admin-faint); font-size: 15px; font-weight: 600;
+}
+.admin-tab.is-active {
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  border-bottom-color: transparent;
+}
+.admin-tabs__filters { margin-left: auto; display: inline-flex; gap: 8px; }
+.admin-select {
+  min-height: 38px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--admin-border); background: var(--admin-surface);
+  color: var(--admin-text); font-size: 13.5px;
+}
+
+/* --- 목록 --- */
+.admin-list { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.admin-row {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.admin-row.is-hidden-item { opacity: 0.72; border-style: dashed; }
+.admin-row--skeleton { height: 116px; background: rgba(255, 255, 255, 0.05); }
+.admin-row__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.admin-row__id { font-family: var(--admin-mono); font-size: 12.5px; color: var(--admin-faint); }
+.admin-row__name { font-size: 16px; font-weight: 600; }
+.admin-row__meta { font-size: 13px; color: var(--admin-faint); }
+.admin-row__badges { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.admin-row__body { margin: 0; font-size: 15px; line-height: 1.55; color: var(--admin-muted); }
+.admin-row__none { color: var(--admin-faint); }
+.admin-row__sub {
+  margin: 0; font-size: 12.5px; color: var(--admin-faint);
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.admin-row__hash, .admin-row__code { font-family: var(--admin-mono); }
+.admin-row__actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+/* 삭제는 의도적으로 가장 눈에 안 띄는 자리(맨 오른쪽)에 둔다 — 실수 클릭을 구조로 줄인다. */
+.admin-row__actions .admin-btn--danger { margin-left: auto; }
+.admin-list__count { margin: 4px 0 0; font-size: 12.5px; color: var(--admin-faint); }
+
+.admin-badge {
+  padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: rgba(255, 255, 255, 0.09); color: var(--admin-muted);
+}
+.admin-badge.is-warn { background: var(--admin-warn); color: var(--n-900); }
+.admin-badge.is-hidden { background: rgba(255, 255, 255, 0.14); color: var(--admin-text); }
+
+.admin-empty {
+  padding: 48px 20px; text-align: center; color: var(--admin-faint);
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.admin-empty p { margin: 0; font-size: 15px; }
+
+/* --- 버튼 3단계 위계 --- */
+.admin-btn {
+  min-height: 44px;
+  padding: 9px 16px; border-radius: 10px; cursor: pointer;
+  font-size: 14px; font-weight: 600; border: 1px solid transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-btn:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+.admin-btn--sm { min-height: 32px; padding: 5px 10px; font-size: 12.5px; }
+/* 1단계: 주 동작(숨기기/해제) — 눈에 띄되 위협적이지 않게 */
+.admin-btn--primary { background: var(--admin-accent); color: var(--n-900); }
+.admin-btn--primary:hover:not(:disabled) { background: var(--admin-positive); }
+/* 2단계: 보조 동작 — 테두리만 */
+.admin-btn--ghost { border-color: var(--admin-border); color: var(--admin-muted); background: transparent; }
+.admin-btn--ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); }
+/* 3단계: 파괴적 동작 — 글자만. 무게감을 일부러 뺀다 */
+.admin-btn--danger { background: transparent; color: var(--admin-danger); }
+.admin-btn--danger:hover:not(:disabled) { background: rgba(239, 115, 57, 0.14); color: var(--admin-danger-strong); }
+/* 모달 안의 확정 버튼만 채운다 — 여기까지 온 것은 이미 의도가 확인된 시점이다 */
+.admin-btn--danger-solid { background: var(--admin-danger-strong); color: var(--white); }
+
+/* --- 삭제 확인 모달 --- */
+.admin-modal { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 20px; }
+.admin-modal__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.62); }
+.admin-modal__card {
+  position: relative;
+  width: min(460px, 100%);
+  background: var(--admin-raised);
+  border: 1px solid var(--admin-border);
+  border-radius: 18px; padding: 24px;
+  display: flex; flex-direction: column; gap: 12px;
+  color: var(--admin-text);
+}
+.admin-modal__title { margin: 0; font-size: 18px; font-weight: 700; }
+.admin-modal__body { margin: 0; font-size: 14px; line-height: 1.6; color: var(--admin-muted); }
+.admin-modal__quote {
+  margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13.5px;
+  background: rgba(0, 0, 0, 0.28); color: var(--admin-muted);
+  border-left: 3px solid var(--admin-border);
+}
+.admin-modal__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+
+/* --- 토스트 --- */
+.admin-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 130;
+  padding: 12px 18px; border-radius: 12px; font-size: 14px;
+  background: var(--admin-raised); color: var(--admin-text);
+  border: 1px solid var(--admin-border);
+}
+.admin-toast.is-error { border-color: var(--admin-danger); color: var(--admin-danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-boot__spinner { animation: none; }
+  .admin-btn { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .admin-stats__meta { margin-left: 0; width: 100%; }
+  .admin-tabs__filters { margin-left: 0; width: 100%; }
+  .admin-row__badges { margin-left: 0; }
+}
+
+/* --- 관리자 트래픽 탭 (부록 X, 2026-08-10) --- */
+.admin-traffic { display: flex; flex-direction: column; gap: 22px; }
+
+.admin-traffic__kpis { display: flex; gap: 12px; flex-wrap: wrap; }
+.admin-kpi {
+  flex: 1 1 150px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.admin-kpi__num { font-size: 28px; font-weight: 700; line-height: 1.1; }
+.admin-kpi__label { font-size: 12.5px; color: var(--admin-faint); }
+
+/* 숫자를 그냥 두면 "정확한 사람 수"로 읽힌다. 한계를 같은 화면에 붙여둔다. */
+.admin-traffic__caveat {
+  margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--admin-faint);
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid var(--admin-border);
+  padding: 10px 12px; border-radius: 0 10px 10px 0;
+}
+.admin-traffic__caption { margin: 0 0 10px; font-size: 12px; line-height: 1.6; color: var(--admin-faint); }
+.admin-traffic__block { display: flex; flex-direction: column; }
+.admin-traffic__title { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.admin-traffic__none { margin: 0; font-size: 13.5px; color: var(--admin-faint); }
+
+/* 일자별 막대 — 차트 라이브러리를 들이지 않는다(새 의존성 금지). */
+.admin-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.admin-bar { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.admin-bar__label { width: 44px; color: var(--admin-faint); font-variant-numeric: tabular-nums; }
+.admin-bar__track { flex: 1; height: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.admin-bar__fill { display: block; height: 100%; background: var(--admin-accent); border-radius: 999px; }
+.admin-bar__value { width: 148px; text-align: right; color: var(--admin-muted); }
+
+/* 시간대 분포 */
+.admin-hours {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; align-items: flex-end; gap: 3px; height: 92px;
+}
+.admin-hour { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.admin-hour__fill { width: 100%; min-height: 2px; background: var(--admin-accent); border-radius: 3px 3px 0 0; }
+.admin-hour__label { font-size: 10px; color: var(--admin-faint); margin-top: 4px; height: 12px; }
+
+/* 경로·지문 목록 */
+.admin-paths { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.admin-path {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 10px; padding: 9px 12px; font-size: 13px;
+}
+.admin-path code { font-family: var(--admin-mono); font-size: 12.5px; color: var(--admin-muted); word-break: break-all; }
+.admin-path__meta { font-size: 11.5px; color: var(--admin-faint); }
+.admin-path b { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .admin-bar__value { width: auto; }
+  .admin-hour__label { display: none; }
+}

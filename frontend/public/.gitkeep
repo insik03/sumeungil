@@ -1,0 +1,3 @@
+# 이 디렉터리는 현재 비어 있다(정적 파일은 전부 코드/외부 URL 로 처리).
+# 그래도 존재해야 한다 — frontend/Dockerfile 의 `COPY --from=build /app/public ./public` 가
+# 디렉터리 부재 시 실패하고, git 은 빈 디렉터리를 추적하지 않기 때문이다.
