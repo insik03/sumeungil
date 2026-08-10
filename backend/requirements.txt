@@ -1,4 +1,8 @@
-fastapi==0.115.6
+# BadHost (CVE-2026-48710) fix: starlette <1.0.1 is vulnerable, pin explicitly.
+# fastapi 0.115.x caps starlette below 1.0.1 -> bumped to 0.141.1 (starlette>=0.46, no cap).
+# NOTE: keep this file ASCII-only; Windows pip reads it as cp949 and chokes on Korean.
+fastapi==0.141.1
+starlette==1.0.1
 uvicorn[standard]==0.34.0
 httpx==0.28.1
 python-dotenv==1.0.1
