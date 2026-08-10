@@ -4723,6 +4723,19 @@ input:focus-visible,
   font-weight: 600;
 }
 
+/* §48(신규, 대표 스크린샷 피드백 2026-08-11) — 지역 선택 영역(제목+드롭다운)과 다음 섹션
+   ("숨은길 PICK") 사이가 공통 .section 상하 여백(모바일 32px, 데스크톱 64~96px 두 번 겹침)
+   때문에 과하게 떨어져 보인다는 지적. .regions-hero 하단 패딩만 좁힌다 — .featured-section은
+   홈/테마 등 다른 화면에서도 재사용하므로 그쪽 상단 여백은 그대로 둔다. */
+.regions-hero {
+  padding-bottom: var(--sp-3);
+}
+@media (min-width: 1024px) {
+  .regions-hero {
+    padding-bottom: var(--sp-6);
+  }
+}
+
 /* §45(신규) — "지금 많이 찾는 곳"/"숨은 발견" 제목 옆 더보기·접기 배치(대표 지시, /themes의
    "더보기는 제목 옆" 패턴과 동일 배치). .theme-collections__group-head(§44)와 같은 레시피지만
    그 클래스를 h2.section__title에 그대로 붙이면 폰트 크기가 text-lg로 줄어든다(그룹 소제목용
