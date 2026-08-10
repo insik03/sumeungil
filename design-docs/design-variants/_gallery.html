@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>숨은길 — 홈 화면 디자인 시안 5종 비교</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#6b6b6b; --line:#e2e2dd; --bg:#f4f4f0;
+    --green:#1B4332; --navy:#0B2545; --brown:#5C4033;
+  }
+  *{box-sizing:border-box; margin:0;}
+  body{font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--ink); padding:28px 20px 60px;}
+  header{max-width:1500px; margin:0 auto 26px; border-bottom:2px solid var(--ink); padding-bottom:16px;}
+  h1{font-size:22px; letter-spacing:-.01em;}
+  .sub{color:var(--muted); font-size:13.5px; margin-top:6px; line-height:1.6;}
+  .sub b{color:var(--ink);}
+  .grid{max-width:1500px; margin:0 auto; display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:26px 22px;}
+  .card{background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    box-shadow:0 4px 18px rgba(0,0,0,.05); display:flex; flex-direction:column;}
+  .cap{padding:13px 16px; border-bottom:1px solid var(--line);}
+  .cap .no{display:inline-block; font-size:11px; font-weight:800; color:#fff; background:var(--green);
+    border-radius:6px; padding:2px 8px; margin-right:8px; vertical-align:middle;}
+  .cap .nm{font-weight:800; font-size:15px; vertical-align:middle;}
+  .cap .desc{color:var(--muted); font-size:12px; margin-top:7px; line-height:1.55;}
+  .frame-wrap{position:relative; width:100%; height:620px; background:#fff; overflow:hidden;}
+  /* 375px 시안을 카드 폭에 맞춰 축소해서 전체가 보이게 */
+  iframe{border:0; width:375px; height:1550px; transform-origin:top left;
+    /* scale은 JS로 카드 폭에 맞춤 */}
+  .frame-wrap.scaled iframe{position:absolute; top:0; left:50%;}
+  .open{display:block; text-align:center; padding:11px; font-size:12.5px; font-weight:700;
+    color:var(--navy); text-decoration:none; border-top:1px solid var(--line); background:#fafaf8;}
+  .open:hover{background:#f0f0ec;}
+  .legend{max-width:1500px; margin:24px auto 0; font-size:12.5px; color:var(--muted); line-height:1.7;}
+  .legend b{color:var(--ink);}
+  .swatch{display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:middle; margin:0 3px 0 9px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>숨은길 — 홈 화면 디자인 시안 5종</h1>
+  <p class="sub">브랜드 3색<span class="swatch" style="background:#1B4332"></span>딥그린 <span class="swatch" style="background:#0B2545"></span>딥네이비 <span class="swatch" style="background:#5C4033"></span>어스브라운 은 <b>전 시안 공통 고정</b>. 타이포·질감·레이아웃만 다르게 만든 5가지 방향입니다. 아래는 각 시안을 축소해 담은 미리보기이며, <b>"전체 화면으로 열기"</b>를 누르면 실제 375px 크기로 봅니다.</p>
+</header>
+
+<div class="grid" id="grid">
+  <div class="card">
+    <div class="cap"><span class="no">1</span><span class="nm">에디토리얼 / 매거진</span>
+      <div class="desc">세리프 헤드라인 + 넉넉한 여백. 카드 없이 타이포그래피와 헤어라인으로 위계. 프리미엄 여행 잡지 표지 느낌.</div></div>
+    <div class="frame-wrap"><iframe src="variant-1-editorial.html" loading="lazy" title="에디토리얼"></iframe></div>
+    <a class="open" href="variant-1-editorial.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+
+  <div class="card">
+    <div class="cap"><span class="no">2</span><span class="nm">손그림 지도 / 여행 저널</span>
+      <div class="desc">종이 질감 + 손그림풍 점선 경로, 발자국·나뭇잎 모티프. 여행 다이어리를 펼친 듯한 따뜻한 아날로그 느낌.</div></div>
+    <div class="frame-wrap"><iframe src="variant-2-handdrawn.html" loading="lazy" title="손그림 저널"></iframe></div>
+    <a class="open" href="variant-2-handdrawn.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+
+  <div class="card">
+    <div class="cap"><span class="no">3</span><span class="nm">다크 프리미엄 대시보드</span>
+      <div class="desc">어두운 배경 + 네온처럼 빛나는 혼잡도 수치, 게이지/그래프 모티프. 고급 내비·항공권 앱 느낌.</div></div>
+    <div class="frame-wrap"><iframe src="variant-3-dark-dashboard.html" loading="lazy" title="다크 대시보드"></iframe></div>
+    <a class="open" href="variant-3-dark-dashboard.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+
+  <div class="card">
+    <div class="cap"><span class="no">4</span><span class="nm">레트로 관광 포스터</span>
+      <div class="desc">7-80년대 관광 포스터/우표 느낌. 굵은 고딕 + 플랫 컬러 블록, 태양·산·길을 단순 도형으로. 실크스크린 인쇄 톤.</div></div>
+    <div class="frame-wrap"><iframe src="variant-4-retro-poster.html" loading="lazy" title="레트로 포스터"></iframe></div>
+    <a class="open" href="variant-4-retro-poster.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+
+  <div class="card">
+    <div class="cap"><span class="no">5</span><span class="nm">미니멀 (극단적 절제)</span>
+      <div class="desc">압도적 여백 + 가는 선. 텍스트를 아주 크게 아주 적게. 컬러는 포인트로만. 고급 건축 스튜디오 웹사이트 느낌.</div></div>
+    <div class="frame-wrap"><iframe src="variant-5-minimal.html" loading="lazy" title="미니멀"></iframe></div>
+    <a class="open" href="variant-5-minimal.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+</div>
+
+<p class="legend">
+  <b>참고 1.</b> 미리보기는 카드 폭에 맞춰 축소돼 있어 실제보다 작게 보입니다 — 세밀한 인상은 "전체 화면으로 열기"로 확인하세요.<br>
+  <b>참고 2.</b> 시안 2·3·4·5는 혼잡도 색을 빨강/노랑/초록 대신 <b>브랜드 3색(네이비=혼잡·브라운=보통·그린=여유)</b>으로 재매핑했습니다. 색만 다른 게 아니라 아이콘 모양·텍스트로도 구분돼 색맹 접근성은 유지됩니다. 이 매핑을 그대로 갈지도 결정 대상입니다.<br>
+  <b>참고 3.</b> 전부 홈 화면 하나만 만든 스타일 데모입니다. 방향을 고르시면 그 톤으로 나머지 5개 화면을 통일하고 실제 구현에 들어갑니다.
+</p>
+
+<script>
+  // 각 iframe을 카드 폭에 맞춰 축소
+  function fit(){
+    document.querySelectorAll('.frame-wrap').forEach(function(w){
+      var f = w.querySelector('iframe');
+      var scale = w.clientWidth / 375;
+      f.style.transform = 'scale(' + scale + ')';
+      w.classList.add('scaled');
+      f.style.left = '0';
+      // 축소 후 컨텐츠가 위쪽부터 보이도록 wrap 높이에 맞춤
+    });
+  }
+  window.addEventListener('load', fit);
+  window.addEventListener('resize', fit);
+</script>
+</body>
+</html>

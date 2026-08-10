@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 스타일 시안 A/3 · 탐험가의 보물지도</title>
+<style>
+/* =========================================================================
+   스타일 시안 A/3 — "탐험가의 보물지도 / 발견의 스릴"  (홈 랜딩 #s-home 전용)
+   ─────────────────────────────────────────────────────────────────────────
+   방향 전환 배경: 대표가 기존 5개 시안(design-variants/) 전체를 "힐링·고요함
+   에 쏠려 있다"고 반려. 이번 3개 신규 시안은 정반대 축 — 여행의 설렘·발견의
+   재미·모험심을 표현한다. 이 파일은 그중 A안, 배정 컨셉은 "보물지도".
+
+   1) 컨셉: "숨은 명소를 발견한다"를 보물찾기 모험으로 번역했다.
+      - 종이 질감 배경 + 등고선 패턴(topographic contour) = 지도 위를 걷는 느낌
+      - 나침반 로즈(회전 애니메이션, prefers-reduced-motion 시 정지)
+      - 찢어진 종이 가장자리(torn edge, ::before 지그재그 clip-path)로 섹션 경계
+      - X-마크·좌표 눈금자·왁스 스탬프 칩·핀으로 고정한 듯 겹쳐진 카드
+      - 전광판 카드를 좌우 지그재그로 배치 + 배경에 점선 트레일(SVG)로 "탐험
+        경로를 따라가는" 동선을 만들어 정적 그리드를 피했다.
+
+   2) 디자인 인텔리전스 조회 결과: "여행 지도 모험 발견 관광 앱" 키워드로
+      --design-system 조회 시 DB 최상위 추천은 Glassmorphism(SaaS/금융 대시
+      보드용, frosted glass)이었다 — 브리프(보물지도·모험·역동적 비대칭)와
+      맞지 않아 채택하지 않았다. 대신 우선순위 규칙(접근성 > 터치/인터랙션 >
+      성능 > 스타일)만 그대로 준수하고, 스타일 자체는 브리프에서 직접 지정된
+      "탐험가의 보물지도" 모티프를 브랜드 3색 파생 팔레트로 구현했다. 안티
+      패턴 체크(이모지 아이콘 금지 → 전부 inline SVG, 클릭 요소 cursor 처리,
+      44px 터치 타겟, 포커스 가시성, reduced-motion 대응, 375/768 반응형)는
+      원본 5개 시안과 동일하게 적용했다.
+
+   3) 팔레트 — 브랜드 3색(그린#1B4332/네이비#0B2545/브라운#5C4033)의 HSL을
+      스크립트로 역산(green H154.5 S43% L18%, navy H213 S72% L16%, brown
+      H19 S29% L28%)한 뒤, **같은 색상군 내에서** 채도·명도만 크게 끌어올려
+      3개의 "에너지 틴트"를 새로 파생했다(색상환 이동 없음 — 지시사항 준수):
+        --gold-500 #EFA639 (brown 계열, H36 S85% L58% — 브라운을 밝은 골드로)
+        --lime-500 #22D380 (green 계열, H152 S72% L48% — 그린을 밝은 라임으로)
+        --azure-500 #3E86EA (navy 계열, H215 S80% L58% — 네이비를 밝은 코발트로)
+      전부 파이썬으로 상대휘도 계산해 WCAG 대비를 직접 검산했다(주요 조합):
+        ink(#241A15) on gold-500  = 8.26:1   |  gold-500 on navy-900 = 9.39:1
+        ink on lime-500           = 8.67:1   |  lime-500 on navy-900 = 9.86:1
+        ink on azure-500          = 4.70:1   |  brown-700 on paper   = 10.21:1
+        cream on green/navy/brown-600 = 9.4~15.4:1 (기존 브랜드 스케일 재사용)
+      cream on gold-700(hover)=3.29:1로 AA 미달이라 그 조합은 사용하지 않고,
+      골드 배경에는 항상 ink 텍스트만 쓴다(버튼/칩/랭크 메달 전부 확인).
+
+   4) 혼잡도 배지는 5개 기존 시안과 동일한 관례를 유지한다(색+아이콘 모양
+      2중 인코딩, 색맹/저시력 대응): 혼잡=네이비+원, 보통=브라운+삼각,
+      여유=그린+사각. TOP1 카드만 골드 링 글로우를 얹어 "지금 가장 뜨거운
+      좌표"라는 에너지를 더했다 — 색만으로 의미를 바꾸지 않고 순수 장식.
+
+   5) 이 파일은 #s-home(홈 랜딩) 1개 화면만 다룬다. 목적지 자동완성 API,
+      실제 데이터 연동 등은 스코프 밖 — 정적 마크업 + 모바일 메뉴 토글 정도의
+      최소 JS만 포함했다. 원본 mockup/index.html의 카피·데이터(전광판 TOP5
+      지명/혼잡도 %, 축제명)는 그대로 유지하고 헤드라인·부제·라벨 톤만
+      발견/모험 정서로 재작성했다.
+   ========================================================================= */
+
+:root{
+  /* 브랜드 3색 스케일 (기존 03-design-spec.md 토큰과 동일 파생 규칙 재사용) */
+  --green-900:#0A1F16; --green-700:#153B2A; --green-600:#1B4332; --green-500:#2C6349; --green-300:#6FAB8B; --green-100:#D3E9DE;
+  --navy-900:#050E1B;  --navy-700:#0A203D;  --navy-600:#0B2545;  --navy-500:#1B3E6E;  --navy-300:#6C88B0;  --navy-100:#D6E0EE;
+  --brown-900:#241A15; --brown-700:#4A3329; --brown-600:#5C4033; --brown-500:#7A5A48; --brown-300:#BC9A87; --brown-100:#EEDFD5;
+
+  /* 신규 파생 — 에너지 틴트 (색상군 유지, 채도/명도만 상향. §3 근거) */
+  --gold-500:#EFA639;  --gold-700:#C17715;
+  --lime-500:#22D380;  --lime-700:#1B7E51;
+  --azure-500:#3E86EA; --azure-700:#1D56A5;
+
+  --paper:#F5EFE4;   /* 종이 배경 */
+  --cream:#FBF6EC;   /* 카드/색블록 위 밝은 면 */
+  --ink:#241A15;     /* 본문 대비용 최짙은 색(brown-900) */
+
+  --font-head:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+  --font-mono:'Consolas','SFMono-Regular','Menlo',monospace;
+
+  --touch-min:44px;
+  --pad:20px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--brown-700);
+  font-family:var(--font-body);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+h1,h2,h3,p,ul,ol{margin:0;}
+ul,ol{list-style:none;padding:0;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;background:none;border:none;color:inherit;cursor:pointer;}
+img,svg{display:block;max-width:100%;}
+input{font-family:inherit;}
+a:focus-visible, button:focus-visible, input:focus-visible{
+  outline:3px solid var(--azure-700);
+  outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important;}
+}
+
+/* =========================================================================
+   0. 시안 라벨
+   ========================================================================= */
+.variant-tag{
+  position:sticky; top:0; z-index:80;
+  background:var(--navy-900); color:var(--cream);
+  font-family:var(--font-body); font-size:11px; font-weight:700;
+  letter-spacing:0.08em; text-transform:uppercase;
+  padding:9px var(--pad);
+  display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+  border-bottom:2px dashed var(--gold-500);
+}
+.variant-tag span{opacity:0.68; font-weight:400; text-transform:none; letter-spacing:0;}
+
+/* =========================================================================
+   1. GNB — 다크 네이비 + 골드 대시 경계 + 우표형 로고
+   ========================================================================= */
+.gnb{
+  position:relative; z-index:40;
+  background:var(--navy-900);
+  border-bottom:3px dashed var(--gold-500);
+  padding:0 var(--pad);
+  min-height:64px;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.gnb__logo{font-family:var(--font-head); font-size:19px; font-weight:900; letter-spacing:-0.01em; color:var(--cream);}
+.gnb__logo span{color:var(--gold-500);}
+.gnb__menu{display:none; gap:26px; align-items:center;}
+.gnb__menu a{min-height:var(--touch-min); display:flex; align-items:center; font-size:14px; font-weight:700; color:var(--navy-100);}
+.gnb__menu a:hover{color:var(--gold-500);}
+.gnb__actions{display:none; align-items:center; gap:10px;}
+.btn{
+  min-height:var(--touch-min); display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:0 20px; font-size:14px; font-weight:800; border-radius:999px; white-space:nowrap;
+  border:2px solid transparent; cursor:pointer; transition:transform .12s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.btn:active{transform:translate(2px,2px);}
+.btn--text{color:var(--cream);}
+.btn--text:hover{color:var(--gold-500);}
+.btn--ghost{border-color:var(--cream); color:var(--cream);}
+.btn--ghost:hover{background:var(--cream); color:var(--navy-900);}
+.gnb__burger{
+  width:var(--touch-min); height:var(--touch-min); flex:0 0 auto;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer;
+}
+.gnb__burger span{display:block; width:22px; height:3px; background:var(--cream); border-radius:2px;}
+
+.mnav{
+  position:fixed; inset:0; z-index:200; background:var(--navy-900);
+  display:flex; flex-direction:column; padding:var(--pad);
+  opacity:0; visibility:hidden; transition:opacity .2s ease;
+}
+.mnav.is-open{opacity:1; visibility:visible;}
+.mnav__top{display:flex; justify-content:flex-end;}
+.mnav__close{width:var(--touch-min); height:var(--touch-min); color:var(--cream); font-size:26px; cursor:pointer;}
+.mnav__list{margin-top:32px; display:flex; flex-direction:column;}
+.mnav__list a{
+  min-height:60px; display:flex; align-items:center;
+  font-family:var(--font-head); font-size:24px; font-weight:900; color:var(--cream);
+  border-bottom:1px dashed rgba(239,166,57,0.35);
+}
+.mnav__cta{margin-top:auto; padding-top:24px;}
+
+@media (min-width:768px){
+  .gnb{padding:0 40px; min-height:72px;}
+  .gnb__menu{display:flex;}
+  .gnb__actions{display:flex;}
+  .gnb__burger{display:none;}
+}
+
+/* 좌표 눈금자 스트립 — 지도 상단 여백 느낌 */
+.ruler{
+  position:relative; background:var(--cream);
+  border-bottom:1px solid var(--brown-300);
+  padding:7px var(--pad);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:0.06em;
+  color:var(--brown-500); overflow:hidden;
+}
+.ruler span:nth-child(2){color:var(--green-600);}
+.ruler::before{
+  content:""; position:absolute; left:0; right:0; top:50%; height:1px;
+  background:repeating-linear-gradient(90deg, var(--brown-300) 0 6px, transparent 6px 13px);
+  z-index:0;
+}
+.ruler span{position:relative; background:var(--cream); padding:0 8px; z-index:1;}
+
+/* =========================================================================
+   2. 히어로 — 등고선 종이 배경 + 나침반 + 비대칭 레이어드 카드
+   ========================================================================= */
+.hero{
+  position:relative; overflow:hidden;
+  background:
+    radial-gradient(circle at 88% 8%, transparent 0 34px, rgba(27,67,50,0.07) 35px 37px, transparent 38px 70px, rgba(92,64,51,0.06) 71px 73px, transparent 74px 106px, rgba(27,67,50,0.05) 107px 109px, transparent 110px 999px),
+    radial-gradient(circle at 6% 92%, transparent 0 30px, rgba(11,37,69,0.06) 31px 33px, transparent 34px 62px, rgba(92,64,51,0.05) 63px 65px, transparent 66px 999px),
+    var(--paper);
+  padding:34px var(--pad) 46px;
+}
+.compass{
+  position:absolute; top:-34px; right:-46px; width:230px; height:230px;
+  opacity:0.16; pointer-events:none;
+  animation:spin 34s linear infinite;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+.stamp-eyebrow{
+  position:relative; display:inline-flex; align-items:center; gap:7px;
+  font-family:var(--font-head); font-size:11px; font-weight:900; letter-spacing:0.08em;
+  color:var(--navy-900); background:var(--cream);
+  border:1.5px dashed var(--navy-700); border-radius:999px;
+  padding:6px 14px 6px 10px;
+  transform:rotate(-2.4deg);
+}
+.stamp-eyebrow i{width:8px; height:8px; border-radius:50%; background:var(--gold-500); flex:0 0 auto;}
+
+.hero__title{
+  position:relative; margin-top:18px; font-family:var(--font-head); font-weight:900;
+  font-size:clamp(28px,8.4vw,42px); line-height:1.28; letter-spacing:-0.01em;
+  color:var(--navy-900); max-width:15ch;
+}
+.hero__title .ln2{display:block; margin-top:2px; transform:rotate(-0.6deg); transform-origin:left center;}
+.hero__title mark{background:none; color:inherit; position:relative; padding:0 .06em; z-index:1;}
+.hero__title mark::before{
+  content:""; position:absolute; left:-5px; right:-5px; top:32%; bottom:2px;
+  background:var(--gold-500); z-index:-1; transform:skew(-8deg,-1deg); border-radius:2px 10px 2px 10px;
+}
+.hero__sub{margin-top:18px; font-size:15px; color:var(--brown-700); max-width:36ch; line-height:1.7;}
+
+/* 목적지 검색 — 좌표 카드(핀으로 고정된 느낌) */
+.dest{
+  position:relative; margin-top:30px; background:var(--cream);
+  border:2px dashed var(--navy-700); border-radius:8px;
+  box-shadow:6px 6px 0 var(--gold-700);
+  padding:20px 18px 18px;
+  transform:rotate(-1deg);
+}
+.dest__pin{
+  position:absolute; top:-16px; left:22px; width:32px; height:32px; border-radius:50%;
+  background:var(--gold-500); border:3px solid var(--cream);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 0 rgba(36,26,21,0.25);
+}
+.dest__pin svg{width:14px; height:14px;}
+.dest__label{display:block; font-size:12.5px; font-weight:800; letter-spacing:0.02em; color:var(--navy-900); margin-bottom:10px; margin-left:2px;}
+.dest__row{
+  display:flex; align-items:center; gap:10px;
+  border:2px solid var(--brown-300); border-radius:6px; padding:0 12px; min-height:var(--touch-min);
+  background:var(--paper);
+}
+.dest__row:focus-within{border-color:var(--navy-700);}
+.dest__icon{flex:0 0 auto; width:18px; height:18px;}
+.dest__input{
+  flex:1; border:none; outline:none; background:transparent;
+  font-size:15px; font-family:inherit; color:var(--ink); min-height:var(--touch-min);
+}
+.dest__input::placeholder{color:var(--brown-500);}
+.dest__quick{margin-top:14px; display:flex; align-items:center; flex-wrap:wrap; gap:9px;}
+.dest__quick-label{width:100%; font-size:11px; font-weight:800; color:var(--brown-700); margin-bottom:2px;}
+.seal{
+  min-height:36px; padding:0 15px; border-radius:999px; cursor:pointer;
+  border:2px solid var(--green-600); color:var(--green-700); background:var(--cream);
+  font-size:12.5px; font-weight:800; transition:background .15s ease, color .15s ease, transform .15s ease;
+}
+.seal:hover{background:var(--green-600); color:var(--cream);}
+.seal:nth-child(2){transform:rotate(-4deg);}
+.seal:nth-child(3){transform:rotate(3deg);}
+.seal:nth-child(4){transform:rotate(-2deg);}
+.seal:nth-child(5){transform:rotate(5deg);}
+
+.hero__cta{margin:26px 0 0; display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+.btn--x{
+  background:var(--gold-500); color:var(--ink); border:2px dashed var(--ink);
+  box-shadow:4px 4px 0 var(--navy-900);
+}
+.btn--x:hover{background:var(--gold-700); color:var(--cream);}
+.btn--x svg{width:16px; height:16px;}
+
+.hero__next{
+  margin-top:22px; display:flex; align-items:center; gap:8px;
+  font-size:12.5px; font-weight:700; color:var(--brown-500);
+}
+.hero__next svg{width:14px; height:14px; animation:bob 1.6s ease-in-out infinite;}
+@keyframes bob{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(4px);} }
+
+@media (min-width:768px){
+  .hero{padding:52px 40px 60px;}
+  .hero__title{max-width:20ch;}
+  .dest{max-width:420px;}
+}
+
+/* =========================================================================
+   3. 실시간 신호 보드 — 지그재그 배치 + 배경 트레일 SVG
+   ========================================================================= */
+.section{padding:44px var(--pad) 8px; position:relative;}
+@media (min-width:768px){ .section{padding:64px 40px 8px;} }
+
+.section__eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--font-head); font-size:11px; font-weight:900; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--cream); background:var(--navy-900); padding:6px 14px; border-radius:999px;
+}
+.section__eyebrow i{width:6px; height:6px; border-radius:50%; background:var(--gold-500); box-shadow:0 0 0 3px rgba(239,166,57,0.35);}
+.section__title{
+  margin-top:14px; font-family:var(--font-head); font-size:clamp(21px,5.6vw,27px); font-weight:900;
+  color:var(--navy-900); line-height:1.35; letter-spacing:-0.01em; max-width:18ch;
+}
+.sample-tag{
+  display:inline-flex; align-items:center; margin-top:10px;
+  font-size:11px; font-weight:800; color:var(--brown-700);
+  border:1.5px dashed var(--brown-500); border-radius:999px; padding:4px 12px;
+}
+
+.trail-wrap{position:relative; margin-top:24px;}
+.trail-svg{position:absolute; inset:0; width:100%; height:100%; z-index:0; opacity:0.55;}
+.board{position:relative; z-index:1; display:flex; flex-direction:column; gap:18px; padding:6px 2px 26px;}
+.board-card{
+  position:relative; background:var(--cream); border:2px solid var(--navy-900); border-radius:8px;
+  padding:14px 16px; display:flex; align-items:center; gap:12px;
+  box-shadow:5px 5px 0 var(--brown-300);
+  width:84%;
+}
+.board-card:nth-child(odd){align-self:flex-start; transform:rotate(-1deg);}
+.board-card:nth-child(even){align-self:flex-end; transform:rotate(1.2deg);}
+.board-card--top1{box-shadow:5px 5px 0 var(--gold-500); border-color:var(--gold-700);}
+.board-card__rank{
+  flex:0 0 auto; width:40px; height:40px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-head); font-size:12px; font-weight:900;
+  background:var(--navy-900); color:var(--cream);
+  border:2px dashed var(--brown-300);
+}
+.board-card--top1 .board-card__rank{background:var(--gold-500); color:var(--ink); border-color:var(--navy-900); box-shadow:0 0 0 4px rgba(239,166,57,0.28);}
+.board-card__body{flex:1; min-width:0;}
+.board-card__name{font-family:var(--font-head); font-size:15px; font-weight:900; color:var(--ink); line-height:1.3;}
+.badge{
+  display:inline-flex; align-items:center; gap:6px; margin-top:7px;
+  font-size:12px; font-weight:800; padding:4px 11px; border-radius:999px; color:var(--cream);
+}
+.badge__icon{width:9px; height:9px; flex:0 0 auto; background:currentColor;}
+.badge--busy{background:var(--navy-600);}
+.badge--busy .badge__icon{border-radius:50%;}
+.badge--mid{background:var(--brown-600);}
+.badge--mid .badge__icon{clip-path:polygon(50% 0%,0% 100%,100% 100%);}
+.badge--calm{background:var(--green-600);}
+.badge--calm .badge__icon{border-radius:2px;}
+
+@media (min-width:768px){
+  .board{flex-direction:row; flex-wrap:wrap; gap:20px;}
+  .board-card{width:calc(33.333% - 14px);}
+  .board-card:nth-child(odd), .board-card:nth-child(even){align-self:auto; transform:none;}
+}
+
+/* =========================================================================
+   4. 지역 축제 배너 — 찢어진 두루마리 + 리본
+   ========================================================================= */
+.festival-wrap{margin-top:30px; position:relative;}
+.festival{
+  position:relative; background:var(--brown-600); color:var(--cream);
+  border-radius:6px; padding:26px 20px 24px; overflow:hidden;
+}
+.festival::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:12px;
+  background:var(--paper);
+  clip-path:polygon(0% 100%,3% 20%,7% 90%,11% 15%,15% 85%,19% 20%,23% 90%,27% 15%,31% 85%,35% 20%,39% 90%,43% 15%,47% 85%,51% 20%,55% 90%,59% 15%,63% 85%,67% 20%,71% 90%,75% 15%,79% 85%,83% 20%,87% 90%,91% 15%,95% 85%,100% 20%,100% 100%);
+}
+.festival__ribbon{
+  position:absolute; top:14px; right:-30px; background:var(--gold-500); color:var(--ink);
+  font-size:11px; font-weight:900; letter-spacing:0.04em; padding:5px 34px;
+  transform:rotate(38deg); box-shadow:0 2px 0 rgba(36,26,21,0.3);
+}
+.festival__eyebrow{position:relative; font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:var(--brown-100); margin-top:6px;}
+.festival__title{margin-top:8px; font-family:var(--font-head); font-size:19px; font-weight:900;}
+.festival__desc{margin-top:6px; font-size:13.5px; color:var(--brown-100); line-height:1.6; max-width:34ch;}
+.festival__cta{margin-top:16px;}
+.festival .btn--ghost{border-color:var(--cream); color:var(--cream);}
+.festival .btn--ghost:hover{background:var(--cream); color:var(--brown-700);}
+
+/* =========================================================================
+   5. 하단 — 좌표 눈금 리본 + 시안 안내
+   ========================================================================= */
+.ribbon{
+  margin-top:46px; height:26px;
+  background:repeating-linear-gradient(
+    135deg,
+    var(--navy-900) 0 22px,
+    var(--gold-500) 22px 44px,
+    var(--green-600) 44px 66px,
+    var(--brown-600) 66px 88px
+  );
+}
+.footer-note{padding:26px var(--pad) 44px; text-align:center; font-size:12px; color:var(--brown-500);}
+.footer-note b{display:block; font-family:var(--font-head); font-size:14px; font-weight:900; color:var(--navy-900); margin-bottom:4px;}
+</style>
+</head>
+<body>
+
+<div class="variant-tag">
+  <span>숨은길 · 스타일 비교 시안(v2, 여행 설렘/발견 테마)</span>
+  A / 3 — 탐험가의 보물지도 (최종안 아님)
+</div>
+
+<div class="mnav" id="mnav" role="dialog" aria-label="모바일 메뉴">
+  <div class="mnav__top"><button class="mnav__close" aria-label="메뉴 닫기" onclick="closeMnav()">&times;</button></div>
+  <nav class="mnav__list">
+    <a href="#">여행지 추천</a>
+    <a href="#">AI 여행 경로</a>
+    <a href="#">저장한 코스</a>
+    <a href="#">여행 팁</a>
+  </nav>
+  <div class="mnav__cta"><button class="btn btn--ghost" style="width:100%;">시작하기</button></div>
+</div>
+
+<section id="s-home">
+
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--ghost">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMnav()"><span></span><span></span><span></span></button>
+  </div>
+
+  <div class="ruler" aria-hidden="true">
+    <span>35.8&deg;N</span><span>미탐험 구역 037</span><span>127.1&deg;E</span>
+  </div>
+
+  <div class="hero">
+    <svg class="compass" viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="92" fill="none" stroke="#0A203D" stroke-width="2"/>
+      <circle cx="100" cy="100" r="70" fill="none" stroke="#5C4033" stroke-width="1" stroke-dasharray="1 7"/>
+      <path d="M100 14 L112 100 L100 186 L88 100 Z" fill="#0A203D"/>
+      <path d="M14 100 L100 88 L186 100 L100 112 Z" fill="#5C4033"/>
+      <circle cx="100" cy="100" r="9" fill="#EFA639" stroke="#0A203D" stroke-width="2"/>
+      <text x="100" y="34" text-anchor="middle" font-size="13" font-weight="900" fill="#0A203D">N</text>
+      <text x="100" y="176" text-anchor="middle" font-size="13" font-weight="900" fill="#0A203D">S</text>
+      <text x="34" y="105" text-anchor="middle" font-size="13" font-weight="900" fill="#5C4033">W</text>
+      <text x="166" y="105" text-anchor="middle" font-size="13" font-weight="900" fill="#5C4033">E</text>
+    </svg>
+
+    <span class="stamp-eyebrow"><i></i>미공개 루트 OPEN</span>
+
+    <h1 class="hero__title">사람들이 아직 못 찾은 곳,<span class="ln2"><mark>당신이 먼저</mark> 발견하세요</span></h1>
+    <p class="hero__sub">서연님, 지도에 잘 안 나오는 한적한 골목과 숨은 산책로를 AI가 찾아드려요. 아이와 함께 걷기 좋은 미공개 코스, 지금 열어보세요.</p>
+
+    <!-- M16(2026-07-24 신규) — 목적지 검색 자동완성. 자유 텍스트 NLP가 아니라 지명 후보 검색(구조화 입력)이며,
+         선택 시 region_code로 후보를 좁힌다(08 정본 태그/LLM 파이프라인과 무관). 배치 근거는 03-design-spec.md §16.1.
+         이 파일은 스타일 비교용 시안이라 실제 검색/자동완성 로직은 연결하지 않았다 — 시각 레이아웃만 확인 목적. -->
+    <div class="dest">
+      <span class="dest__pin" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 12l16 -6l-6 16l-2 -8z" fill="#241A15"/></svg>
+      </span>
+      <label class="dest__label" for="destInput">탐험을 시작할 좌표를 입력하세요</label>
+      <div class="dest__row">
+        <svg class="dest__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10" cy="10" r="6.5" fill="none" stroke="#0A203D" stroke-width="2"/>
+          <line x1="15" y1="15" x2="21" y2="21" stroke="#0A203D" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input type="text" id="destInput" class="dest__input" placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)" autocomplete="off" />
+      </div>
+      <div class="dest__quick">
+        <span class="dest__quick-label">먼저 발견된 좌표</span>
+        <button type="button" class="seal">경주</button>
+        <button type="button" class="seal">전주</button>
+        <button type="button" class="seal">강릉</button>
+        <button type="button" class="seal">부산</button>
+      </div>
+    </div>
+
+    <div class="hero__cta">
+      <button class="btn btn--x">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        숨은 코스 발견하기
+      </button>
+    </div>
+
+    <div class="hero__next">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 14l6 6 6-6" stroke="#5C4033" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      다음 발견: 지금 붐비는 좌표부터 확인하기
+    </div>
+  </div>
+
+  <div class="section">
+    <span class="section__eyebrow"><i></i>실시간 신호 · LIVE</span>
+    <h2 class="section__title" id="boardHeading">지금, 사람들이 몰리는 좌표는?</h2>
+    <span class="sample-tag" id="boardCaption">예시 데이터입니다 · API 연동 전</span>
+
+    <div class="trail-wrap">
+      <svg class="trail-svg" viewBox="0 0 100 420" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M78 10 C 20 60, 90 110, 22 160 S 85 260, 20 310 S 88 400, 30 415" fill="none" stroke="#5C4033" stroke-width="1.4" stroke-dasharray="1 8" stroke-linecap="round"/>
+      </svg>
+      <div class="board" role="list" id="boardList">
+        <div class="board-card board-card--top1" role="listitem" data-region="경주">
+          <div class="board-card__rank">TOP 1</div>
+          <div class="board-card__body">
+            <div class="board-card__name">경주 불국사</div>
+            <span class="badge badge--busy"><span class="badge__icon"></span>혼잡 82%</span>
+          </div>
+        </div>
+        <div class="board-card" role="listitem" data-region="전주">
+          <div class="board-card__rank">TOP 2</div>
+          <div class="board-card__body">
+            <div class="board-card__name">전주 한옥마을</div>
+            <span class="badge badge--busy"><span class="badge__icon"></span>혼잡 76%</span>
+          </div>
+        </div>
+        <div class="board-card" role="listitem" data-region="강릉">
+          <div class="board-card__rank">TOP 3</div>
+          <div class="board-card__body">
+            <div class="board-card__name">강릉 안목해변</div>
+            <span class="badge badge--mid"><span class="badge__icon"></span>보통 54%</span>
+          </div>
+        </div>
+        <div class="board-card" role="listitem" data-region="부산">
+          <div class="board-card__rank">TOP 4</div>
+          <div class="board-card__body">
+            <div class="board-card__name">부산 해운대</div>
+            <span class="badge badge--mid"><span class="badge__icon"></span>보통 48%</span>
+          </div>
+        </div>
+        <div class="board-card" role="listitem" data-region="경주">
+          <div class="board-card__rank">TOP 5</div>
+          <div class="board-card__body">
+            <div class="board-card__name">경주 대릉원 돌담길</div>
+            <span class="badge badge--calm"><span class="badge__icon"></span>여유 22%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="festival-wrap">
+      <span class="section__eyebrow"><i></i>지금 이 지역 축제</span>
+      <div class="festival" style="margin-top:16px;">
+        <span class="festival__ribbon">발견됨</span>
+        <div class="festival__eyebrow">숨은 루트 열림</div>
+        <div class="festival__title">전주 한지문화축제</div>
+        <div class="festival__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요</div>
+        <div class="festival__cta"><button class="btn btn--ghost">루트 보기</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ribbon" aria-hidden="true"></div>
+  <div class="footer-note">
+    <b>숨은길 · 스타일 비교 시안 A/3</b>
+    이 화면은 최종 채택안이 아닙니다 — 톤앤매너 비교를 위한 시안입니다.
+  </div>
+
+</section>
+
+<script>
+function openMnav(){ document.getElementById('mnav').classList.add('is-open'); }
+function closeMnav(){ document.getElementById('mnav').classList.remove('is-open'); }
+</script>
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 스타일 시안 4/5 · 레트로 관광 포스터</title>
+<style>
+/* =========================================================================
+   스타일 시안 4/5 — "레트로 한국 관광 포스터"
+   ─────────────────────────────────────────────────────────────────────────
+   컨셉 메모 (03-design-spec.md 채택 전 비교용, 이 파일 자체가 최종본은 아님)
+
+   1) 배정 방향: 7-80년대 국내 관광 포스터/우표 디자인 — 굵은 지오메트릭
+      태양·산·길 모티프, 큰 면적 플랫 컬러 블록, 굵은 고딕 헤드라인.
+      variant-5(미니멀 세리프)와 정반대 축에 있도록 의도적으로 "장식적·
+      상징적" 쪽으로 밀어붙였다 — 대표가 지적한 "Notion 같은 제네릭 AI
+      느낌"에서 가장 멀리 떨어진 안이 이 variant의 존재 이유.
+
+   2) 디자인 인텔리전스 조회 결과 반영:
+      - "레트로 관광 포스터"에 대한 직접 매치 스타일은 DB에 없어(Retro-
+        Futurism은 네온/사이버펑크로 브리프와 불일치) 채택하지 않음.
+      - 대신 "Flat Design / Flat Design Mobile" 결과를 근거로 채택:
+        그림자 없음(box-shadow:none 원칙), 색면 블로킹(color-blocking),
+        4-6색 이내 저채도 아님 고채도 한정 팔레트, 큰 볼드 타이포,
+        44px 터치 타겟 — 이 규칙들을 "레트로 포스터"의 컬러 블록/굵은
+        고딕 타이포 요구와 결합했다. 유일한 예외는 버튼/카드의 하드
+        오프셋 그림자(예: 4px 4px 0 색상)인데, 이는 블러 없는 실크스크린
+        인쇄 정합 오차(registration offset)를 재현하는 장치로 "플랫"
+        원칙을 깨지 않으면서 레트로 인쇄물 느낌을 준다.
+
+   3) 팔레트: 브랜드 3색(그린/네이비/브라운)만 사용, 각 색의 틴트/셰이드는
+      기존 03-design-spec.md 토큰 스케일을 그대로 재사용(파생 자유 조항).
+      추가로 "종이(paper)" 톤 하나만 브라운 극연톤으로 새로 파생했다
+      (인쇄물 배경 느낌, 순백 대신 채택 — 순백은 화면이 아니라 인쇄물처럼
+      보이게 하는 데 방해가 됨). 모든 텍스트 조합은 WCAG AA 이상
+      (본문 대비 다수 8:1~14:1, 계산은 §1 스케일 색상값 그대로 재사용해
+      직접 검산 완료 — 그린/네이비/브라운-600 on paper/cream 모두 8:1대,
+      cream on 각 브랜드-600 배지는 8.7~14:1).
+
+   4) 혼잡도 배지 3색 매핑은 variant-5(미니멀안)와 동일하게 통일했다
+      (네이비=혼잡, 브라운=보통, 그린=여유) — 두 시안을 나란히 비교할 때
+      "색이 곧 상태"라는 학습이 흔들리지 않도록 하기 위함. 여기에 원본
+      메인 목업(index.html)의 원·삼각·사각 아이콘 형태 관례까지 얹어
+      색+아이콘 모양+텍스트 3중 표기를 유지한다(색맹/저시력 대응).
+
+   5) 실사용 인터랙션(목적지 자동완성 API 연동, 축제 배너 클릭 등)은
+      이 파일의 스코프가 아니다 — 스타일 비교가 목적이므로 정적 마크업
+      + 최소 JS(모바일 메뉴 토글)만 넣었다.
+   ========================================================================= */
+
+:root{
+  /* 03-design-spec.md §1 그린/네이비/브라운 스케일 재사용 (파생 자유) */
+  --green-900:#0A1F16; --green-700:#153B2A; --green-600:#1B4332; --green-500:#2C6349; --green-300:#6FAB8B; --green-100:#D3E9DE;
+  --navy-900:#050E1B;  --navy-700:#0A203D;  --navy-600:#0B2545;  --navy-500:#1B3E6E;  --navy-300:#6C88B0;  --navy-100:#D6E0EE;
+  --brown-900:#241A15; --brown-700:#4A3329; --brown-600:#5C4033; --brown-500:#7A5A48; --brown-300:#BC9A87; --brown-100:#EEDFD5;
+
+  --paper:#F5EFE4;   /* 브라운 극연톤 — 인쇄물 배경 (신규 파생, 근거 상단 메모 §3) */
+  --cream:#FBF6EC;   /* 색 블록 위에 얹는 밝은 텍스트/면 (신규 파생, cream on 브랜드색 대비 8.7~14:1) */
+  --ink:  var(--brown-900); /* 종이 위 본문 텍스트 — 순검정 대신 브라운 파생으로 톤 통일 */
+
+  --font-head:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+
+  --touch-min:44px;
+  --pad:20px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-body);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul,ol{margin:0;}
+ul,ol{list-style:none;padding:0;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;background:none;border:none;color:inherit;cursor:pointer;}
+img,svg{display:block;max-width:100%;}
+a:focus-visible, button:focus-visible, input:focus-visible{
+  outline:3px solid var(--navy-600);
+  outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+}
+
+/* =========================================================================
+   0. 시안 라벨 — 비교용 표식(실제 제품 UI 아님)
+   ========================================================================= */
+.variant-tag{
+  position:sticky; top:0; z-index:50;
+  background:var(--navy-900); color:var(--cream);
+  font-family:var(--font-body); font-size:11px; font-weight:700;
+  letter-spacing:0.1em; text-transform:uppercase;
+  padding:9px var(--pad);
+  display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+}
+.variant-tag span{opacity:0.65; font-weight:400; text-transform:none; letter-spacing:0;}
+
+/* =========================================================================
+   1. GNB — 종이 바탕 + 굵은 하단 경계선 + 우표 로고마크
+   ========================================================================= */
+.gnb{
+  background:var(--paper);
+  border-bottom:3px solid var(--navy-600);
+  padding:0 var(--pad);
+  min-height:64px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.gnb__brand{display:flex; align-items:center; gap:10px;}
+.gnb__mark{
+  width:34px; height:34px; border-radius:50%; flex:0 0 auto;
+  background:var(--green-600);
+  border:2px dashed var(--cream);
+  display:flex; align-items:center; justify-content:center;
+}
+.gnb__mark i{width:14px; height:14px; border-radius:50%; background:var(--cream); display:block;}
+.gnb__logo{font-family:var(--font-head); font-size:19px; font-weight:900; letter-spacing:-0.01em; color:var(--navy-700);}
+.gnb__logo b{color:var(--brown-600);}
+.gnb__menu{display:none; gap:28px; align-items:center;}
+.gnb__menu a{min-height:var(--touch-min); display:flex; align-items:center; font-size:14px; font-weight:800; color:var(--ink);}
+.gnb__menu a:hover{color:var(--green-600);}
+.gnb__actions{display:none; align-items:center; gap:10px;}
+.btn{
+  min-height:var(--touch-min); display:inline-flex; align-items:center; justify-content:center;
+  padding:0 20px; font-size:14px; font-weight:800; border-radius:999px;
+  border:2px solid transparent; transition:transform .12s ease, background .15s ease, color .15s ease;
+}
+.btn:active{transform:translate(2px,2px);}
+.btn--solid-navy{background:var(--navy-600); color:var(--cream); box-shadow:4px 4px 0 var(--brown-600);}
+.btn--solid-navy:hover{background:var(--navy-700);}
+.btn--outline{background:transparent; color:var(--navy-700); border-color:var(--navy-700);}
+.btn--outline:hover{background:var(--navy-700); color:var(--cream);}
+.btn--block{width:100%;}
+
+.gnb__burger{
+  width:var(--touch-min); height:var(--touch-min); flex:0 0 auto;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+}
+.gnb__burger span{display:block; width:22px; height:3px; background:var(--navy-700); border-radius:2px;}
+
+.mnav{
+  position:fixed; inset:0; z-index:200; background:var(--green-600);
+  display:flex; flex-direction:column; padding:var(--pad);
+  opacity:0; visibility:hidden; transition:opacity .2s ease;
+}
+.mnav.is-open{opacity:1; visibility:visible;}
+.mnav__top{display:flex; justify-content:flex-end;}
+.mnav__close{width:var(--touch-min); height:var(--touch-min); color:var(--cream); font-size:26px;}
+.mnav__list{margin-top:32px; display:flex; flex-direction:column;}
+.mnav__list a{
+  min-height:60px; display:flex; align-items:center;
+  font-family:var(--font-head); font-size:24px; font-weight:900; color:var(--cream);
+  border-bottom:1px solid rgba(251,246,236,0.25);
+}
+.mnav__cta{margin-top:auto; padding-top:24px;}
+
+@media (min-width:1024px){
+  .gnb{padding:0 48px; min-height:76px;}
+  .gnb__menu{display:flex;}
+  .gnb__actions{display:flex;}
+  .gnb__burger{display:none;}
+}
+
+/* =========================================================================
+   2. 히어로 — 딥그린 색면 블록 + 태양/산/길 지오메트릭 모티프
+   ========================================================================= */
+.hero{
+  position:relative; overflow:hidden;
+  background:var(--green-600);
+  padding:36px var(--pad) 0;
+}
+.hero__eyebrow{
+  font-family:var(--font-head); font-size:12px; font-weight:800; letter-spacing:0.22em;
+  color:var(--green-100); text-transform:uppercase;
+}
+.hero__title{
+  margin-top:14px; font-family:var(--font-head); font-weight:900;
+  font-size:clamp(30px,8.6vw,44px); line-height:1.22; letter-spacing:-0.01em;
+  color:var(--cream);
+}
+.hero__title mark{
+  background:none; color:inherit; position:relative; display:inline-block;
+}
+.hero__title mark::after{
+  content:""; position:absolute; left:0; right:0; bottom:-2px; height:10px;
+  background:var(--brown-500); z-index:-1;
+}
+.hero__sub{margin-top:16px; font-size:15px; color:var(--green-100); max-width:34ch; line-height:1.65;}
+
+/* 목적지 검색 — 우표 카드 */
+.dest{
+  position:relative; margin-top:26px; background:var(--cream);
+  border:2.5px solid var(--navy-700); border-radius:6px;
+  box-shadow:6px 6px 0 var(--brown-600);
+  padding:18px;
+}
+.dest__stamp{
+  position:absolute; top:-18px; right:14px; width:58px; height:58px; border-radius:50%;
+  background:var(--brown-600); border:2px dashed var(--cream);
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  transform:rotate(-9deg);
+  font-family:var(--font-head); font-weight:900; font-size:10px; line-height:1.25; color:var(--cream);
+}
+.dest__label{display:block; font-size:12px; font-weight:800; letter-spacing:0.04em; color:var(--brown-700); margin-bottom:10px;}
+.dest__row{
+  display:flex; align-items:center; gap:10px;
+  border:2px solid var(--navy-300); border-radius:4px; padding:0 12px; min-height:var(--touch-min);
+}
+.dest__row:focus-within{border-color:var(--navy-700);}
+.dest__icon{width:16px; height:16px; flex:0 0 auto; position:relative;}
+.dest__icon::before{content:""; position:absolute; top:0; left:0; width:10px; height:10px; border:2px solid var(--navy-600); border-radius:50%;}
+.dest__icon::after{content:""; position:absolute; bottom:0; right:0; width:6px; height:2px; background:var(--navy-600); transform:rotate(45deg); transform-origin:right center;}
+.dest__input{
+  flex:1; border:none; outline:none; background:transparent;
+  font-size:15px; font-family:inherit; color:var(--ink); min-height:var(--touch-min);
+}
+.dest__input::placeholder{color:var(--brown-500);}
+.dest__quick{margin-top:12px; display:flex; align-items:center; flex-wrap:wrap; gap:8px;}
+.dest__quick-label{font-size:11px; font-weight:800; color:var(--brown-700); margin-right:2px;}
+.chip{
+  min-height:var(--touch-min); padding:0 16px; border-radius:999px;
+  border:2px solid var(--green-600); color:var(--green-700); font-size:13px; font-weight:800;
+  transition:background .15s ease, color .15s ease;
+}
+.chip:hover{background:var(--green-600); color:var(--cream);}
+
+.hero__cta{margin:24px 0 0;}
+.hero__cta .btn{background:var(--brown-600); color:var(--cream); box-shadow:4px 4px 0 var(--navy-900); border-color:var(--brown-600);}
+.hero__cta .btn:hover{background:var(--brown-700);}
+
+.hero__art{margin-top:28px; line-height:0;}
+
+@media (min-width:1024px){
+  .hero{padding:64px 48px 0; display:grid; grid-template-columns:1.05fr 0.95fr; gap:48px; align-items:center;}
+  .hero__art{margin-top:0; align-self:end;}
+}
+
+/* =========================================================================
+   3. 실시간 전광판 — 우표(스탬프) 카드 가로 스크롤
+   ========================================================================= */
+.section{padding:40px var(--pad);}
+@media (min-width:1024px){ .section{padding:64px 48px;} }
+
+.eyebrow-pill{
+  display:inline-flex; align-items:center; font-family:var(--font-head);
+  font-size:11px; font-weight:900; letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--cream); background:var(--navy-700); padding:5px 14px; border-radius:999px;
+}
+.section__title{
+  margin-top:14px; font-family:var(--font-head); font-size:clamp(22px,5.6vw,28px); font-weight:900;
+  color:var(--navy-700); line-height:1.35; letter-spacing:-0.01em;
+}
+.sample-stamp{
+  display:inline-flex; align-items:center; gap:6px; margin-top:12px;
+  font-size:11px; font-weight:800; color:var(--brown-700);
+  border:1.5px dashed var(--brown-500); border-radius:999px; padding:4px 12px;
+  transform:rotate(-1.2deg);
+}
+
+.board{display:flex; gap:16px; overflow-x:auto; padding:22px 2px 10px; scroll-snap-type:x proximity;}
+.board::-webkit-scrollbar{height:6px;}
+.stamp-card{
+  flex:0 0 156px; scroll-snap-align:start;
+  background:var(--cream); border:2px solid var(--navy-700); border-radius:4px;
+  box-shadow:5px 5px 0 var(--green-600);
+  padding:14px; display:flex; flex-direction:column; gap:10px;
+}
+.stamp-card__rank{
+  align-self:flex-start; width:30px; height:30px; border-radius:50%;
+  border:1.5px dashed var(--brown-600); display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-head); font-size:12px; font-weight:900; color:var(--navy-700);
+}
+.stamp-card__name{font-family:var(--font-head); font-size:15px; font-weight:900; color:var(--ink); line-height:1.3;}
+
+.badge{
+  display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  font-size:12px; font-weight:800; padding:4px 11px; border-radius:999px; color:var(--cream);
+}
+.badge__icon{width:9px; height:9px; flex:0 0 auto; background:currentColor;}
+.badge--busy{background:var(--navy-600);}
+.badge--busy .badge__icon{border-radius:50%;}
+.badge--mid{background:var(--brown-600);}
+.badge--mid .badge__icon{clip-path:polygon(50% 0%,0% 100%,100% 100%);}
+.badge--calm{background:var(--green-600);}
+.badge--calm .badge__icon{border-radius:2px;}
+
+/* =========================================================================
+   4. 지역 축제 배너 — 브라운 색면 블록
+   ========================================================================= */
+.festival{
+  margin:0 var(--pad); background:var(--brown-600); color:var(--cream);
+  border-radius:4px; padding:24px; position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+.festival::before{
+  content:""; position:absolute; right:-30px; top:-30px; width:120px; height:120px; border-radius:50%;
+  background:var(--brown-500); opacity:0.55;
+}
+.festival__body{position:relative; max-width:60ch;}
+.festival__eyebrow{font-size:11px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--brown-100);}
+.festival__title{margin-top:8px; font-family:var(--font-head); font-size:20px; font-weight:900;}
+.festival__desc{margin-top:6px; font-size:13.5px; color:var(--brown-100); line-height:1.55;}
+.festival .btn--outline{position:relative; border-color:var(--cream); color:var(--cream); flex:0 0 auto;}
+.festival .btn--outline:hover{background:var(--cream); color:var(--brown-700);}
+@media (min-width:1024px){ .festival{margin:0 48px;} }
+
+/* =========================================================================
+   5. 하단 리본 — 대각선 3색 스트라이프(하드엣지, 소프트 그라디언트 아님)
+   ========================================================================= */
+.ribbon{
+  height:30px;
+  background:repeating-linear-gradient(
+    135deg,
+    var(--green-600) 0 26px,
+    var(--brown-600) 26px 52px,
+    var(--navy-600) 52px 78px
+  );
+}
+.footer-note{padding:28px var(--pad) 44px; text-align:center; font-size:12px; color:var(--brown-700);}
+.footer-note b{display:block; font-family:var(--font-head); font-size:14px; font-weight:900; color:var(--navy-700); margin-bottom:4px;}
+</style>
+</head>
+<body>
+
+<div class="variant-tag">
+  <span>숨은길 · 스타일 비교 시안</span>
+  4 / 5 — 레트로 관광 포스터 (최종안 아님)
+</div>
+
+<div class="mnav" id="mnav" role="dialog" aria-label="모바일 메뉴">
+  <div class="mnav__top"><button class="mnav__close" aria-label="메뉴 닫기" onclick="closeMnav()">&times;</button></div>
+  <nav class="mnav__list">
+    <a href="#">여행지 추천</a>
+    <a href="#">AI 여행 경로</a>
+    <a href="#">저장한 코스</a>
+    <a href="#">여행 팁</a>
+  </nav>
+  <div class="mnav__cta"><button class="btn btn--block" style="background:var(--cream); color:var(--green-700);">시작하기</button></div>
+</div>
+
+<header class="gnb">
+  <div class="gnb__brand">
+    <span class="gnb__mark" aria-hidden="true"><i></i></span>
+    <span class="gnb__logo">숨은<b>길</b></span>
+  </div>
+  <nav class="gnb__menu">
+    <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+  </nav>
+  <div class="gnb__actions">
+    <button class="btn btn--outline">로그인</button>
+    <button class="btn btn--solid-navy">시작하기</button>
+  </div>
+  <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMnav()"><span></span><span></span><span></span></button>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="hero__eyebrow">SUMEUNGIL · 사람 적은 여행</p>
+    <h1 class="hero__title">사람 적은 곳으로,<br/>온 가족이 <mark>걷는 숨은 길</mark></h1>
+    <p class="hero__sub">서연님, 아이와 함께 걷기 좋은 한적한 숨은길이에요. 온보딩에서 알려주신 취향을 반영했어요.</p>
+
+    <div class="dest" id="destSearch">
+      <div class="dest__stamp" aria-hidden="true">AI<br/>추천</div>
+      <label class="dest__label" for="destInput">어디로 떠나시나요?</label>
+      <div class="dest__row">
+        <span class="dest__icon" aria-hidden="true"></span>
+        <input type="text" id="destInput" class="dest__input"
+               placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)"
+               role="combobox" aria-expanded="false" autocomplete="off" />
+      </div>
+      <div class="dest__quick">
+        <span class="dest__quick-label">인기 검색지</span>
+        <button type="button" class="chip">경주</button>
+        <button type="button" class="chip">전주</button>
+        <button type="button" class="chip">강릉</button>
+        <button type="button" class="chip">부산</button>
+      </div>
+    </div>
+
+    <div class="hero__cta"><button class="btn">맞춤 코스 보러가기</button></div>
+
+    <div class="hero__art">
+      <svg viewBox="0 0 375 230" width="100%" height="auto" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+        <defs><clipPath id="rpSun"><circle cx="187.5" cy="255" r="160"/></clipPath></defs>
+        <g clip-path="url(#rpSun)">
+          <rect x="0" y="95" width="375" height="55" fill="#FBF6EC"/>
+          <rect x="0" y="150" width="375" height="16" fill="#7A5A48"/>
+          <rect x="0" y="166" width="375" height="16" fill="#FBF6EC"/>
+          <rect x="0" y="182" width="375" height="16" fill="#2C6349"/>
+          <rect x="0" y="198" width="375" height="16" fill="#FBF6EC"/>
+          <rect x="0" y="214" width="375" height="30" fill="#1B3E6E"/>
+        </g>
+        <polygon points="0,190 60,120 130,190" fill="#6FAB8B"/>
+        <polygon points="90,190 170,105 250,190" fill="#3F8563"/>
+        <polygon points="-10,230 90,140 210,230" fill="#153B2A"/>
+        <polygon points="150,230 260,130 400,230" fill="#1B4332"/>
+        <path d="M40 214 Q 110 190 150 205 T 260 150 T 330 90" fill="none" stroke="#FBF6EC" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="2 11"/>
+        <circle cx="40" cy="214" r="8" fill="#5C4033" stroke="#FBF6EC" stroke-width="2.5"/>
+        <path d="M330 74 c0 11 -11 18 -11 18 s-11 -7 -11 -18 a11 11 0 0 1 22 0z" fill="#D3E9DE" stroke="#153B2A" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </section>
+
+  <section class="section" style="padding-bottom:8px;">
+    <span class="eyebrow-pill">실시간 전광판</span>
+    <h2 class="section__title">지금 이 관광지,<br/>얼마나 붐빌까요?</h2>
+    <span class="sample-stamp">예시 데이터입니다 · API 연동 전</span>
+
+    <div class="board" role="list">
+      <div class="stamp-card" role="listitem">
+        <span class="stamp-card__rank">01</span>
+        <span class="stamp-card__name">경주 불국사</span>
+        <span class="badge badge--busy"><span class="badge__icon"></span>혼잡 82%</span>
+      </div>
+      <div class="stamp-card" role="listitem">
+        <span class="stamp-card__rank">02</span>
+        <span class="stamp-card__name">전주 한옥마을</span>
+        <span class="badge badge--busy"><span class="badge__icon"></span>혼잡 76%</span>
+      </div>
+      <div class="stamp-card" role="listitem">
+        <span class="stamp-card__rank">03</span>
+        <span class="stamp-card__name">강릉 안목해변</span>
+        <span class="badge badge--mid"><span class="badge__icon"></span>보통 54%</span>
+      </div>
+      <div class="stamp-card" role="listitem">
+        <span class="stamp-card__rank">04</span>
+        <span class="stamp-card__name">부산 해운대</span>
+        <span class="badge badge--mid"><span class="badge__icon"></span>보통 48%</span>
+      </div>
+      <div class="stamp-card" role="listitem">
+        <span class="stamp-card__rank">05</span>
+        <span class="stamp-card__name">경주 대릉원 돌담길</span>
+        <span class="badge badge--calm"><span class="badge__icon"></span>여유 22%</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:8px;">
+    <span class="eyebrow-pill" style="background:var(--brown-700);">지금 이 지역 축제</span>
+    <div class="festival" style="margin-left:0; margin-right:0; margin-top:16px;">
+      <div class="festival__body">
+        <p class="festival__eyebrow">Local Festival</p>
+        <h3 class="festival__title">전주 한지문화축제</h3>
+        <p class="festival__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요</p>
+      </div>
+      <button class="btn btn--outline">보기</button>
+    </div>
+  </section>
+</main>
+
+<div class="ribbon" aria-hidden="true"></div>
+<p class="footer-note"><b>숨은길</b>스타일 시안 4/5 · 레트로 관광 포스터 — 대표 검토용, 최종 채택 전 화면입니다</p>
+
+<script>
+function openMnav(){ document.getElementById('mnav').classList.add('is-open'); }
+function closeMnav(){ document.getElementById('mnav').classList.remove('is-open'); }
+</script>
+</body>
+</html>

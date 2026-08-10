@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 시안 1 · 에디토리얼/매거진 (스타일 비교용, 최종안 아님)</title>
+<style>
+/* =========================================================
+   디자인 토큰 — 브랜드 3색(딥그린 #1B4332 / 딥네이비 #0B2545 / Earth Brown #5C4033)에서
+   파생시킨 확장 팔레트. 원본 목업(01-backend-design 연동판)과는 별개의 "스타일 데모" 파일.
+   외부 폰트/CDN 로드 없음 — 시스템에 설치돼 있으면 쓰고, 없으면 OS 기본 세리프/산세리프로 폴백.
+   ========================================================= */
+:root{
+  --green-900:#0A1F16; --green-700:#153B2A; --green-600:#1B4332; --green-500:#2C6349;
+  --green-300:#6FAB8B; --green-200:#A8D0BC; --green-100:#D3E9DE; --green-50:#EFF7F3;
+
+  --navy-900:#050E1B; --navy-800:#081A2E; --navy-700:#0A203D; --navy-600:#0B2545;
+  --navy-500:#1B3E6E; --navy-300:#6C88B0; --navy-100:#D6E0EE; --navy-50:#F0F4FA;
+
+  --brown-700:#4A3329; --brown-600:#5C4033; --brown-500:#7A5A48; --brown-300:#BC9A87;
+  --brown-100:#EEDFD5; --brown-50:#F8F1EC;
+
+  --paper:#FBFAF6;      /* 매거진 인쇄 용지 느낌의 온기 있는 오프화이트 */
+  --paper-2:#F3F0E8;    /* 피처 패널용 살짝 짙은 용지톤 */
+  --ink:var(--navy-900);/* 본문 잉크색 — 순검정 대신 딥네이비 파생색으로 브랜드 일관성 유지 */
+  --line:#DAD4C6;       /* 헤어라인 구분선 */
+  --line-strong:#C8C0AC;
+
+  --danger:#B3261E; --warning:#8A5A00; --success:#1E6B41;
+
+  --font-serif:'Noto Serif KR','Nanum Myeongjo','Batang','Apple SD Gothic Neo',Georgia,'Times New Roman',serif;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+  --font-mono:ui-monospace,'SFMono-Regular',Consolas,'Courier New',monospace;
+
+  --touch-min:44px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:#E7E3D8; /* 화면 밖 배경 — 375px "지면"을 액자처럼 보여주기 위한 톤 */
+  font-family:var(--font-sans);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul{margin:0;}
+ul{list-style:none;padding:0;}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit;}
+a{color:inherit;text-decoration:none;}
+img,svg{display:block;max-width:100%;}
+button:focus-visible, a:focus-visible, input:focus-visible{
+  outline:3px solid var(--navy-500);
+  outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+
+/* 지면(誌面) 프레임 — 375px 모바일 기준, 데스크톱에서는 액자처럼 중앙 배치 */
+.sheet{
+  max-width:375px; margin:0 auto;
+  background:var(--paper);
+  min-height:100vh;
+  box-shadow:0 24px 64px rgba(5,14,27,0.18);
+}
+@media (min-width:376px){
+  body{padding:32px 12px;}
+  .sheet{min-height:auto;}
+}
+
+/* =========================================================
+   1. 마스트헤드 (매거진 표지 상단 워드마크)
+   ========================================================= */
+.masthead{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 20px 14px;
+}
+.masthead__word{
+  font-family:var(--font-serif); font-weight:700; font-size:23px;
+  letter-spacing:0.01em; color:var(--navy-900);
+}
+.masthead__word em{ font-style:normal; color:var(--green-600); }
+.masthead__actions{ display:flex; align-items:center; gap:10px; }
+.link-quiet{
+  font-size:13px; font-weight:600; color:var(--navy-700);
+  min-height:var(--touch-min); display:inline-flex; align-items:center; padding:0 6px;
+}
+.btn-outline{
+  min-height:40px; display:inline-flex; align-items:center;
+  padding:0 14px; border:1px solid var(--navy-900);
+  font-size:12px; font-weight:700; letter-spacing:0.06em; color:var(--navy-900);
+}
+.masthead__burger{
+  width:var(--touch-min); height:var(--touch-min); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:5px;
+}
+.masthead__burger i{display:block; width:20px; height:1.5px; background:var(--navy-900);}
+
+.hairline{border-bottom:1px solid var(--line);}
+
+/* 섹션 탭 — 잡지 목차 코너 느낌의 얇은 인덱스 내비게이션 */
+.subnav{
+  display:flex; gap:0; padding:0 20px; overflow-x:auto;
+  border-bottom:1px solid var(--line);
+}
+.subnav::-webkit-scrollbar{display:none;}
+.subnav a{
+  font-size:11.5px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase;
+  color:var(--navy-500); white-space:nowrap;
+  padding:12px 16px 12px 0; position:relative; min-height:var(--touch-min); display:flex; align-items:center;
+}
+.subnav a:not(:last-child)::after{
+  content:""; position:absolute; right:0; top:50%; transform:translateY(-50%);
+  width:1px; height:11px; background:var(--line-strong);
+}
+.subnav a:first-child{color:var(--navy-900);}
+
+/* =========================================================
+   2. 히어로 — 표지 헤드라인
+   ========================================================= */
+.hero{ padding:36px 20px 32px; position:relative; }
+.hero__kicker{
+  display:flex; align-items:center; gap:10px;
+  font-size:12px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase;
+  color:var(--green-600); margin-bottom:18px;
+}
+.hero__kicker::before{ content:""; width:22px; height:1px; background:var(--green-600); }
+
+.hero__title{
+  font-family:var(--font-serif); font-weight:700;
+  font-size:clamp(34px,9vw,42px); line-height:1.18; letter-spacing:-0.01em;
+  color:var(--navy-900); margin-bottom:22px;
+}
+.hero__title .accent{ color:var(--green-600); font-style:italic; }
+
+.hero__dek{
+  font-family:var(--font-serif); font-style:italic; font-size:16.5px; line-height:1.65;
+  color:var(--navy-700); max-width:30ch;
+  padding-left:16px; border-left:2px solid var(--green-600);
+  margin-bottom:30px;
+}
+.hero__dek b{ font-style:normal; font-weight:700; color:var(--navy-900); }
+
+/* 트레일 모티프 — 카드 없이, 헤드라인 아래 흐르는 얇은 지도선으로만 존재감 */
+.hero__motif{ margin:-4px 0 30px; opacity:0.9; }
+
+/* 목적지 검색 — 언더라인 필드, 박스/그림자 없음 */
+.search{ margin-bottom:30px; }
+.search__label{
+  display:block; font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--navy-500); margin-bottom:12px;
+}
+.search__field{
+  display:flex; align-items:center; gap:10px;
+  border-bottom:1.5px solid var(--navy-900); padding-bottom:11px;
+}
+.search__field svg{ flex:0 0 auto; }
+.search__field input{
+  flex:1; border:none; background:transparent; outline:none;
+  font-family:var(--font-serif); font-size:18px; color:var(--navy-900);
+  padding:8px 0; min-height:28px;
+}
+.search__field input::placeholder{ color:var(--navy-300); font-style:italic; }
+.search__clear{
+  width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+  font-size:18px; color:var(--navy-500);
+}
+.search__list{
+  margin-top:2px; border:1px solid var(--line-strong); background:var(--paper);
+  box-shadow:0 8px 20px rgba(5,14,27,0.10);
+}
+.search__list li{ font-size:15px; padding:12px 14px; border-bottom:1px solid var(--line); min-height:var(--touch-min); display:flex; align-items:center; }
+.search__list li:last-child{ border-bottom:none; }
+
+.search__quick{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin-top:16px; }
+.search__quick-label{ font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--navy-500); }
+.search__quick button{
+  font-size:14px; font-weight:600; color:var(--green-700);
+  text-decoration:underline; text-underline-offset:4px; text-decoration-color:var(--green-300);
+  padding:10px 2px; min-height:40px; display:inline-flex; align-items:center;
+}
+
+.hero__cta{
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  min-height:52px; width:100%; padding:0 22px;
+  background:var(--green-700); color:var(--paper);
+  font-size:15px; font-weight:700; letter-spacing:0.03em;
+}
+.hero__cta svg{ flex:0 0 auto; }
+
+/* =========================================================
+   3. 섹션 공통 (전광판 / 축제)
+   ========================================================= */
+.section{ padding:34px 20px 8px; }
+.section__eyebrow{
+  font-size:12px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--brown-600); margin-bottom:10px;
+}
+.section__title{
+  font-family:var(--font-serif); font-weight:700; font-size:25px; line-height:1.32;
+  color:var(--navy-900); letter-spacing:-0.005em;
+}
+.section__tag{
+  display:block; margin-top:10px; font-size:11px; font-weight:600; letter-spacing:0.04em;
+  color:var(--navy-500); font-style:italic;
+}
+
+/* 혼잡도 랭킹 — 카드 대신 인덱스형 리스트, 위계는 큰 세리프 서수로 */
+.rank-list{ margin-top:22px; padding-bottom:26px; }
+.rank-item{
+  display:flex; align-items:baseline; gap:16px;
+  padding:17px 0; border-top:1px solid var(--line);
+}
+.rank-list .rank-item:last-child{ border-bottom:1px solid var(--line); }
+.rank-item__num{
+  font-family:var(--font-serif); font-weight:700; font-size:26px;
+  color:var(--brown-500); flex:0 0 auto; width:36px;
+  font-variant-numeric:oldstyle-nums;
+}
+.rank-item__body{ flex:1; min-width:0; }
+.rank-item__region{
+  font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--navy-500);
+}
+.rank-item__name{
+  font-family:var(--font-serif); font-weight:600; font-size:18px; color:var(--navy-900);
+  margin-top:3px;
+}
+.rank-item__status{
+  flex:0 0 auto; display:flex; align-items:center; gap:6px;
+  font-size:13.5px; font-weight:700; white-space:nowrap;
+}
+.rank-item__dot{ width:7px; height:7px; border-radius:50%; }
+.rank-item.is-danger .rank-item__status{ color:var(--danger); }
+.rank-item.is-danger .rank-item__dot{ background:var(--danger); }
+.rank-item.is-warning .rank-item__status{ color:var(--warning); }
+.rank-item.is-warning .rank-item__dot{ background:var(--warning); }
+.rank-item.is-success .rank-item__status{ color:var(--success); }
+.rank-item.is-success .rank-item__dot{ background:var(--success); }
+
+/* 지역 축제 — 매거진 피처/애드버토리얼 패널 톤 */
+.feature{
+  margin:6px 20px 34px;
+  padding:26px 22px;
+  background:var(--paper-2);
+  border-top:3px solid var(--brown-600);
+}
+.feature__eyebrow{
+  font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--brown-600); margin-bottom:12px;
+}
+.feature__title{
+  font-family:var(--font-serif); font-weight:700; font-style:italic; font-size:23px;
+  color:var(--brown-700); line-height:1.3; margin-bottom:10px;
+}
+.feature__desc{
+  font-family:var(--font-serif); font-size:15px; line-height:1.7; color:var(--navy-800,var(--navy-700));
+  max-width:34ch; margin-bottom:18px;
+}
+.feature__cta{
+  display:inline-flex; align-items:center; gap:8px;
+  min-height:44px;
+  font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+  color:var(--brown-700); border-bottom:1.5px solid var(--brown-700);
+}
+
+/* =========================================================
+   4. 폴리오 푸터 — 잡지 하단 러닝헤드
+   ========================================================= */
+.folio{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-top:1px solid var(--line);
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:0.05em;
+  color:var(--navy-500);
+}
+
+/* 시안 라벨 — 실제 제품에는 없음. 비교 검토용 배지만 화면 밖 상단에 별도 표기 */
+.variant-tag{
+  max-width:375px; margin:0 auto 10px; padding:8px 14px;
+  font-family:var(--font-sans); font-size:12px; font-weight:700; color:var(--paper);
+  background:var(--navy-900); text-align:center; letter-spacing:0.04em;
+}
+@media (max-width:375px){ .variant-tag{ display:none; } }
+</style>
+</head>
+<body>
+
+<div class="variant-tag">시안 1/5 · 에디토리얼/매거진 스타일 — 비교 검토용 (최종안 아님)</div>
+
+<div class="sheet">
+
+  <!-- 마스트헤드 -->
+  <div class="masthead hairline">
+    <div class="masthead__word">숨은<em>길</em></div>
+    <div class="masthead__actions">
+      <a href="#" class="link-quiet">로그인</a>
+      <button type="button" class="btn-outline">시작하기</button>
+      <button type="button" class="masthead__burger" aria-label="메뉴 열기"><i></i><i></i><i></i></button>
+    </div>
+  </div>
+
+  <!-- 섹션 인덱스 -->
+  <nav class="subnav" aria-label="주요 메뉴">
+    <a href="#">여행지 추천</a>
+    <a href="#">AI 여행 경로</a>
+    <a href="#">저장한 코스</a>
+    <a href="#">여행 팁</a>
+  </nav>
+
+  <!-- 히어로 -->
+  <div class="hero">
+    <div class="hero__kicker">Hidden Trails Journal · Vol. 01</div>
+
+    <h1 class="hero__title">사람 적은 곳으로,<br/>온 가족이 걷는<br/><span class="accent">숨은 길</span></h1>
+
+    <p class="hero__dek"><b>서연님,</b> 아이와 함께 걷기 좋은 한적한 숨은길이에요. 온보딩에서 알려주신 취향을 반영했어요.</p>
+
+    <svg class="hero__motif" width="335" height="46" viewBox="0 0 335 46" fill="none" aria-hidden="true">
+      <path d="M4 34 Q 90 6 168 30 T 331 14" stroke="#1B4332" stroke-width="1.5" stroke-opacity="0.55" stroke-dasharray="1 9" stroke-linecap="round"/>
+      <circle cx="4" cy="34" r="4.5" fill="#5C4033"/>
+      <path d="M320 8c0 7 -7 12 -7 12s-7 -5 -7 -12a7 7 0 0 1 14 0z" fill="#1B4332" opacity="0.75"/>
+    </svg>
+
+    <div class="search" id="destSearch">
+      <label class="search__label" for="destInput">어디로 떠나시나요?</label>
+      <div class="search__field">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="#0B2545" stroke-width="1.6"/><path d="M20 20L16.5 16.5" stroke="#0B2545" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input type="text" id="destInput" placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)"
+               role="combobox" aria-expanded="false" aria-controls="destListbox" aria-autocomplete="list" autocomplete="off" />
+        <button type="button" class="search__clear" aria-label="검색어 지우기" hidden>&times;</button>
+      </div>
+      <ul class="search__list" id="destListbox" role="listbox" aria-label="목적지 추천 검색어" hidden></ul>
+
+      <div class="search__quick">
+        <span class="search__quick-label">인기 검색지</span>
+        <button type="button">경주</button>
+        <button type="button">전주</button>
+        <button type="button">강릉</button>
+        <button type="button">부산</button>
+      </div>
+    </div>
+
+    <button type="button" class="hero__cta">
+      맞춤 코스 보러가기
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke="#FBFAF6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- 실시간 전광판 -->
+  <div class="section">
+    <div class="section__eyebrow">실시간 전광판</div>
+    <h2 class="section__title">지금 이 관광지,<br/>얼마나 붐빌까요?</h2>
+    <span class="section__tag">예시 데이터입니다 · API 연동 전</span>
+
+    <div class="rank-list" role="list">
+      <div class="rank-item is-danger" role="listitem">
+        <span class="rank-item__num">01</span>
+        <div class="rank-item__body">
+          <div class="rank-item__region">경주</div>
+          <div class="rank-item__name">불국사</div>
+        </div>
+        <span class="rank-item__status"><span class="rank-item__dot"></span>혼잡 82%</span>
+      </div>
+      <div class="rank-item is-danger" role="listitem">
+        <span class="rank-item__num">02</span>
+        <div class="rank-item__body">
+          <div class="rank-item__region">전주</div>
+          <div class="rank-item__name">한옥마을</div>
+        </div>
+        <span class="rank-item__status"><span class="rank-item__dot"></span>혼잡 76%</span>
+      </div>
+      <div class="rank-item is-warning" role="listitem">
+        <span class="rank-item__num">03</span>
+        <div class="rank-item__body">
+          <div class="rank-item__region">강릉</div>
+          <div class="rank-item__name">안목해변</div>
+        </div>
+        <span class="rank-item__status"><span class="rank-item__dot"></span>보통 54%</span>
+      </div>
+      <div class="rank-item is-warning" role="listitem">
+        <span class="rank-item__num">04</span>
+        <div class="rank-item__body">
+          <div class="rank-item__region">부산</div>
+          <div class="rank-item__name">해운대</div>
+        </div>
+        <span class="rank-item__status"><span class="rank-item__dot"></span>보통 48%</span>
+      </div>
+      <div class="rank-item is-success" role="listitem">
+        <span class="rank-item__num">05</span>
+        <div class="rank-item__body">
+          <div class="rank-item__region">경주</div>
+          <div class="rank-item__name">대릉원 돌담길</div>
+        </div>
+        <span class="rank-item__status"><span class="rank-item__dot"></span>여유 22%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 지역 축제 -->
+  <div class="section" style="padding-bottom:0;">
+    <div class="section__eyebrow">지금 이 지역 축제</div>
+  </div>
+  <div class="feature">
+    <div class="feature__eyebrow">Festival Note</div>
+    <div class="feature__title">전주 한지문화축제</div>
+    <p class="feature__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요.</p>
+    <a href="#" class="feature__cta">
+      자세히 보기
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke="#4A3329" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </div>
+
+  <div class="folio">
+    <span>숨은길 — HIDDEN TRAILS</span>
+    <span>P. 01</span>
+  </div>
+
+</div>
+</body>
+</html>

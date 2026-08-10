@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 시안 3/5 · 다크 프리미엄 데이터 대시보드</title>
+<style>
+/* =========================================================
+   0. 토큰 — 브랜드 3색(딥그린 #1B4332 / 딥네이비 #0B2545 / Earth Brown #5C4033)
+   에서만 파생. 어두운 배경엔 각 색의 어두운 shade, 강조엔 밝은 tint를 사용.
+   전 색상쌍 WCAG AA 실측(우측 주석 = 대비비, 스크립트 계산치) 완료.
+   ========================================================= */
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+  --font-mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,'Courier New',monospace;
+
+  /* 배경 레이어 (navy 계열 최암) */
+  --bg-page:#0A1526;
+  --bg-panel:#10203A;
+  --bg-panel-2:#16294A;
+  --bg-input:#0D1A2E;
+
+  /* 히어로: 딥그린 → 딥네이비 그라디언트 (브랜드 2색 조합, 새 색 아님) */
+  --bg-hero-a:#071A12;
+  --bg-hero-b:#0B2545;
+
+  /* 축제 배너: Earth Brown 최암 shade */
+  --bg-brown-a:#2A1B12;
+  --bg-brown-b:#1C130D;
+
+  --border-soft:rgba(133,178,255,0.14);
+  --border-mid:rgba(133,178,255,0.24);
+  --border-interactive:#4A72AC;      /* vs --bg-page 3.74:1 / vs --bg-panel 3.33:1 (비텍스트 UI 3:1 충족) */
+
+  --text-primary:#F4F7FC;            /* vs --bg-page 17.03:1 */
+  --text-secondary:#B8C4DA;          /* vs --bg-page 10.40:1 */
+  --text-muted:#8592AC;              /* vs --bg-page 5.84:1 / vs --bg-panel 5.20:1 */
+
+  /* 강조색 — 브랜드 3색의 밝은 tint(그린→민트, 네이비→라이트블루, 브라운→골드/러스트) */
+  --mint:#34E0A1;      --mint-ink:#06281C;   /* mint vs bg-page 10.73:1, ink-on-mint 9.28:1 */
+  --gold:#F0B15C;      --gold-ink:#3A2308;   /* gold vs bg-page 9.71:1, ink-on-gold 7.83:1 */
+  --rust:#FF7A52;      --rust-ink:#1A0904;   /* rust vs bg-page 7.10:1, ink-on-rust 7.52:1 */
+  --blue:#6FA8FF;                            /* blue vs bg-page 7.60:1 */
+
+  --mint-wash:rgba(52,224,161,0.14);
+  --gold-wash:rgba(240,177,92,0.16);
+  --rust-wash:rgba(255,122,82,0.16);
+  --blue-wash:rgba(111,168,255,0.14);
+
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px;
+  --space-6:24px; --space-8:32px; --space-10:40px; --space-12:48px; --space-16:64px;
+
+  --radius-sm:8px; --radius-md:14px; --radius-lg:20px; --radius-full:999px;
+  --touch-min:44px;
+  --shadow-panel:0 8px 28px rgba(2,6,14,0.55);
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font-sans);
+  background:var(--bg-page);
+  color:var(--text-primary);
+  font-size:16px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul{margin:0;}
+ul{list-style:none;padding:0;}
+button{font-family:inherit;cursor:pointer;}
+a{color:inherit;text-decoration:none;}
+img,svg{display:block;max-width:100%;}
+button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-visible{
+  outline:3px solid var(--mint); outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+}
+
+/* =========================================================
+   1. 리뷰어 라벨 — 실제 제품 UI 아님, 시안 비교용 표식
+   ========================================================= */
+.review-tag{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; gap:var(--space-2);
+  background:#050B14; color:var(--text-secondary);
+  padding:var(--space-2) var(--space-4);
+  font-size:12px; font-family:var(--font-mono); letter-spacing:0.02em;
+  border-bottom:1px solid var(--border-soft);
+}
+.review-tag__dot{width:7px; height:7px; border-radius:50%; background:var(--mint); flex:0 0 auto; box-shadow:0 0 8px var(--mint); animation:pulse 1.8s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
+@media (prefers-reduced-motion: reduce){ .review-tag__dot{animation:none;} }
+.review-tag b{color:var(--text-primary);}
+
+/* =========================================================
+   2. GNB
+   ========================================================= */
+.gnb{
+  position:relative; z-index:20;
+  background:rgba(10,21,38,0.92); backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--space-4); height:60px;
+}
+.gnb::after{
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px;
+  background:linear-gradient(90deg, var(--mint), var(--gold) 50%, var(--blue));
+  box-shadow:0 0 10px rgba(52,224,161,0.5);
+}
+.gnb__logo{font-size:19px; font-weight:800; letter-spacing:-0.01em; color:var(--text-primary);}
+.gnb__logo span{color:var(--mint);}
+.gnb__menu{display:none; gap:var(--space-6); align-items:center;}
+.gnb__menu a{font-size:14px; font-weight:600; color:var(--text-secondary); min-height:var(--touch-min); display:flex; align-items:center; transition:color .15s;}
+.gnb__menu a:hover{color:var(--mint);}
+.gnb__actions{display:none; align-items:center; gap:var(--space-3);}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:var(--touch-min); padding:0 var(--space-5);
+  border-radius:var(--radius-full); font-size:14px; font-weight:700;
+  border:1px solid transparent; transition:filter .15s, box-shadow .15s, background .15s;
+}
+.btn--mint{background:var(--mint); color:var(--mint-ink); box-shadow:0 0 18px rgba(52,224,161,0.28);}
+.btn--mint:hover{filter:brightness(1.06); box-shadow:0 0 24px rgba(52,224,161,0.42);}
+.btn--gold{background:var(--gold); color:var(--gold-ink); box-shadow:0 0 16px rgba(240,177,92,0.26);}
+.btn--gold:hover{filter:brightness(1.06);}
+.btn--ghost{background:transparent; color:var(--text-secondary); border-color:var(--border-interactive);}
+.btn--ghost:hover{color:var(--text-primary); border-color:var(--blue);}
+.btn--text{background:transparent; color:var(--text-secondary); font-weight:600;}
+.btn--text:hover{color:var(--text-primary);}
+.btn--sm{min-height:38px; padding:0 var(--space-4); font-size:13px;}
+
+.gnb__burger{
+  display:flex; flex-direction:column; gap:5px; align-items:center; justify-content:center;
+  width:var(--touch-min); height:var(--touch-min); background:none; border:none;
+}
+.gnb__burger i{display:block; width:20px; height:2px; background:var(--text-primary); border-radius:2px;}
+
+.mobile-nav{
+  position:fixed; inset:0; z-index:200;
+  background:#081120; color:var(--text-primary);
+  display:none; flex-direction:column; padding:var(--space-4);
+}
+.mobile-nav.is-open{display:flex;}
+.mobile-nav__top{display:flex; justify-content:flex-end;}
+.mobile-nav__close{width:var(--touch-min); height:var(--touch-min); background:none; border:none; color:var(--text-primary); font-size:26px;}
+.mobile-nav__list{margin-top:var(--space-6); display:flex; flex-direction:column;}
+.mobile-nav__list a{
+  min-height:56px; display:flex; align-items:center;
+  font-size:20px; font-weight:700; color:var(--text-primary);
+  border-bottom:1px solid var(--border-soft);
+}
+.mobile-nav__cta{margin-top:var(--space-8);}
+
+@media (min-width:1024px){
+  .gnb{height:72px; padding:0 var(--space-10);}
+  .gnb__menu{display:flex;}
+  .gnb__actions{display:flex;}
+  .gnb__burger{display:none;}
+}
+
+/* =========================================================
+   3. 히어로
+   ========================================================= */
+.hero{
+  position:relative; overflow:hidden;
+  background:linear-gradient(160deg, var(--bg-hero-a) 0%, var(--bg-hero-b) 100%);
+  padding:var(--space-8) var(--space-4) var(--space-10);
+}
+.hero::before{
+  /* 등고선/회로 텍스처 — 인라인 SVG data URI, 외부 요청 없음, 저대비 장식 전용 */
+  content:""; position:absolute; inset:0; opacity:0.5; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%236FA8FF' stroke-opacity='0.07' stroke-width='1'%3E%3Cpath d='M-10 30 Q 40 8 80 30 T 170 30'/%3E%3Cpath d='M-10 70 Q 40 48 80 70 T 170 70'/%3E%3Cpath d='M-10 110 Q 40 88 80 110 T 170 110'/%3E%3Cpath d='M-10 150 Q 40 128 80 150 T 170 150'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:160px 160px;
+}
+.hero__inner{position:relative; z-index:1;}
+.hero__eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:0.08em;
+  color:var(--gold); background:var(--gold-wash); border:1px solid rgba(240,177,92,0.35);
+  padding:4px 12px; border-radius:var(--radius-full); text-transform:uppercase;
+}
+.hero__eyebrow-dot{width:6px; height:6px; border-radius:50%; background:var(--gold); box-shadow:0 0 6px var(--gold); animation:pulse 1.8s ease-in-out infinite;}
+.hero__title{margin-top:var(--space-4); font-size:clamp(28px,7vw,40px); font-weight:800; line-height:1.32; letter-spacing:-0.015em; color:var(--text-primary);}
+.hero__title em{font-style:normal; color:var(--mint); text-shadow:0 0 22px rgba(52,224,161,0.35);}
+.hero__sub{margin-top:var(--space-3); font-size:15px; color:var(--text-secondary); max-width:520px; line-height:1.6;}
+
+/* 목적지 검색 */
+.dest-search{
+  margin-top:var(--space-6); max-width:480px;
+  background:var(--bg-panel); border:1px solid var(--border-mid); border-radius:var(--radius-lg);
+  padding:var(--space-4); box-shadow:var(--shadow-panel);
+}
+.dest-search__label{display:block; font-size:13px; font-weight:800; color:var(--blue); margin-bottom:var(--space-2); letter-spacing:0.01em;}
+.dest-search__box{
+  display:flex; align-items:center; gap:var(--space-2);
+  background:var(--bg-input); border:1.5px solid var(--border-interactive); border-radius:var(--radius-md);
+  padding:0 var(--space-3); min-height:var(--touch-min); transition:border-color .15s, box-shadow .15s;
+}
+.dest-search__box:focus-within{border-color:var(--mint); box-shadow:0 0 0 3px var(--mint-wash);}
+.dest-search__icon{width:16px; height:16px; flex:0 0 auto; position:relative;}
+.dest-search__icon::before{content:""; position:absolute; top:0; left:0; width:10px; height:10px; border:2px solid var(--text-muted); border-radius:50%;}
+.dest-search__icon::after{content:""; position:absolute; bottom:1px; right:0; width:6px; height:2px; background:var(--text-muted); border-radius:1px; transform:rotate(45deg); transform-origin:right center;}
+.dest-search__input{
+  flex:1; border:none; outline:none; background:transparent;
+  font-size:15px; font-family:inherit; color:var(--text-primary); min-height:var(--touch-min);
+}
+.dest-search__input::placeholder{color:var(--text-muted);}
+.dest-search__quick{margin-top:var(--space-3); display:flex; align-items:center; flex-wrap:wrap; gap:var(--space-2);}
+.dest-search__quick-label{font-size:12px; font-weight:700; color:var(--text-muted); margin-right:2px;}
+.chip{
+  min-height:38px; display:inline-flex; align-items:center;
+  padding:0 var(--space-4); border-radius:var(--radius-full);
+  border:1.5px solid var(--border-interactive); background:transparent;
+  color:var(--text-secondary); font-size:13px; font-weight:700; font-family:var(--font-mono);
+  transition:background .15s, color .15s, border-color .15s;
+}
+.chip:hover, .chip.is-selected{background:var(--mint-wash); color:var(--mint); border-color:var(--mint);}
+
+.hero__cta{margin-top:var(--space-6);}
+
+/* 데스크톱 2컬럼(장식 아트) */
+.hero__art{display:none;}
+@media (min-width:1024px){
+  .hero{padding:var(--space-16) var(--space-10);}
+  .hero__row{display:flex; align-items:center; gap:var(--space-16);}
+  .hero__inner{flex:1;}
+  .hero__art{flex:1; display:flex; justify-content:center;}
+}
+
+/* =========================================================
+   4. 실시간 전광판 — 다크 대시보드 핵심 화면
+   ========================================================= */
+.section{padding:var(--space-8) var(--space-4);}
+@media (min-width:1024px){ .section{padding:var(--space-16) var(--space-10);} }
+
+.section--board{
+  position:relative;
+  background-image:repeating-linear-gradient(0deg, rgba(111,168,255,0.045) 0 1px, transparent 1px 28px),
+                    repeating-linear-gradient(90deg, rgba(111,168,255,0.045) 0 1px, transparent 1px 28px);
+}
+.section__eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--font-mono); font-size:11px; font-weight:800; letter-spacing:0.08em;
+  color:var(--blue); background:var(--blue-wash); border:1px solid rgba(111,168,255,0.35);
+  text-transform:uppercase; padding:4px 12px; border-radius:var(--radius-full);
+}
+.section__title{font-size:22px; font-weight:800; margin-top:var(--space-3); margin-bottom:var(--space-1); letter-spacing:-0.01em; color:var(--text-primary);}
+.section__desc{font-size:14px; color:var(--text-secondary); margin-bottom:var(--space-5);}
+.sample-tag{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--font-mono); font-size:11px; color:var(--gold); background:var(--gold-wash);
+  border:1px dashed rgba(240,177,92,0.45);
+  padding:3px 10px; border-radius:var(--radius-full); font-weight:700; margin-bottom:var(--space-4);
+}
+
+.board{display:flex; gap:var(--space-3); overflow-x:auto; padding-bottom:var(--space-2); scroll-snap-type:x proximity;}
+.board::-webkit-scrollbar{height:6px;}
+.board::-webkit-scrollbar-thumb{background:var(--border-interactive); border-radius:var(--radius-full);}
+
+.board-card{
+  flex:0 0 158px; scroll-snap-align:start;
+  position:relative; background:var(--bg-panel); border:1px solid var(--border-soft);
+  border-radius:var(--radius-md); padding:var(--space-4) var(--space-3) var(--space-3);
+  display:flex; flex-direction:column; gap:var(--space-2);
+  box-shadow:var(--shadow-panel);
+}
+.board-card::before{
+  content:""; position:absolute; top:0; left:14px; right:14px; height:2px; border-radius:2px;
+  background:var(--sev-color); box-shadow:0 0 10px var(--sev-color);
+}
+.board-card--danger{--sev-color:var(--rust);}
+.board-card--warning{--sev-color:var(--gold);}
+.board-card--success{--sev-color:var(--mint);}
+
+.board-card__rank{font-family:var(--font-mono); font-size:11px; font-weight:800; color:var(--text-muted); letter-spacing:0.04em;}
+.board-card__name{font-size:14px; font-weight:800; color:var(--text-primary); line-height:1.35; min-height:38px;}
+
+.gauge{
+  /* --pct/--sev-color는 조상 .board-card[style]/.board-card--* 에서 상속받는다.
+     이 규칙에서 --pct 기본값을 재선언하면 상속을 가려버리므로 절대 여기서 선언하지 않는다. */
+  width:66px; height:66px; margin:2px auto 0; position:relative;
+  border-radius:50%;
+  background:conic-gradient(var(--sev-color) calc(var(--pct)*1%), rgba(255,255,255,0.09) 0);
+}
+.gauge::before{content:""; position:absolute; inset:7px; border-radius:50%; background:var(--bg-panel);}
+.gauge__value{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-weight:800; color:var(--sev-color);
+}
+.gauge__num{font-size:15px; text-shadow:0 0 10px var(--sev-color);}
+.gauge__pct{font-size:9px; opacity:.85; margin-top:-1px;}
+
+.board-card__state{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  font-size:12px; font-weight:700; color:var(--sev-color);
+}
+.board-card__state i{width:8px; height:8px; flex:0 0 auto; background:var(--sev-color); border-radius:50%;}
+.board-card--warning .board-card__state i{border-radius:0; clip-path:polygon(50% 0%,0% 100%,100% 100%);}
+.board-card--success .board-card__state i{border-radius:2px;}
+
+/* =========================================================
+   5. 축제 배너
+   ========================================================= */
+.festival-banner{
+  position:relative; overflow:hidden;
+  background:linear-gradient(135deg, var(--bg-brown-a), var(--bg-brown-b));
+  border:1px solid rgba(240,177,92,0.28);
+  color:var(--text-primary); border-radius:var(--radius-lg);
+  padding:var(--space-5); display:flex; align-items:center; justify-content:space-between; gap:var(--space-4);
+}
+.festival-banner::before{
+  content:""; position:absolute; inset:0; opacity:.55; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Cg fill='none' stroke='%23F0B15C' stroke-opacity='0.10' stroke-width='1.2'%3E%3Cpath d='M-10 26 Q 38 6 76 26 T 160 26'/%3E%3Cpath d='M-10 62 Q 38 42 76 62 T 160 62'/%3E%3Cpath d='M-10 98 Q 38 78 76 98 T 160 98'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:150px 150px;
+}
+.festival-banner__body{position:relative; z-index:1;}
+.festival-banner__eyebrow{font-family:var(--font-mono); font-size:11px; font-weight:800; letter-spacing:0.06em; color:var(--gold); text-transform:uppercase;}
+.festival-banner__title{font-weight:800; font-size:17px; margin-top:6px; color:var(--text-primary);}
+.festival-banner__desc{font-size:13.5px; color:var(--text-secondary); margin-top:4px; max-width:240px; line-height:1.5;}
+.festival-banner__cta{position:relative; z-index:1; flex:0 0 auto;}
+
+/* =========================================================
+   6. 푸터 노트
+   ========================================================= */
+.footer-note{padding:var(--space-8) var(--space-4) var(--space-10); text-align:center; color:var(--text-muted); font-size:12px;}
+</style>
+</head>
+<body>
+
+<div class="review-tag">
+  <span class="review-tag__dot" aria-hidden="true"></span>
+  시안 <b>3 / 5</b> · 다크 프리미엄 데이터 대시보드 — 스타일 비교용, 최종 채택안 아님
+</div>
+
+<div class="mobile-nav" id="mobileNav" role="dialog" aria-label="모바일 메뉴">
+  <div class="mobile-nav__top">
+    <button class="mobile-nav__close" aria-label="메뉴 닫기" onclick="closeMobileNav()">&times;</button>
+  </div>
+  <nav class="mobile-nav__list">
+    <a href="#">여행지 추천</a>
+    <a href="#">AI 여행 경로</a>
+    <a href="#">저장한 코스</a>
+    <a href="#">여행 팁</a>
+  </nav>
+  <div class="mobile-nav__cta">
+    <button class="btn btn--mint" style="width:100%;">시작하기</button>
+  </div>
+</div>
+
+<div class="gnb">
+  <div class="gnb__logo">숨은<span>길</span></div>
+  <nav class="gnb__menu">
+    <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+  </nav>
+  <div class="gnb__actions">
+    <button class="btn btn--text">로그인</button>
+    <button class="btn btn--mint btn--sm">시작하기</button>
+  </div>
+  <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+</div>
+
+<section class="hero">
+  <div class="hero__inner">
+    <div class="hero__row">
+      <div class="hero__col">
+        <span class="hero__eyebrow"><span class="hero__eyebrow-dot" aria-hidden="true"></span>맞춤 추천 · LIVE</span>
+        <h1 class="hero__title">사람 적은 곳으로,<br/>온 가족이 걷는 <em>숨은 길</em></h1>
+        <p class="hero__sub">서연님, 아이와 함께 걷기 좋은 한적한 숨은길이에요. 온보딩에서 알려주신 취향을 반영했어요.</p>
+
+        <div class="dest-search" id="destSearch">
+          <label class="dest-search__label" for="destInput">어디로 떠나시나요?</label>
+          <div class="dest-search__box">
+            <span class="dest-search__icon" aria-hidden="true"></span>
+            <input type="text" id="destInput" class="dest-search__input"
+                   placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)"
+                   autocomplete="off" />
+          </div>
+          <div class="dest-search__quick">
+            <span class="dest-search__quick-label">인기 검색지</span>
+            <div class="chip-row" style="display:flex; flex-wrap:wrap; gap:8px;">
+              <button type="button" class="chip" onclick="selectDestination('경주', this)">경주</button>
+              <button type="button" class="chip" onclick="selectDestination('전주', this)">전주</button>
+              <button type="button" class="chip" onclick="selectDestination('강릉', this)">강릉</button>
+              <button type="button" class="chip" onclick="selectDestination('부산', this)">부산</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero__cta"><button class="btn btn--mint">맞춤 코스 보러가기</button></div>
+      </div>
+
+      <div class="hero__art">
+        <svg width="240" height="180" viewBox="0 0 240 180" aria-hidden="true">
+          <path d="M14 150 Q 70 108 100 130 T 226 96" stroke="#6FA8FF" stroke-opacity="0.55" stroke-width="2.5" fill="none" stroke-dasharray="2 11" stroke-linecap="round"/>
+          <circle cx="14" cy="150" r="7" fill="#F0B15C"/>
+          <path d="M219 90 c0 10 -10 16 -10 16 s-10 -6 -10 -16 a10 10 0 0 1 20 0z" fill="#34E0A1"/>
+          <circle cx="150" cy="60" r="4" fill="#6FA8FF"><animate attributeName="opacity" values="1;0.3;1" dur="2.2s" repeatCount="indefinite"/></circle>
+          <circle cx="90" cy="118" r="3" fill="#34E0A1"><animate attributeName="opacity" values="0.3;1;0.3" dur="2.2s" repeatCount="indefinite"/></circle>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section--board">
+  <span class="section__eyebrow">실시간 전광판</span>
+  <h2 class="section__title">지금 이 관광지, 얼마나 붐빌까요?</h2>
+  <span class="sample-tag">예시 데이터입니다 · API 연동 전</span>
+
+  <div class="board" role="list">
+    <div class="board-card board-card--danger" role="listitem" style="--pct:82">
+      <div class="board-card__rank">TOP 01</div>
+      <div class="board-card__name">경주 불국사</div>
+      <div class="gauge"><div class="gauge__value"><span class="gauge__num">82</span><span class="gauge__pct">%</span></div></div>
+      <div class="board-card__state"><i aria-hidden="true"></i>혼잡</div>
+    </div>
+    <div class="board-card board-card--danger" role="listitem" style="--pct:76">
+      <div class="board-card__rank">TOP 02</div>
+      <div class="board-card__name">전주 한옥마을</div>
+      <div class="gauge"><div class="gauge__value"><span class="gauge__num">76</span><span class="gauge__pct">%</span></div></div>
+      <div class="board-card__state"><i aria-hidden="true"></i>혼잡</div>
+    </div>
+    <div class="board-card board-card--warning" role="listitem" style="--pct:54">
+      <div class="board-card__rank">TOP 03</div>
+      <div class="board-card__name">강릉 안목해변</div>
+      <div class="gauge"><div class="gauge__value"><span class="gauge__num">54</span><span class="gauge__pct">%</span></div></div>
+      <div class="board-card__state"><i aria-hidden="true"></i>보통</div>
+    </div>
+    <div class="board-card board-card--warning" role="listitem" style="--pct:48">
+      <div class="board-card__rank">TOP 04</div>
+      <div class="board-card__name">부산 해운대</div>
+      <div class="gauge"><div class="gauge__value"><span class="gauge__num">48</span><span class="gauge__pct">%</span></div></div>
+      <div class="board-card__state"><i aria-hidden="true"></i>보통</div>
+    </div>
+    <div class="board-card board-card--success" role="listitem" style="--pct:22">
+      <div class="board-card__rank">TOP 05</div>
+      <div class="board-card__name">경주 대릉원 돌담길</div>
+      <div class="gauge"><div class="gauge__value"><span class="gauge__num">22</span><span class="gauge__pct">%</span></div></div>
+      <div class="board-card__state"><i aria-hidden="true"></i>여유</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0;">
+  <span class="section__eyebrow">지금 이 지역 축제</span>
+  <div class="festival-banner" style="margin-top:var(--space-4);">
+    <div class="festival-banner__body">
+      <div class="festival-banner__eyebrow">Festival</div>
+      <div class="festival-banner__title">전주 한지문화축제</div>
+      <div class="festival-banner__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요</div>
+    </div>
+    <button class="btn btn--gold festival-banner__cta">보기</button>
+  </div>
+</section>
+
+<div class="footer-note">숨은길 · 다크 프리미엄 데이터 대시보드 시안 — 실제 서비스 화면이 아닙니다</div>
+
+<script>
+function openMobileNav(){ document.getElementById('mobileNav').classList.add('is-open'); }
+function closeMobileNav(){ document.getElementById('mobileNav').classList.remove('is-open'); }
+function selectDestination(name, btn){
+  document.getElementById('destInput').value = name;
+  document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('is-selected'); });
+  if(btn){ btn.classList.add('is-selected'); }
+}
+</script>
+</body>
+</html>

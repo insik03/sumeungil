@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 스타일 시안 C/3 · 스탬프 수집 여행 여권</title>
+<style>
+/* =========================================================================
+   스타일 시안 C/3 — "스탬프 수집 / 여정 게임" (design-variants-v2)
+   ─────────────────────────────────────────────────────────────────────────
+   컨셉 메모 (03-design-spec.md 채택 전 비교용 · 이 파일 자체가 최종본 아님)
+
+   0) 방향 전환 배경: 기존 5개 시안(design-variants/)이 "힐링·고요함"에
+      쏠려 대표가 반려. 이번 v2 배치는 정반대 축 — 여행의 설렘·발견의
+      재미·수집의 즐거움·두근거림. 차분한 톤 금지 지시를 최우선 제약으로
+      삼았다.
+
+   1) 배정 방향: 여권 스탬프북 + 기차표/입장권 모티프 + 배지·마일스톤
+      수집. "다음엔 어디를 정복할까?" 게임적 두근거림. 레트로 여권/빈티지
+      티켓 감성이되 유치하지 않게 — 잉크 도장, 티켓 스텁, 절취선, 수집
+      진행바("숨은 명소 3/12 발견!")로 구현했다.
+
+   2) 디자인 인텔리전스 조회 결과 반영:
+      - "여행 여권/스탬프 수집" 직접 매치 스타일은 스킬 DB에 없음(조회:
+        "gamification badge collection ticket stub retro passport" →
+        Pixel Art / Vaporwave / Chromatic Aberration만 반환, 모두 부적합
+        — 네온/글리치 계열은 브랜드 3색 제약과 "세련된 빈티지" 톤에 불일치
+        하여 채택하지 않음).
+      - 대신 앞선 variant-4(레트로 관광 포스터)에서 검증된 원칙을 계승:
+        브랜드색 스케일 파생 방식(700/600/500/틴트), 브라운 극연톤
+        "paper" 배경 파생, 하드 오프셋 그림자(실크스크린 정합 오차 재현).
+      - v2 고유 추가 원칙: (a) 배지/스탬프는 "밝은 채도 tint 배경 + 어두운
+        잉크 텍스트"로 구성 — 흰 텍스트 대비 실패 구간(터콰/머스타드 중간
+        명도)을 피하면서 동시에 "종이 위 잉크 도장" 은유를 시각적으로도
+        강화한다. (b) 수집 게임 HUD(진행바·스티커 카드·리미티드 스탬프)로
+        "정복/수집" 정서를 전면에 배치.
+
+   3) 팔레트: 브랜드 3색(그린 #1B4332 / 네이비 #0B2545 / 브라운 #5C4033)만
+      사용, 각 색의 채도 있는 밝은 파생 tint를 새로 계산해 생기를 줬다
+      (새 색상환 색 없음 — 모두 3색 hue 유지 파생):
+        - green-ink #4FAE7E  (그린 hue 유지, 채도/명도↑ — 여유/성공 잉크)
+        - navy-ink  #2E62AC  (네이비 hue 유지 — UI 액센트, 중립 칩)
+        - terracotta #D4713D (브라운 hue, 저명도쪽 — 혼잡/핫 잉크)
+        - mustard   #E3B15E (브라운 hue, 고명도쪽 — 보통 잉크)
+        - paper     #FBF3E6 (브라운 극연톤 — 여권 종이 배경, 신규 파생)
+      대비 검산(sRGB relative luminance 근사): paper 위 navy-600 본문
+      텍스트 ≈13:1, 배지는 모두 "vivid tint 배경 + 900 shade 어두운 텍스트"
+      조합으로 계산상 4.5:1 이상 확보(terracotta/mustard/green-ink 각각
+      약 4.7:1/8.6:1/6.5:1). navy-ink 칩만 명도가 낮아 예외적으로 cream
+      텍스트를 올렸다(≈5.3:1). 정밀 감사는 qa-reviewer 3차 게이트에서
+      재검증 필요 — 이 파일은 시안 비교 목적의 근사 계산임을 명시.
+
+   4) 실사용 인터랙션(목적지 자동완성 API, 축제 배너 클릭 등)은 스코프
+      밖. 정적 마크업 + 최소 JS(모바일 메뉴 토글, 진행바 카운트업)만.
+
+   5) 콘텐츠는 index.html #s-home 원본 유지(히어로 취지·목적지 검색·
+      TOP5 혼잡도 전광판·축제 배너 데이터) — 톤/카피만 수집 게임 정서로
+      재작성. 혼잡도 전광판은 "지금 뜨는 스탬프 랭킹"으로 재해석했다.
+   ========================================================================= */
+
+  :root{
+    --green-900:#0A1F16; --green-700:#153B2A; --green-600:#1B4332; --green-500:#2B6B4B;
+    --green-ink:#4FAE7E; --green-200:#BEE3CE; --green-100:#E9F6EE;
+
+    --navy-900:#050E1B; --navy-800:#08192E; --navy-700:#0A203D; --navy-600:#0B2545; --navy-500:#1D3E72;
+    --navy-ink:#2E62AC; --navy-200:#C9D8EE; --navy-100:#EEF3FB;
+
+    --brown-900:#241A14; --brown-700:#4A3329; --brown-600:#5C4033; --brown-500:#8A5A3C;
+    --terracotta:#D4713D; --mustard:#E3B15E;
+
+    --paper:#FBF3E6; --paper-deep:#F2E3CC; --cream:#FFFDF8;
+    --ink:var(--navy-600);
+
+    --font-head:'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+    --font-serif:'Batang','바탕','Nanum Myeongjo',Georgia,serif;
+    --font-body:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+
+    --touch-min:44px;
+    --pad:20px;
+  }
+
+  *,*::before,*::after{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    background-image:radial-gradient(circle at 1px 1px, rgba(11,37,69,0.06) 1px, transparent 0);
+    background-size:15px 15px;
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,p,ul,ol{margin:0;}
+  ul,ol{list-style:none;padding:0;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;background:none;border:none;color:inherit;cursor:pointer;}
+  img,svg{display:block;max-width:100%;}
+  input{font-family:inherit;}
+  button, a, input, .chip{cursor:pointer;}
+  a:focus-visible, button:focus-visible, input:focus-visible{
+    outline:3px solid var(--navy-ink);
+    outline-offset:2px;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important;}
+  }
+
+  /* =========================================================================
+     0. 시안 라벨 — 비교용 표식(실제 제품 UI 아님)
+     ========================================================================= */
+  .variant-tag{
+    position:sticky; top:0; z-index:80;
+    background:var(--navy-900); color:var(--cream);
+    font-size:11px; font-weight:700; letter-spacing:0.08em;
+    padding:9px var(--pad);
+    display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+  }
+  .variant-tag b{font-weight:800;}
+  .variant-tag span{opacity:0.62; font-weight:400; letter-spacing:0;}
+
+  /* =========================================================================
+     1. GNB — 여권 커버(딥네이비) + 크레스트 로고 + 진행률 미니 칩
+     ========================================================================= */
+  .gnb{
+    position:sticky; top:33px; z-index:70;
+    background:var(--navy-600);
+    background-image:linear-gradient(180deg, var(--navy-500) 0%, var(--navy-600) 60%);
+    padding:0 var(--pad);
+    min-height:60px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    border-bottom:3px solid var(--terracotta);
+    box-shadow:0 4px 0 rgba(0,0,0,0.08);
+  }
+  .gnb__brand{display:flex; align-items:center; gap:9px;}
+  .gnb__mark{
+    width:32px; height:32px; border-radius:50%; flex:0 0 auto;
+    background:var(--terracotta);
+    border:2px dashed var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    transform:rotate(-6deg);
+  }
+  .gnb__mark svg{width:15px;height:15px;}
+  .gnb__logo{font-family:var(--font-head); font-size:18px; font-weight:900; letter-spacing:-0.01em; color:var(--cream);}
+  .gnb__logo span{color:var(--mustard);}
+  .gnb__menu{display:none; gap:24px; align-items:center;}
+  .gnb__menu a{min-height:var(--touch-min); display:flex; align-items:center; font-size:13.5px; font-weight:700; color:var(--navy-100);}
+  .gnb__menu a:hover{color:var(--mustard);}
+  .gnb__actions{display:none; align-items:center; gap:10px;}
+  .gnb__right{display:flex; align-items:center; gap:8px;}
+
+  .progress-chip{
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(255,253,248,0.12); border:1.5px solid rgba(255,253,248,0.35);
+    border-radius:999px; padding:5px 11px 5px 8px; min-height:30px;
+    font-size:11.5px; font-weight:800; color:var(--cream); white-space:nowrap;
+  }
+  .progress-chip__icon{width:14px;height:14px;flex:0 0 auto;}
+
+  .btn{
+    min-height:var(--touch-min); display:inline-flex; align-items:center; justify-content:center;
+    padding:0 20px; font-size:14px; font-weight:800; border-radius:999px;
+    border:2px solid transparent; transition:transform .12s ease, background .15s ease, color .15s ease;
+  }
+  .btn:active{transform:translate(2px,2px);}
+  .btn--primary{background:var(--terracotta); color:var(--brown-900); box-shadow:3px 3px 0 var(--navy-900);}
+  .btn--primary:hover{background:#DE8451;}
+  .btn--ghost{background:transparent; color:var(--cream); border-color:rgba(255,253,248,0.55);}
+  .btn--ghost:hover{background:rgba(255,253,248,0.12);}
+  .btn--block{width:100%;}
+
+  .gnb__burger{
+    width:var(--touch-min); height:var(--touch-min); flex:0 0 auto;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  }
+  .gnb__burger i{display:block; width:20px; height:2.5px; background:var(--cream); border-radius:2px;}
+
+  .mnav{
+    position:fixed; inset:0; z-index:200; background:var(--navy-700);
+    display:flex; flex-direction:column; padding:var(--pad);
+    opacity:0; visibility:hidden; transition:opacity .2s ease;
+  }
+  .mnav.is-open{opacity:1; visibility:visible;}
+  .mnav__top{display:flex; justify-content:flex-end;}
+  .mnav__close{width:var(--touch-min); height:var(--touch-min); color:var(--cream); font-size:26px;}
+  .mnav__list{margin-top:28px; display:flex; flex-direction:column;}
+  .mnav__list a{
+    min-height:56px; display:flex; align-items:center;
+    font-size:21px; font-weight:800; color:var(--cream);
+    border-bottom:1px dashed rgba(255,253,248,0.25);
+  }
+  .mnav__cta{margin-top:auto; padding-top:24px;}
+
+  @media (min-width:1024px){
+    .gnb{padding:0 48px; min-height:72px;}
+    .gnb__menu{display:flex;}
+    .gnb__actions{display:flex;}
+    .gnb__burger{display:none;}
+  }
+
+  /* =========================================================================
+     2. 히어로 — 여권 내지 + 원형 소인(消印) 스탬프 + 물결 여정선
+     ========================================================================= */
+  .hero{
+    position:relative; overflow:hidden;
+    padding:34px var(--pad) 8px;
+  }
+  .hero__eyebrow{
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:11.5px; font-weight:800; letter-spacing:0.14em;
+    color:var(--brown-700); text-transform:uppercase;
+    border:1.5px dashed var(--brown-500); border-radius:999px; padding:5px 12px 5px 8px;
+  }
+  .hero__eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--terracotta);flex:0 0 auto;}
+
+  .hero__wrap{position:relative;}
+  .hero__stamp{
+    position:absolute; top:-14px; right:-6px; width:112px; height:112px;
+    opacity:0.94; animation:stampIn .55s cubic-bezier(.2,1.4,.4,1) both; animation-delay:.15s;
+  }
+  @keyframes stampIn{ from{ transform:scale(.5) rotate(-26deg); opacity:0; } to{ transform:scale(1) rotate(-11deg); opacity:0.94; } }
+
+  .hero__title{
+    margin-top:16px; font-family:var(--font-serif); font-weight:700;
+    font-size:clamp(28px,8.2vw,40px); line-height:1.28; letter-spacing:-0.01em;
+    color:var(--navy-700); max-width:11ch;
+  }
+  .hero__title b{color:var(--terracotta); font-style:italic;}
+  .hero__sub{margin-top:14px; font-size:14.5px; color:var(--brown-700); max-width:36ch; line-height:1.65;}
+  .hero__sub strong{color:var(--navy-600);}
+
+  .hero__cta-row{margin-top:20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  .hero__cta{background:var(--green-600); color:var(--cream); box-shadow:3px 3px 0 var(--terracotta); border-color:var(--green-600);}
+  .hero__cta:hover{background:var(--green-700);}
+  .hero__cta-note{font-size:12px; font-weight:700; color:var(--green-700); display:inline-flex; align-items:center; gap:5px;}
+  .hero__cta-note svg{width:14px;height:14px;}
+
+  @media (min-width:1024px){
+    .hero{padding:56px 48px 12px; display:grid; grid-template-columns:1.1fr 0.9fr; gap:40px; align-items:start;}
+  }
+
+  /* -------------------------------------------------------------------------
+     목적지 검색 — 탑승권(보딩패스) 티켓 카드
+     ------------------------------------------------------------------------- */
+  .ticket{
+    position:relative; margin-top:24px;
+    background:var(--cream);
+    border-radius:14px;
+    box-shadow:0 10px 0 -4px var(--navy-900), 0 2px 14px rgba(11,37,69,0.14);
+    border:2px solid var(--navy-700);
+  }
+  .ticket__main{padding:16px 16px 14px;}
+  .ticket__head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .ticket__route{font-size:10.5px; font-weight:800; letter-spacing:0.08em; color:var(--brown-500); text-transform:uppercase;}
+  .ticket__no{font-size:10.5px; font-weight:700; color:var(--navy-200); background:var(--navy-600); padding:2px 8px; border-radius:4px;}
+  .dest-search__label{display:block; font-family:var(--font-serif); font-size:15px; font-weight:700; color:var(--navy-700); margin-bottom:9px;}
+  .dest-search__box{
+    display:flex; align-items:center; gap:10px;
+    border:2px solid var(--navy-200); border-radius:8px; padding:0 12px; min-height:var(--touch-min);
+    background:var(--paper);
+  }
+  .dest-search__box:focus-within{border-color:var(--navy-ink);}
+  .dest-search__icon{width:16px; height:16px; flex:0 0 auto; position:relative;}
+  .dest-search__icon::before{content:"";position:absolute;top:0;left:0;width:10px;height:10px;border:2px solid var(--navy-600);border-radius:50%;}
+  .dest-search__icon::after{content:"";position:absolute;bottom:0;right:0;width:6px;height:2px;background:var(--navy-600);transform:rotate(45deg);transform-origin:right center;}
+  .dest-search__input{flex:1; border:none; outline:none; background:transparent; font-size:15px; color:var(--ink); min-height:var(--touch-min);}
+  .dest-search__input::placeholder{color:var(--brown-500);}
+  .dest-search__clear{width:28px;height:28px;border-radius:50%;color:var(--brown-500);font-size:18px;}
+
+  .dest-search__quick{margin-top:12px; display:flex; align-items:center; flex-wrap:wrap; gap:8px;}
+  .dest-search__quick-label{font-size:11px; font-weight:800; color:var(--brown-700); margin-right:2px;}
+  .chip{
+    position:relative; min-height:36px; padding:0 14px 0 16px; border-radius:6px 6px 6px 0;
+    border:1.5px dashed var(--green-600); color:var(--green-700); font-size:12.5px; font-weight:800;
+    background:var(--green-100);
+    transition:background .15s ease, color .15s ease, transform .12s ease;
+  }
+  .chip:hover{background:var(--green-600); color:var(--cream); transform:translateY(-2px);}
+  .chip.is-selected{background:var(--green-600); color:var(--cream);}
+
+  .ticket__stub{
+    position:relative;
+    border-top:2px dashed var(--navy-200);
+    margin:0 16px; padding:11px 0 14px;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .ticket__stub::before, .ticket__stub::after{
+    content:""; position:absolute; top:-9px; width:18px; height:18px; border-radius:50%;
+    background:var(--paper);
+  }
+  .ticket__stub::before{left:-25px;}
+  .ticket__stub::after{right:-25px;}
+  .ticket__stub-text{font-size:10.5px; font-weight:700; color:var(--brown-500); letter-spacing:0.03em;}
+  .ticket__stub-text b{color:var(--navy-600);}
+  .dest-search__status{font-size:12px; color:var(--brown-700); padding:0 16px;}
+
+  .dest-search__list{
+    list-style:none; margin:8px 16px 0; padding:6px; background:var(--cream);
+    border:1.5px solid var(--navy-200); border-radius:8px;
+  }
+  .dest-search__list li{padding:10px 8px; border-radius:6px; font-size:14px;}
+  .dest-search__list li:hover{background:var(--green-100);}
+
+  /* =========================================================================
+     3. 수집 진행바 — "MY 여행 여권" 게임 HUD
+     ========================================================================= */
+  .passport{
+    margin:30px var(--pad) 0; padding:20px 18px;
+    background:var(--navy-600); border-radius:16px; color:var(--cream);
+    position:relative; overflow:hidden;
+  }
+  .passport::before{
+    content:""; position:absolute; inset:0;
+    background-image:repeating-linear-gradient(135deg, rgba(255,253,248,0.045) 0 2px, transparent 2px 10px);
+    pointer-events:none;
+  }
+  .passport__row{position:relative; display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .passport__eyebrow{font-size:11px; font-weight:800; letter-spacing:0.12em; color:var(--navy-200); text-transform:uppercase;}
+  .passport__count{font-family:var(--font-serif); font-size:22px; font-weight:700; color:var(--mustard);}
+  .passport__title{position:relative; margin-top:4px; font-size:16.5px; font-weight:800; line-height:1.4;}
+  .passport__desc{position:relative; margin-top:6px; font-size:12.5px; color:var(--navy-200); line-height:1.6;}
+
+  .stampgrid{position:relative; margin-top:16px; display:flex; flex-wrap:wrap; gap:9px;}
+  .stampslot{
+    width:30px; height:30px; border-radius:50%; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .stampslot--filled{background:var(--mustard); box-shadow:0 0 0 2px rgba(255,253,248,0.5);}
+  .stampslot--filled svg{width:15px;height:15px;}
+  .stampslot--empty{border:1.5px dashed rgba(255,253,248,0.4);}
+
+  @media (min-width:1024px){ .passport{margin:36px 48px 0;} }
+
+  /* =========================================================================
+     4. 지금 뜨는 스탬프 랭킹 — 스티커 카드 가로 스크롤(원본 TOP5 유지)
+     ========================================================================= */
+  .section{padding:36px var(--pad) 4px;}
+  @media (min-width:1024px){ .section{padding:52px 48px 4px;} }
+
+  .section__eyebrow{
+    display:inline-flex; align-items:center; font-size:11px; font-weight:900; letter-spacing:0.09em; text-transform:uppercase;
+    color:var(--cream); background:var(--navy-ink); padding:5px 13px; border-radius:999px;
+  }
+  .section__title{
+    margin-top:13px; font-family:var(--font-serif); font-size:clamp(20px,5.2vw,25px); font-weight:700;
+    color:var(--navy-700); line-height:1.4;
+  }
+  .sample-tag{
+    display:inline-flex; align-items:center; gap:6px; margin-top:11px;
+    font-size:11px; font-weight:700; color:var(--brown-700);
+    border:1.5px dashed var(--brown-500); border-radius:999px; padding:4px 12px;
+    transform:rotate(-1deg);
+  }
+
+  .board{display:flex; gap:16px; overflow-x:auto; padding:20px 2px 14px; scroll-snap-type:x proximity;}
+  .board::-webkit-scrollbar{height:6px;}
+  .board::-webkit-scrollbar-thumb{background:var(--navy-200); border-radius:4px;}
+
+  .sticker{
+    flex:0 0 172px; scroll-snap-align:start; position:relative;
+    background:var(--cream); border-radius:12px; padding:16px 14px 14px;
+    border:2px solid var(--navy-700);
+    box-shadow:4px 4px 0 var(--navy-900);
+  }
+  .sticker:nth-child(odd){ transform:rotate(-1.4deg); }
+  .sticker:nth-child(even){ transform:rotate(1.2deg); }
+  .sticker::after{ /* 스티커 모서리 접힘 */
+    content:""; position:absolute; right:0; bottom:0; width:16px; height:16px;
+    background:linear-gradient(135deg, transparent 50%, var(--paper) 50%);
+    border-top-left-radius:5px;
+  }
+  .sticker__rank{
+    position:absolute; top:-13px; left:12px; width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    border:2px dashed var(--cream); transform:rotate(-8deg);
+    font-size:9.5px; font-weight:900; line-height:1.1;
+  }
+  .sticker__rank span{font-size:12px;}
+  .sticker[data-lv="hot"] .sticker__rank{background:var(--terracotta); color:var(--brown-900);}
+  .sticker[data-lv="mid"] .sticker__rank{background:var(--mustard); color:var(--brown-900);}
+  .sticker[data-lv="calm"] .sticker__rank{background:var(--green-ink); color:var(--green-900);}
+
+  .sticker__name{margin-top:20px; font-size:14.5px; font-weight:800; color:var(--navy-700); line-height:1.35;}
+  .sticker__note{margin-top:6px; font-size:11.5px; color:var(--brown-700); line-height:1.5;}
+
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; margin-top:10px;
+    font-size:11.5px; font-weight:800; padding:5px 11px; border-radius:6px;
+  }
+  .badge__icon{width:8px; height:8px; flex:0 0 auto; background:currentColor; border-radius:50%;}
+  .badge--hot{background:var(--terracotta); color:var(--brown-900);}
+  .badge--mid{background:var(--mustard); color:var(--brown-900);}
+  .badge--calm{background:var(--green-ink); color:var(--green-900);}
+
+  /* =========================================================================
+     5. 한정판 스탬프 배너 — 지역 축제(원본 데이터 유지)
+     ========================================================================= */
+  .limited{
+    margin:24px var(--pad) 8px; position:relative; overflow:hidden;
+    background:var(--brown-600); color:var(--cream);
+    border-radius:16px; padding:22px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .limited::before{
+    content:""; position:absolute; right:-36px; top:-36px; width:140px; height:140px; border-radius:50%;
+    background:var(--terracotta); opacity:0.45;
+  }
+  .limited__medal{
+    position:relative; flex:0 0 auto; width:64px; height:64px; border-radius:50%;
+    background:var(--mustard); border:3px dashed var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 3px 0 rgba(0,0,0,0.18);
+  }
+  .limited__medal svg{width:30px;height:30px;}
+  .limited__body{position:relative; flex:1 1 200px; min-width:200px;}
+  .limited__eyebrow{font-size:10.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--mustard);}
+  .limited__title{margin-top:7px; font-family:var(--font-serif); font-size:19px; font-weight:700;}
+  .limited__desc{margin-top:6px; font-size:13px; color:#F0DEC9; line-height:1.6;}
+  .limited .btn{position:relative; background:var(--cream); color:var(--brown-700); flex:0 0 auto; box-shadow:3px 3px 0 var(--navy-900);}
+  .limited .btn:hover{background:var(--mustard);}
+  @media (min-width:1024px){ .limited{margin:24px 48px 8px;} }
+
+  /* =========================================================================
+     6. 하단
+     ========================================================================= */
+  .footer-note{padding:34px var(--pad) 48px; text-align:center; font-size:12px; color:var(--brown-700);}
+  .footer-note b{display:block; font-family:var(--font-serif); font-size:14.5px; font-weight:700; color:var(--navy-700); margin-bottom:5px;}
+</style>
+</head>
+<body>
+
+<div class="variant-tag">
+  <span><b>시안 C/3</b> · 스탬프 수집 / 여정 게임 — 스타일 비교용, 최종 채택안 아님</span>
+  <span>#s-home 재구성 · 375px 기준</span>
+</div>
+
+<header class="gnb">
+  <div class="gnb__brand">
+    <div class="gnb__mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#FFFDF8" stroke-width="1.6" stroke-dasharray="3 3"/><path d="M12 7v5l3 2" stroke="#FFFDF8" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </div>
+    <div class="gnb__logo">숨은<span>길</span></div>
+  </div>
+  <nav class="gnb__menu">
+    <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+  </nav>
+  <div class="gnb__right">
+    <div class="progress-chip" title="여행 여권 진행률">
+      <svg class="progress-chip__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12c3-6 13-6 16 0-3 6-13 6-16 0z" stroke="#E3B15E" stroke-width="1.8"/><circle cx="12" cy="12" r="2.3" fill="#E3B15E"/></svg>
+      3 / 12 발견
+    </div>
+    <div class="gnb__actions">
+      <button class="btn btn--ghost">로그인</button>
+      <button class="btn btn--primary">여권 만들기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="document.getElementById('mnav').classList.add('is-open')"><i></i><i></i><i></i></button>
+  </div>
+</header>
+
+<div class="mnav" id="mnav">
+  <div class="mnav__top"><button class="mnav__close" aria-label="메뉴 닫기" onclick="document.getElementById('mnav').classList.remove('is-open')">&times;</button></div>
+  <nav class="mnav__list">
+    <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+  </nav>
+  <div class="mnav__cta"><button class="btn btn--primary btn--block">여권 만들고 시작하기</button></div>
+</div>
+
+<main>
+  <section class="hero">
+    <div class="hero__wrap">
+      <span class="hero__eyebrow"><i></i>TRAVEL PASSPORT · 서연님의 수집 여정</span>
+
+      <div class="hero__stamp" aria-hidden="true">
+        <svg viewBox="0 0 120 120">
+          <defs>
+            <path id="stampArc" d="M 12,60 A 48,48 0 1 1 108,60" />
+          </defs>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="#D4713D" stroke-width="2.5" stroke-dasharray="4 3"/>
+          <circle cx="60" cy="60" r="40" fill="none" stroke="#D4713D" stroke-width="1.6"/>
+          <text font-size="9.5" font-weight="800" fill="#D4713D" letter-spacing="2">
+            <textPath href="#stampArc" startOffset="2">숨은길 · 발견의 여정 · 숨은길 ·</textPath>
+          </text>
+          <path d="M46 62l9 9 19-21" stroke="#D4713D" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <h1 class="hero__title">이번 도장은,<br/><b>어디</b>서 찍을까요?</h1>
+      <p class="hero__sub"><strong>서연님</strong>, 아이와 함께 걷기 좋은 한적한 길만 골랐어요. 온보딩 취향 그대로, 도장 깨듯 하나씩 정복해봐요.</p>
+
+      <!-- M16(2026-07-24 신규) — 목적지 검색 자동완성. 자유 텍스트 NLP가 아니라 지명 후보 검색(구조화 입력)이며,
+           선택 시 region_code로 후보를 좁힌다(08 정본 태그/LLM 파이프라인과 무관). 배치 근거는 03-design-spec.md §16.1.
+           자동완성 후보 엔드포인트는 01-backend-design.md에 미정의 — backend와 조율 필요(§16.5 D18/D19). -->
+      <div class="ticket" id="destSearch">
+        <div class="ticket__main">
+          <div class="ticket__head">
+            <span class="ticket__route">FROM 서울 · TO ???</span>
+            <span class="ticket__no">NO. 0426</span>
+          </div>
+          <label class="dest-search__label" for="destInput">어디로 떠나시나요?</label>
+          <div class="dest-search__box">
+            <span class="dest-search__icon" aria-hidden="true"></span>
+            <input type="text" id="destInput" class="dest-search__input"
+                   placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)"
+                   role="combobox" aria-expanded="false" aria-controls="destListbox" aria-autocomplete="list"
+                   autocomplete="off" />
+            <button type="button" class="dest-search__clear" id="destClearBtn" aria-label="목적지 검색어 지우기" hidden>&times;</button>
+          </div>
+          <ul class="dest-search__list" id="destListbox" role="listbox" aria-label="목적지 추천 검색어" hidden></ul>
+        </div>
+        <div class="ticket__stub">
+          <span class="ticket__stub-text">지금 다들 <b>도장 찍는 곳</b></span>
+        </div>
+        <div class="ticket__main" style="padding-top:0;">
+          <div class="dest-search__quick">
+            <div class="chip-row" style="display:flex;flex-wrap:wrap;gap:8px;">
+              <button type="button" class="chip">경주</button>
+              <button type="button" class="chip">전주</button>
+              <button type="button" class="chip">강릉</button>
+              <button type="button" class="chip">부산</button>
+            </div>
+          </div>
+        </div>
+        <div class="dest-search__status" id="destStatus" aria-live="polite" style="padding-bottom:14px;"></div>
+      </div>
+
+      <div class="hero__cta-row">
+        <button class="btn hero__cta">첫 코스 도장 찍으러 가기</button>
+        <span class="hero__cta-note">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4L12 3z" fill="#2B6B4B"/></svg>
+          평균 8분이면 첫 도장 완성
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <div class="passport">
+    <div class="passport__row">
+      <span class="passport__eyebrow">MY 여행 여권</span>
+      <span class="passport__count">3<span style="color:var(--navy-200); font-size:14px;">/12</span></span>
+    </div>
+    <p class="passport__title">숨은 명소 3곳 발견! 다음 스탬프까지 얼마 안 남았어요</p>
+    <p class="passport__desc">코스를 완주할 때마다 여권에 도장이 하나씩 찍혀요. 12개를 다 모으면 &ldquo;숨은길 완주자&rdquo; 배지가 열려요.</p>
+    <div class="stampgrid" aria-label="수집 진행 상황: 12칸 중 3칸 발견">
+      <div class="stampslot stampslot--filled" title="발견 완료"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4 10-10" stroke="#241A14" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="stampslot stampslot--filled" title="발견 완료"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4 10-10" stroke="#241A14" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="stampslot stampslot--filled" title="발견 완료"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4 10-10" stroke="#241A14" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+      <div class="stampslot stampslot--empty" title="미발견"></div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section">
+      <span class="section__eyebrow">지금 뜨는 스탬프 랭킹</span>
+      <h2 class="section__title" id="boardHeading">이 도장, 지금 제일 인기 많아요</h2>
+      <span class="sample-tag" id="boardCaption">예시 데이터입니다 · API 연동 전</span>
+
+      <div class="board" role="list" id="boardList">
+        <div class="sticker" data-lv="hot" role="listitem" data-region="경주">
+          <div class="sticker__rank">1<span>st</span></div>
+          <div class="sticker__name">경주 불국사</div>
+          <div class="sticker__note">지금 다들 여기서 도장 찍는 중</div>
+          <span class="badge badge--hot"><span class="badge__icon"></span>혼잡 82%</span>
+        </div>
+        <div class="sticker" data-lv="hot" role="listitem" data-region="전주">
+          <div class="sticker__rank">2<span>nd</span></div>
+          <div class="sticker__name">전주 한옥마을</div>
+          <div class="sticker__note">줄 서서 찍는 인기 스탬프</div>
+          <span class="badge badge--hot"><span class="badge__icon"></span>혼잡 76%</span>
+        </div>
+        <div class="sticker" data-lv="mid" role="listitem" data-region="강릉">
+          <div class="sticker__rank">3<span>rd</span></div>
+          <div class="sticker__name">강릉 안목해변</div>
+          <div class="sticker__note">적당히 붐비는 인기 코스</div>
+          <span class="badge badge--mid"><span class="badge__icon"></span>보통 54%</span>
+        </div>
+        <div class="sticker" data-lv="mid" role="listitem" data-region="부산">
+          <div class="sticker__rank">4<span>th</span></div>
+          <div class="sticker__name">부산 해운대</div>
+          <div class="sticker__note">여유롭게 찍을 만해요</div>
+          <span class="badge badge--mid"><span class="badge__icon"></span>보통 48%</span>
+        </div>
+        <div class="sticker" data-lv="calm" role="listitem" data-region="경주">
+          <div class="sticker__rank">5<span>th</span></div>
+          <div class="sticker__name">경주 대릉원 돌담길</div>
+          <div class="sticker__note">지금 찍기 딱 좋아요</div>
+          <span class="badge badge--calm"><span class="badge__icon"></span>여유 22%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="limited">
+      <div class="limited__medal" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 15.9l-5.6 3.2 1.4-6.3-4.8-4.3 6.4-.6L12 2z" fill="#241A14"/></svg>
+      </div>
+      <div class="limited__body">
+        <span class="limited__eyebrow">지금 이 지역 축제 · 한정판 스탬프</span>
+        <div class="limited__title">전주 한지문화축제</div>
+        <p class="limited__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요. 지금 방문하면 이 기간에만 찍을 수 있는 한정판 스탬프를 모을 수 있어요!</p>
+      </div>
+      <button class="btn">한정 스탬프 보기</button>
+    </div>
+  </section>
+
+  <p class="footer-note">
+    <b>시안 C/3 · 스탬프 수집 여행 여권</b>
+    본 화면은 03-design-spec.md 채택 전 스타일 비교용 목업입니다. 실제 데이터/연동은 반영되어 있지 않습니다.
+  </p>
+</main>
+
+</body>
+</html>

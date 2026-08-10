@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>숨은길 — 홈 화면 디자인 시안 (설렘·발견 테마) 3종</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#6b6b6b; --line:#e2e2dd; --bg:#f4f4f0;
+    --green:#1B4332; --navy:#0B2545; --brown:#5C4033;
+  }
+  *{box-sizing:border-box; margin:0;}
+  body{font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--ink); padding:28px 20px 60px;}
+  header{max-width:1200px; margin:0 auto 26px; border-bottom:2px solid var(--ink); padding-bottom:16px;}
+  h1{font-size:22px; letter-spacing:-.01em;}
+  .sub{color:var(--muted); font-size:13.5px; margin-top:6px; line-height:1.6;}
+  .sub b{color:var(--ink);}
+  .grid{max-width:1200px; margin:0 auto; display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:26px 22px;}
+  .card{background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    box-shadow:0 4px 18px rgba(0,0,0,.05); display:flex; flex-direction:column;}
+  .cap{padding:13px 16px; border-bottom:1px solid var(--line);}
+  .cap .no{display:inline-block; font-size:11px; font-weight:800; color:#fff; background:var(--brown);
+    border-radius:6px; padding:2px 8px; margin-right:8px; vertical-align:middle;}
+  .cap .nm{font-weight:800; font-size:15px; vertical-align:middle;}
+  .cap .desc{color:var(--muted); font-size:12px; margin-top:7px; line-height:1.55;}
+  .frame-wrap{position:relative; width:100%; height:640px; background:#fff; overflow:hidden;}
+  iframe{border:0; width:375px; height:1700px; transform-origin:top left;}
+  .open{display:block; text-align:center; padding:11px; font-size:12.5px; font-weight:700;
+    color:var(--navy); text-decoration:none; border-top:1px solid var(--line); background:#fafaf8;}
+  .open:hover{background:#f0f0ec;}
+  .legend{max-width:1200px; margin:24px auto 0; font-size:12.5px; color:var(--muted); line-height:1.7;}
+  .legend b{color:var(--ink);}
+</style>
+</head>
+<body>
+<header>
+  <h1>숨은길 — 홈 화면 시안 (설렘·발견 테마) 3종</h1>
+  <p class="sub">이전 힐링 톤 대신 <b>여행의 설렘·발견의 재미·모험심</b>을 축으로 한 3방향입니다. 브랜드 3색(딥그린·딥네이비·어스브라운)은 유지하되 채도·대비를 살렸습니다. 미리보기는 축소돼 있으니 세밀한 인상은 <b>"전체 화면으로 열기"</b>로 확인하세요.</p>
+</header>
+
+<div class="grid" id="grid">
+  <div class="card">
+    <div class="cap"><span class="no">A</span><span class="nm">탐험가의 보물지도</span>
+      <div class="desc">등고선 종이 배경 + 회전하는 나침반, 찢어진 종이 가장자리, X 마크 CTA. TOP5를 지그재그 비대칭으로 배치해 "발견"의 스릴을 줌. 골드/라임/애저 강조.</div></div>
+    <div class="frame-wrap"><iframe src="variant-A-treasure-map.html" loading="lazy" title="보물지도"></iframe></div>
+    <a class="open" href="variant-A-treasure-map.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+
+  <div class="card">
+    <div class="cap"><span class="no">B</span><span class="nm">부티크 트래블 브랜드</span>
+      <div class="desc">Airbnb 감성의 힙한 여행앱. 초대형 타이포 + 비비드 컬러 블록(민트·아주르·코랄), 둥근 pill 버튼, 자신감 있는 브랜드 카피. 세련되면서 생기 넘치게.</div></div>
+    <div class="frame-wrap"><iframe src="variant-B-boutique-travel.html" loading="lazy" title="부티크 트래블"></iframe></div>
+    <a class="open" href="variant-B-boutique-travel.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+
+  <div class="card">
+    <div class="cap"><span class="no">C</span><span class="nm">스탬프 수집 / 여정 게임</span>
+      <div class="desc">여권 스탬프북·티켓 모티프. 도장 자국, 절취선, "숨은 명소 3/12 발견!" 진행바. 여행지를 모으는 수집의 재미와 "다음엔 어디?"의 두근거림.</div></div>
+    <div class="frame-wrap"><iframe src="variant-C-stamp-collection.html" loading="lazy" title="스탬프 수집"></iframe></div>
+    <a class="open" href="variant-C-stamp-collection.html" target="_blank">전체 화면으로 열기 →</a>
+  </div>
+</div>
+
+<p class="legend">
+  <b>참고 1.</b> 미리보기는 카드 폭에 맞춰 축소돼 있어 실제보다 작게 보입니다 — "전체 화면으로 열기"로 실제 375px 크기를 확인하세요.<br>
+  <b>참고 2.</b> 세 시안 모두 브랜드 3색의 색상각은 유지하되 밝고 채도 높은 파생색으로 에너지를 줬습니다(새 색상환 색은 안 씀). 히어로 카피도 "먼저 발견하세요" 같은 설렘 톤으로 각자 바꿨습니다.<br>
+  <b>참고 3.</b> 홈 화면 하나만 만든 스타일 데모입니다. 방향(또는 조합)을 고르시면 그 톤으로 나머지 화면을 통일하고 실제 구현에 들어갑니다.
+</p>
+
+<script>
+  function fit(){
+    document.querySelectorAll('.frame-wrap').forEach(function(w){
+      var f = w.querySelector('iframe');
+      var scale = w.clientWidth / 375;
+      f.style.transform = 'scale(' + scale + ')';
+      f.style.left = '0';
+    });
+  }
+  window.addEventListener('load', fit);
+  window.addEventListener('resize', fit);
+</script>
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 시안 B: 부티크 트래블 (스타일 비교용, 최종안 아님)</title>
+<style>
+/* =========================================================================
+   숨은길 — Variant B: 부티크 트래블 브랜드 / 힙한 여행 스타트업
+   -------------------------------------------------------------------------
+   방향: 대표 피드백("기존 5안이 힐링·고요함에 쏠림")에 대한 정반대 톤 실험.
+   키워드: 설렘, 발견, 트렌디함, 두근거림. 차분/고요 톤 배제.
+
+   팔레트 원칙(협상 불가 조건 준수):
+   - 브랜드 3색(딥그린 #1B4332 / 딥네이비 #0B2545 / Earth Brown #5C4033)의
+     HSL 색상각(H)만 그대로 두고 채도(S)·명도(L)를 올려 만든 "비비드 파생색"만 사용.
+     그린 H≈154.5°, 네이비 H≈213°, 브라운 H≈19° — 새 색상각 추가 없음.
+   - 비비드 배경(mint/azure/coral) 위에는 항상 다크 텍스트(navy-900),
+     딥 베이스(600/700/900) 배경 위에는 화이트 텍스트만 사용해 WCAG AA를 만족시킴.
+     (예: 화이트 on 비비드 azure #2B82EE = 3.8:1로 큰 텍스트만 가능 → 본문엔 다크 텍스트로 전환.
+          다크 navy-900 on 비비드 mint #20DF8E = 11:1, on 비비드 coral #EF7339 = 6.6:1 — 안전)
+   - 의미 매핑(혼잡도)도 브랜드 3색 안에서: 혼잡=coral(브라운 계열, 뜨거움) /
+     보통=azure(네이비 계열, 중립) / 여유=mint(그린 계열, 좋음) — 색+아이콘 모양+텍스트 3중 표기 유지.
+   - 오프라인 단일 파일: 외부 CDN/폰트/이미지 요청 없음. 시스템 폰트 + 인라인 SVG만 사용.
+   ========================================================================= */
+:root{
+  /* ---- 그린 계열 (H≈154.5°) ---- */
+  --g-900:#0A1F16; --g-700:#153B2A; --g-600:#1B4332; /* 브랜드 베이스 */
+  --g-500:#20DF8E; /* 비비드 민트 — 긍정/여유 시맨틱, 보조 액션 */
+  --g-400:#5BEBA8; --g-100:#D8F5E8; --g-50:#EFFBF5;
+
+  /* ---- 네이비 계열 (H≈213°) ---- */
+  --n-900:#050E1B; --n-700:#0A203D; --n-600:#0B2545; /* 브랜드 베이스 */
+  --n-500:#2B82EE; /* 비비드 아주르 — 정보/보통 시맨틱 */
+  --n-400:#5FA3F5; --n-100:#E4EEFC; --n-50:#F2F7FE;
+  --n-mid:#173B72; /* 히어로 그라디언트 중간 정지값(#0B2545↔#2B82EE 보간, 새 색상각 아님) */
+
+  /* ---- 브라운 계열 (H≈19°) ---- */
+  --b-900:#241A15; --b-700:#4A3329; --b-600:#5C4033; /* 브랜드 베이스 */
+  --b-500:#EF7339; /* 비비드 코랄 — 메인 CTA/혼잡 시맨틱 */
+  --b-400:#FF9A6B; --b-dark:#A53E0D; /* 딥 비비드(배너 그라디언트용, 화이트 텍스트 안전) */
+  --b-100:#FBE3D5; --b-50:#FDF3EC;
+
+  --white:#FFFFFF;
+  --ink:#050E1B;          /* 본문/헤드라인 기본 잉크 = navy-900 */
+  --ink-muted:#3F5068;    /* 보조 텍스트, on white 8.2:1 */
+
+  --font-base:'Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',system-ui,sans-serif;
+
+  --text-xs:12px; --text-sm:14px; --text-base:16px; --text-lg:18px;
+  --text-xl:22px; --text-2xl:26px;
+  --text-3xl:clamp(28px,7vw,34px);
+  --text-4xl:clamp(36px,9.5vw,46px);
+  --text-5xl:clamp(40px,11vw,58px);
+
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+  --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px; --sp-16:64px; --sp-20:80px;
+
+  --r-sm:14px; --r-md:20px; --r-lg:28px; --r-xl:36px; --r-full:999px;
+  --shadow-card:0 4px 14px rgba(5,14,27,0.08);
+  --shadow-md:0 10px 28px rgba(5,14,27,0.16);
+  --shadow-lg:0 20px 48px rgba(5,14,27,0.24);
+  --touch-min:44px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font-base);
+  color:var(--ink);
+  background:var(--white);
+  font-size:var(--text-base);
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul{margin:0;}
+ul{list-style:none;padding:0;}
+button{font-family:inherit;cursor:pointer;}
+a{color:inherit;text-decoration:none;cursor:pointer;}
+img,svg{display:block;max-width:100%;}
+button, a, input, [tabindex]{-webkit-tap-highlight-color:transparent;}
+button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-visible{
+  outline:3px solid var(--n-500); outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+}
+
+/* ---- 시안 안내 배너(스타일 비교용 표시, 실제 제품 화면 아님) ---- */
+.variant-flag{
+  background:var(--n-900); color:var(--n-100);
+  font-size:var(--text-xs); font-weight:700; text-align:center;
+  padding:var(--sp-2) var(--sp-4); letter-spacing:0.01em;
+}
+.variant-flag b{color:var(--white);}
+
+.page{max-width:480px; margin:0 auto; background:var(--white); box-shadow:0 0 60px rgba(5,14,27,0.10); min-height:100vh;}
+@media (min-width:960px){ body{background:var(--n-50);} .page{margin:0 auto;} }
+
+/* =========================================================================
+   GNB
+   ========================================================================= */
+.gnb{
+  position:sticky; top:0; z-index:30;
+  background:rgba(255,255,255,0.94); backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--n-100);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--sp-4); height:60px;
+}
+.gnb__logo{display:flex; align-items:center; gap:6px; font-size:var(--text-lg); font-weight:900; letter-spacing:-0.02em; color:var(--ink);}
+.gnb__logo-badge{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50%; background:var(--g-500); color:var(--n-900);
+  font-size:13px; font-weight:900;
+}
+.gnb__menu{display:none; gap:var(--sp-6); align-items:center;}
+.gnb__menu a{font-size:var(--text-sm); font-weight:700; color:var(--ink-muted); min-height:var(--touch-min); display:flex; align-items:center; transition:color .18s;}
+.gnb__menu a:hover{color:var(--ink);}
+.gnb__actions{display:flex; align-items:center; gap:var(--sp-2);}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  min-height:var(--touch-min); padding:0 var(--sp-5);
+  border-radius:var(--r-full); font-size:var(--text-sm); font-weight:800;
+  border:none; transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  white-space:nowrap;
+}
+.btn:hover{transform:translateY(-1px); filter:brightness(1.04);}
+.btn:active{transform:translateY(0);}
+.btn--coral{background:var(--b-500); color:var(--n-900); box-shadow:0 6px 16px rgba(239,115,57,0.35);}
+.btn--mint{background:var(--g-500); color:var(--n-900); box-shadow:0 6px 16px rgba(32,223,142,0.32);}
+.btn--white{background:var(--white); color:var(--n-900); box-shadow:var(--shadow-card);}
+.btn--white-on-dark{background:var(--white); color:var(--b-900);}
+.btn--ghost-text{background:transparent; color:var(--ink-muted); padding:0 var(--sp-3);}
+.btn--ghost-text:hover{color:var(--ink);}
+.btn--block{width:100%;}
+.btn--lg{min-height:52px; padding:0 var(--sp-6); font-size:var(--text-base);}
+
+.gnb__burger{
+  display:flex; align-items:center; justify-content:center; flex-direction:column; gap:5px;
+  width:var(--touch-min); height:var(--touch-min); background:none; border:none;
+}
+.gnb__burger i{display:block; width:20px; height:2.5px; border-radius:2px; background:var(--n-900);}
+
+.mobile-nav{
+  position:fixed; inset:0; z-index:200; display:none; flex-direction:column; padding:var(--sp-4);
+  background:linear-gradient(165deg, var(--n-900) 0%, var(--n-600) 55%, var(--n-mid) 100%);
+  color:var(--white);
+}
+.mobile-nav.is-open{display:flex;}
+.mobile-nav__top{display:flex; justify-content:space-between; align-items:center;}
+.mobile-nav__close{width:var(--touch-min); height:var(--touch-min); background:none; border:none; color:var(--white); font-size:26px;}
+.mobile-nav__list{margin-top:var(--sp-8); display:flex; flex-direction:column;}
+.mobile-nav__list a{
+  min-height:60px; display:flex; align-items:center;
+  font-size:var(--text-2xl); font-weight:900; letter-spacing:-0.02em;
+  border-bottom:1px solid rgba(255,255,255,0.14);
+}
+.mobile-nav__cta{margin-top:var(--sp-8);}
+
+@media (min-width:1024px){
+  .page{max-width:none;}
+  .gnb{height:76px; padding:0 var(--sp-10); max-width:1120px; margin:0 auto;}
+  .gnb__menu{display:flex;}
+  .gnb__burger{display:none;}
+}
+
+/* =========================================================================
+   HERO
+   ========================================================================= */
+.hero{
+  position:relative; overflow:hidden;
+  background:linear-gradient(160deg, var(--n-900) 0%, var(--n-600) 42%, var(--n-mid) 70%, var(--n-500) 100%);
+  padding:var(--sp-8) var(--sp-4) 0;
+  border-radius:0 0 var(--r-xl) var(--r-xl);
+}
+.hero__eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:var(--text-xs); font-weight:800; letter-spacing:0.04em;
+  background:var(--b-500); color:var(--n-900);
+  padding:6px 14px; border-radius:var(--r-full);
+}
+.hero__title{
+  font-size:var(--text-5xl); font-weight:900; line-height:1.15; letter-spacing:-0.03em;
+  color:var(--white); margin-top:var(--sp-4);
+}
+.hero__title em{font-style:normal; color:var(--g-500);}
+.hero__sub{
+  margin-top:var(--sp-4); font-size:var(--text-base); color:var(--n-100);
+  max-width:420px; line-height:1.6;
+}
+.hero__art{position:relative; height:150px; margin-top:var(--sp-6);}
+.hero__art svg{position:absolute; bottom:0; left:0; width:100%; height:100%;}
+
+/* 검색 카드 — 히어로 하단 경계에 겹치도록 음수 마진으로 띄우는 "플로팅 카드" */
+.search-card{
+  position:relative; z-index:5;
+  margin:-46px var(--sp-4) 0; padding:var(--sp-5);
+  background:var(--white); border-radius:var(--r-lg);
+  box-shadow:var(--shadow-lg);
+}
+.search-card__label{font-size:var(--text-sm); font-weight:800; color:var(--ink); margin-bottom:var(--sp-2); display:block;}
+.dest-search__box{
+  display:flex; align-items:center; gap:var(--sp-2);
+  border:2px solid var(--n-100); border-radius:var(--r-full);
+  padding:0 var(--sp-2) 0 var(--sp-4); min-height:52px; transition:border-color .18s;
+}
+.dest-search__box:focus-within{border-color:var(--n-500);}
+.dest-search__icon{width:18px; height:18px; flex:0 0 auto; color:var(--n-500);}
+.dest-search__input{
+  flex:1; border:none; outline:none; background:transparent;
+  font-size:var(--text-base); font-weight:600; color:var(--ink); min-width:0;
+  padding:var(--sp-3) 0;
+}
+.dest-search__input::placeholder{color:#94A3B8; font-weight:500;}
+.dest-search__clear{
+  width:32px; height:32px; border-radius:50%; border:none; background:var(--n-50);
+  color:var(--ink-muted); font-size:16px; display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+}
+.dest-search__list{
+  margin-top:var(--sp-2); border-radius:var(--r-md); overflow:hidden;
+  box-shadow:var(--shadow-card); background:var(--white);
+}
+.dest-search__quick{margin-top:var(--sp-4);}
+.dest-search__quick-label{
+  display:block; font-size:var(--text-xs); font-weight:800; color:var(--ink-muted);
+  letter-spacing:0.03em; margin-bottom:var(--sp-2);
+}
+.chip-row{display:flex; flex-wrap:wrap; gap:var(--sp-2);}
+.chip{
+  min-height:40px; display:inline-flex; align-items:center;
+  padding:0 var(--sp-4); border-radius:var(--r-full);
+  border:none; font-size:var(--text-sm); font-weight:800; color:var(--n-900);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.chip:hover{transform:translateY(-1px);}
+.chip--mint{background:var(--g-500);}
+.chip--azure{background:var(--n-400); color:var(--white);}
+.chip--coral{background:var(--b-500);}
+.chip--sand{background:var(--b-100);}
+
+.search-card__cta{margin-top:var(--sp-5);}
+.dest-search__status{font-size:var(--text-xs); color:var(--ink-muted); margin-top:var(--sp-2);}
+
+/* =========================================================================
+   공통 섹션
+   ========================================================================= */
+.section{padding:var(--sp-10) var(--sp-4) var(--sp-8);}
+.section--mint{background:var(--g-50);}
+.eyebrow-pill{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:var(--text-xs); font-weight:800; letter-spacing:0.03em;
+  padding:5px 13px; border-radius:var(--r-full);
+}
+.eyebrow-pill--coral{background:var(--b-500); color:var(--n-900);}
+.eyebrow-pill--azure{background:var(--n-400); color:var(--white);}
+.section__title{
+  font-size:var(--text-2xl); font-weight:900; letter-spacing:-0.02em;
+  margin-top:var(--sp-3); margin-bottom:var(--sp-2); color:var(--ink);
+}
+.sample-tag{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:var(--text-xs); font-weight:800; color:var(--n-700); background:var(--n-100);
+  padding:3px 12px; border-radius:var(--r-full); margin-bottom:var(--sp-5);
+}
+@media (min-width:1024px){
+  .section{max-width:1120px; margin:0 auto; padding:var(--sp-16) var(--sp-10);}
+}
+
+/* =========================================================================
+   실시간 전광판 TOP5
+   ========================================================================= */
+.board{display:flex; gap:var(--sp-3); overflow-x:auto; padding-bottom:var(--sp-2); scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;}
+.board::-webkit-scrollbar{height:0;}
+.board-card{
+  position:relative; overflow:hidden; scroll-snap-align:start;
+  flex:0 0 156px; background:var(--white); border-radius:var(--r-md);
+  padding:var(--sp-4) var(--sp-3) var(--sp-3); box-shadow:var(--shadow-card);
+  display:flex; flex-direction:column; gap:var(--sp-3);
+}
+.board-card__ranknum{
+  position:absolute; top:-10px; right:-4px; font-size:52px; font-weight:900;
+  color:var(--n-50); z-index:0; line-height:1; letter-spacing:-0.03em; user-select:none;
+}
+.board-card__rank{position:relative; z-index:1; font-size:var(--text-xs); font-weight:800; color:var(--ink-muted); letter-spacing:0.03em;}
+.board-card__name{position:relative; z-index:1; font-size:var(--text-base); font-weight:900; color:var(--ink); letter-spacing:-0.01em;}
+
+.badge{
+  position:relative; z-index:1;
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:var(--text-xs); font-weight:800; padding:5px 11px; border-radius:var(--r-full);
+  color:var(--n-900); align-self:flex-start;
+}
+.badge__icon{width:9px; height:9px; flex:0 0 auto; background:currentColor;}
+.badge--hot{background:var(--b-500);}
+.badge--hot .badge__icon{border-radius:50%;}
+.badge--mid{background:var(--n-400); color:var(--white);}
+.badge--mid .badge__icon{clip-path:polygon(50% 0%,0% 100%,100% 100%); background:var(--white);}
+.badge--calm{background:var(--g-500);}
+.badge--calm .badge__icon{border-radius:3px;}
+
+/* =========================================================================
+   축제 배너
+   ========================================================================= */
+.festival-banner{
+  position:relative; overflow:hidden;
+  background:linear-gradient(135deg, var(--b-700) 0%, var(--b-dark) 100%);
+  color:var(--white); border-radius:var(--r-lg);
+  padding:var(--sp-6) var(--sp-5); display:flex; align-items:center; justify-content:space-between; gap:var(--sp-4);
+}
+.festival-banner__confetti{position:absolute; inset:0; z-index:0;}
+.festival-banner__body{position:relative; z-index:1;}
+.festival-banner__eyebrow{font-size:var(--text-xs); font-weight:800; color:var(--b-100); letter-spacing:0.04em; margin-bottom:6px;}
+.festival-banner__title{font-size:var(--text-xl); font-weight:900; letter-spacing:-0.01em;}
+.festival-banner__desc{font-size:var(--text-sm); color:var(--b-100); margin-top:6px; max-width:220px; line-height:1.5;}
+.festival-banner__cta{position:relative; z-index:1; flex:0 0 auto;}
+
+/* =========================================================================
+   Footer (최소)
+   ========================================================================= */
+.footer{padding:var(--sp-8) var(--sp-4) var(--sp-10); text-align:center;}
+.footer__logo{font-size:var(--text-lg); font-weight:900; color:var(--ink);}
+.footer__tag{margin-top:6px; font-size:var(--text-xs); color:var(--ink-muted); font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="variant-flag">시안 비교용 · <b>Variant B — 부티크 트래블</b> · 최종 채택안 아님</div>
+
+<div class="page">
+
+  <!-- ================= GNB ================= -->
+  <div class="gnb">
+    <div class="gnb__logo"><span>숨은</span><span class="gnb__logo-badge">길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--ghost-text" type="button">로그인</button>
+      <button class="btn btn--mint" type="button">시작하기</button>
+      <button class="gnb__burger" aria-label="메뉴 열기" onclick="document.getElementById('mnav').classList.add('is-open')"><i></i><i></i><i></i></button>
+    </div>
+  </div>
+
+  <div id="mnav" class="mobile-nav">
+    <div class="mobile-nav__top">
+      <div class="gnb__logo" style="color:#fff;"><span>숨은</span><span class="gnb__logo-badge">길</span></div>
+      <button class="mobile-nav__close" aria-label="메뉴 닫기" onclick="document.getElementById('mnav').classList.remove('is-open')">&times;</button>
+    </div>
+    <nav class="mobile-nav__list">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="mobile-nav__cta"><button class="btn btn--coral btn--block btn--lg" type="button">시작하기</button></div>
+  </div>
+
+  <!-- ================= HERO ================= -->
+  <main>
+  <section class="hero" aria-label="숨은길 홈">
+    <span class="hero__eyebrow">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l2.2 6.8H21l-5.6 4.1 2.2 6.9L12 15.8 6.4 19.8l2.2-6.9L3 8.8h6.8L12 2z" fill="currentColor"/></svg>
+      여행은 오늘부터, 두근두근
+    </span>
+    <h1 class="hero__title">사람 대신<br/><em>설렘</em>이 가득한,<br/>우리 가족만의 숨은 루트</h1>
+    <p class="hero__sub">서연님, 아이와 함께 걷기 좋은 한적한 골목을 AI가 찾았어요. 온보딩에서 알려주신 취향 그대로, 아무도 모르는 오늘의 코스를 만나보세요.</p>
+
+    <!-- 지형 실루엣 + 여정 모티프 (실사진 대체, 인라인 SVG) -->
+    <div class="hero__art" aria-hidden="true">
+      <svg viewBox="0 0 375 150" preserveAspectRatio="none">
+        <circle cx="300" cy="26" r="30" fill="#EF7339" opacity="0.9"/>
+        <circle cx="300" cy="26" r="42" fill="none" stroke="#FF9A6B" stroke-width="1.5" opacity="0.4"/>
+        <path d="M0 150 L0 96 L50 60 L95 90 L140 48 L190 92 L235 58 L280 96 L330 66 L375 100 L375 150 Z" fill="#0A203D" opacity="0.55"/>
+        <path d="M0 150 L0 118 L45 84 L90 112 L150 76 L205 118 L260 88 L320 122 L375 100 L375 150 Z" fill="#20DF8E"/>
+        <path d="M40 70 Q 90 30 150 46 T 260 34" stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-dasharray="1 10" stroke-linecap="round" opacity="0.85"/>
+        <path d="M255 30 l14 4 -10 10 -8 -2z" fill="#FFFFFF"/>
+        <circle cx="42" cy="70" r="5" fill="#FFFFFF"/>
+        <circle cx="42" cy="70" r="2" fill="#EF7339"/>
+        <g fill="#FFFFFF" opacity="0.9">
+          <path d="M330 18 l2.4 6.6 6.6 2.4 -6.6 2.4 -2.4 6.6 -2.4 -6.6 -6.6 -2.4 6.6 -2.4z"/>
+          <path d="M20 20 l1.6 4.4 4.4 1.6 -4.4 1.6 -1.6 4.4 -1.6 -4.4 -4.4 -1.6 4.4 -1.6z" opacity="0.7"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- 목적지 검색 (플로팅 카드) -->
+    <div class="search-card" id="destSearch">
+      <label class="search-card__label" for="destInput">어디로 떠나시나요?</label>
+      <div class="dest-search__box">
+        <svg class="dest-search__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2.2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <input type="text" id="destInput" class="dest-search__input"
+               placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)"
+               role="combobox" aria-expanded="false" aria-controls="destListbox" aria-autocomplete="list"
+               autocomplete="off" oninput="onDestInput(this.value)" />
+        <button type="button" class="dest-search__clear" id="destClearBtn" aria-label="목적지 검색어 지우기" onclick="clearDestination()" hidden>&times;</button>
+      </div>
+      <ul class="dest-search__list" id="destListbox" role="listbox" aria-label="목적지 추천 검색어" hidden></ul>
+
+      <div class="dest-search__quick">
+        <span class="dest-search__quick-label">지금 뜨는 여행지</span>
+        <div class="chip-row">
+          <button type="button" class="chip chip--mint" onclick="selectDestination('경주')">경주</button>
+          <button type="button" class="chip chip--azure" onclick="selectDestination('전주')">전주</button>
+          <button type="button" class="chip chip--coral" onclick="selectDestination('강릉')">강릉</button>
+          <button type="button" class="chip chip--sand" onclick="selectDestination('부산')">부산</button>
+        </div>
+      </div>
+
+      <div class="search-card__cta">
+        <button class="btn btn--coral btn--block btn--lg" type="button">설레는 코스 보러가기</button>
+      </div>
+      <div class="dest-search__status" id="destStatus" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ================= 실시간 전광판 TOP5 ================= -->
+  <section class="section section--mint">
+    <span class="eyebrow-pill eyebrow-pill--coral">실시간 혼잡 전광판</span>
+    <h2 class="section__title" id="boardHeading">지금 이 순간, 얼마나 붐빌까요?</h2>
+    <span class="sample-tag" id="boardCaption">예시 데이터입니다 · API 연동 전</span>
+
+    <div class="board" role="list" id="boardList">
+      <div class="board-card" role="listitem" data-region="경주">
+        <span class="board-card__ranknum" aria-hidden="true">01</span>
+        <span class="board-card__rank">TOP 1</span>
+        <div class="board-card__name">경주 불국사</div>
+        <span class="badge badge--hot"><span class="badge__icon"></span>혼잡 82%</span>
+      </div>
+      <div class="board-card" role="listitem" data-region="전주">
+        <span class="board-card__ranknum" aria-hidden="true">02</span>
+        <span class="board-card__rank">TOP 2</span>
+        <div class="board-card__name">전주 한옥마을</div>
+        <span class="badge badge--hot"><span class="badge__icon"></span>혼잡 76%</span>
+      </div>
+      <div class="board-card" role="listitem" data-region="강릉">
+        <span class="board-card__ranknum" aria-hidden="true">03</span>
+        <span class="board-card__rank">TOP 3</span>
+        <div class="board-card__name">강릉 안목해변</div>
+        <span class="badge badge--mid"><span class="badge__icon"></span>보통 54%</span>
+      </div>
+      <div class="board-card" role="listitem" data-region="부산">
+        <span class="board-card__ranknum" aria-hidden="true">04</span>
+        <span class="board-card__rank">TOP 4</span>
+        <div class="board-card__name">부산 해운대</div>
+        <span class="badge badge--mid"><span class="badge__icon"></span>보통 48%</span>
+      </div>
+      <div class="board-card" role="listitem" data-region="경주">
+        <span class="board-card__ranknum" aria-hidden="true">05</span>
+        <span class="board-card__rank">TOP 5</span>
+        <div class="board-card__name">경주 대릉원 돌담길</div>
+        <span class="badge badge--calm"><span class="badge__icon"></span>여유 22%</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 지역 축제 배너 ================= -->
+  <section class="section" style="padding-top:0;">
+    <span class="eyebrow-pill eyebrow-pill--azure">지금 이 지역 축제</span>
+    <div class="festival-banner" style="margin-top:var(--sp-3);">
+      <svg class="festival-banner__confetti" viewBox="0 0 300 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <circle cx="30" cy="20" r="4" fill="#20DF8E" opacity="0.55"/>
+        <circle cx="70" cy="110" r="6" fill="#2B82EE" opacity="0.4"/>
+        <circle cx="250" cy="24" r="5" fill="#20DF8E" opacity="0.5"/>
+        <circle cx="270" cy="90" r="3.5" fill="#FFFFFF" opacity="0.5"/>
+        <path d="M20 90 l2.2 6 6 2.2 -6 2.2 -2.2 6 -2.2 -6 -6 -2.2 6 -2.2z" fill="#FFFFFF" opacity="0.6"/>
+      </svg>
+      <div class="festival-banner__body">
+        <div class="festival-banner__eyebrow">FESTIVAL</div>
+        <div class="festival-banner__title">전주 한지문화축제</div>
+        <div class="festival-banner__desc">한옥마을 혼잡은 살짝 피해서, 골목 공방으로 이어지는 코스로 안내해요</div>
+      </div>
+      <button class="btn btn--white-on-dark festival-banner__cta" type="button">보기</button>
+    </div>
+  </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__logo">숨은길</div>
+    <div class="footer__tag">사람 대신, 설렘을 만나는 여행</div>
+  </footer>
+
+</div>
+
+<script>
+// 이 파일은 스타일 비교용 시안입니다. 실제 자동완성/검색 API 연동 없음 — 최소한의 데모 상호작용만 포함.
+function selectDestination(name){
+  var input = document.getElementById('destInput');
+  input.value = name;
+  document.getElementById('destClearBtn').hidden = false;
+  document.getElementById('destStatus').textContent = name + '(으)로 검색 준비됨';
+}
+function clearDestination(){
+  var input = document.getElementById('destInput');
+  input.value = '';
+  document.getElementById('destClearBtn').hidden = true;
+  document.getElementById('destStatus').textContent = '';
+}
+function onDestInput(v){
+  document.getElementById('destClearBtn').hidden = (v.length === 0);
+}
+</script>
+</body>
+</html>

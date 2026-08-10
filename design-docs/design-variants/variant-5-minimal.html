@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길 — 스타일 시안 5/5 · 미니멀 프리미엄</title>
+<style>
+/* =========================================================
+   0. 토큰 — 브랜드 3색만 사용(그린/네이비/브라운), 나머지는 오프화이트·잉크(중성 다크) 뿐
+   ========================================================= */
+:root{
+  --bg:#FAFAF7;
+  --surface:#FFFFFF;
+  --ink-900:#1A1A17;   /* 본문 최고 대비 텍스트 */
+  --ink-700:#3F3E38;   /* 보조 텍스트 — bg 대비 10.2:1 */
+  --hairline:rgba(26,26,23,0.14);
+  --hairline-strong:rgba(26,26,23,0.28);
+
+  --green:#1B4332;      /* bg 대비 10.6:1 */
+  --navy:#0B2545;       /* bg 대비 13:1+ */
+  --brown:#5C4033;      /* bg 대비 8.97:1 */
+
+  --font-serif:'Noto Serif KR','Nanum Myeongjo','Apple SD Gothic Neo',Georgia,'Times New Roman',serif;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif;
+
+  --touch-min:44px;
+  --pad:28px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--ink-900);
+  font-family:var(--font-sans);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul,ol{margin:0;}
+ul,ol{list-style:none;padding:0;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;background:none;border:none;color:inherit;}
+img,svg{display:block;max-width:100%;}
+a:focus-visible, button:focus-visible, input:focus-visible{
+  outline:2px solid var(--navy);
+  outline-offset:3px;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+}
+
+/* =========================================================
+   1. 시안 라벨 (비교용 — 실제 제품 UI 아님)
+   ========================================================= */
+.variant-tag{
+  position:sticky; top:0; z-index:50;
+  background:var(--navy); color:#F4F1EC;
+  font-family:var(--font-sans); font-size:11px; font-weight:600;
+  letter-spacing:0.12em; text-transform:uppercase;
+  padding:9px var(--pad);
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.variant-tag span{opacity:0.68; font-weight:400;}
+
+/* =========================================================
+   2. 헤더 — 로고 + 버거만. 장식 없음
+   ========================================================= */
+.nav{
+  padding:22px var(--pad) 0;
+}
+.nav__inner{
+  display:flex; align-items:center; justify-content:space-between;
+  padding-bottom:22px; border-bottom:1px solid var(--hairline);
+}
+.nav__logo{
+  font-family:var(--font-serif); font-size:19px; font-weight:600;
+  letter-spacing:0.02em; color:var(--ink-900);
+}
+.nav__toggle{
+  width:var(--touch-min); height:var(--touch-min);
+  display:flex; flex-direction:column; align-items:flex-end; justify-content:center; gap:6px;
+  cursor:pointer;
+}
+.nav__toggle span{display:block; height:1px; background:var(--ink-900);}
+.nav__toggle span:nth-child(1){width:22px;}
+.nav__toggle span:nth-child(2){width:16px;}
+
+.nav-overlay{
+  position:fixed; inset:0; z-index:200; background:var(--bg);
+  display:flex; flex-direction:column;
+  padding:22px var(--pad); opacity:0; visibility:hidden; transition:opacity 220ms ease;
+}
+.nav-overlay.is-open{opacity:1; visibility:visible;}
+.nav-overlay__close{
+  align-self:flex-end; min-height:var(--touch-min); padding:0 4px;
+  font-size:13px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-700);
+  cursor:pointer;
+}
+.nav-overlay__list{
+  margin-top:48px; display:flex; flex-direction:column;
+}
+.nav-overlay__list a{
+  min-height:64px; display:flex; align-items:center;
+  font-family:var(--font-serif); font-size:26px; font-weight:400;
+  border-top:1px solid var(--hairline);
+  transition:color 200ms ease;
+}
+.nav-overlay__list a:last-child{border-bottom:1px solid var(--hairline);}
+.nav-overlay__list a:hover, .nav-overlay__list a:focus-visible{color:var(--green);}
+.nav-overlay__cta{
+  margin-top:auto; padding-top:32px;
+  display:flex; align-items:center; gap:10px;
+  min-height:var(--touch-min);
+  font-size:14px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+  color:var(--navy);
+}
+
+/* =========================================================
+   3. 히어로 — 압도적 여백 + 오버사이즈 타이포 + 웨이트 대비
+   ========================================================= */
+.hero{
+  padding:64px var(--pad) 56px;
+}
+.hero__eyebrow{
+  font-size:12px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase;
+  color:var(--green);
+}
+.hero__title{
+  margin-top:22px;
+  font-family:var(--font-serif);
+  font-size:clamp(2.5rem, 12.5vw, 3.6rem);
+  font-weight:300;
+  line-height:1.16;
+  letter-spacing:-0.01em;
+  color:var(--ink-900);
+}
+.hero__title b{
+  font-weight:700; color:var(--ink-900);
+}
+.hero__sub{
+  margin-top:26px;
+  font-size:15px; color:var(--ink-700);
+  max-width:34ch; line-height:1.7;
+}
+
+/* 목적지 검색 — 언더라인형 미니멀 입력 */
+.search{margin-top:52px;}
+.search__label{
+  display:block; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--ink-700); margin-bottom:14px;
+}
+.search__row{
+  display:flex; align-items:center; gap:12px;
+  border-bottom:1px solid var(--hairline-strong);
+  padding-bottom:12px;
+  transition:border-color 200ms ease;
+}
+.search__row:focus-within{border-color:var(--navy);}
+.search__input{
+  flex:1; border:none; background:transparent; outline:none;
+  font-family:var(--font-sans); font-size:17px; color:var(--ink-900);
+  min-height:32px;
+}
+.search__input::placeholder{color:#8A887E;}
+.search__submit{
+  width:var(--touch-min); height:var(--touch-min);
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--hairline-strong); border-radius:50%;
+  font-size:15px; color:var(--navy); flex:0 0 auto; cursor:pointer;
+  transition:background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+.search__submit:hover{background:var(--navy); color:#fff; border-color:var(--navy);}
+.search__quick{
+  margin-top:16px; display:flex; flex-wrap:wrap; gap:10px;
+}
+.search__chip{
+  min-height:38px; padding:0 16px;
+  border:1px solid var(--hairline-strong); border-radius:2px;
+  font-size:13px; color:var(--ink-700); cursor:pointer;
+  transition:border-color 200ms ease, color 200ms ease, background 200ms ease;
+}
+.search__chip:hover, .search__chip:focus-visible{
+  border-color:var(--green); color:var(--green); background:rgba(27,67,50,0.05);
+}
+
+/* CTA — 채움 없는 아웃라인, 여백으로 무게감 */
+.hero__cta{
+  margin-top:52px;
+  display:inline-flex; align-items:center; gap:12px;
+  min-height:var(--touch-min);
+  padding:0 30px;
+  border:1px solid var(--ink-900);
+  font-size:13px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--ink-900); cursor:pointer;
+  transition:background 200ms ease, color 200ms ease;
+}
+.hero__cta:hover{background:var(--ink-900); color:var(--bg);}
+.hero__cta span{transition:transform 200ms ease;}
+.hero__cta:hover span{transform:translateX(3px);}
+
+/* =========================================================
+   4. 구분선
+   ========================================================= */
+.hairline{border:none; border-top:1px solid var(--hairline); margin:0 var(--pad);}
+
+/* =========================================================
+   5. 실시간 전광판 — 카드 대신 넘버드 리스트 + 하이라인
+   혼잡도는 색+텍스트 라벨을 함께 써서 색만으로 판단하지 않게 하고,
+   빨강/주황 대신 브랜드 3색(네이비=혼잡, 브라운=보통, 그린=여유)으로
+   서수적 의미를 부여한다 — 새 색을 늘리지 않고 톤만으로 위계를 만든다.
+   ========================================================= */
+.board{padding:56px var(--pad) 8px;}
+.board__eyebrow{
+  font-size:12px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--green);
+}
+.board__title{
+  margin-top:16px;
+  font-family:var(--font-serif); font-size:clamp(1.6rem,6vw,2.1rem); font-weight:300;
+  color:var(--ink-900); letter-spacing:-0.01em;
+}
+.board__note{
+  margin-top:8px; font-size:12px; color:#8A887E; letter-spacing:0.02em;
+}
+.board__list{margin-top:36px;}
+.board__row{
+  display:flex; align-items:baseline; gap:18px;
+  padding:22px 0;
+  border-top:1px solid var(--hairline);
+}
+.board__list li:last-child{border-bottom:1px solid var(--hairline);}
+.board__rank{
+  font-family:var(--font-serif); font-size:15px; font-weight:400; color:#8A887E;
+  width:26px; flex:0 0 auto;
+}
+.board__name{
+  flex:1; font-size:16px; font-weight:600; color:var(--ink-900);
+  min-width:0;
+}
+.board__level{
+  flex:0 0 auto; font-size:13px; font-weight:700; letter-spacing:0.02em;
+  display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+}
+.board__level::before{
+  content:""; width:7px; height:7px; border-radius:50%; background:currentColor; flex:0 0 auto;
+}
+.board__level--busy{color:var(--navy);}
+.board__level--mid{color:var(--brown);}
+.board__level--calm{color:var(--green);}
+
+/* =========================================================
+   6. 축제 배너 — 브라운 상단 하이라인 하나로만 강조
+   ========================================================= */
+.festival{
+  margin:56px var(--pad) 64px;
+  padding-top:20px;
+  border-top:2px solid var(--brown);
+}
+.festival__eyebrow{
+  font-size:12px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; color:var(--brown);
+}
+.festival__title{
+  margin-top:14px;
+  font-family:var(--font-serif); font-size:22px; font-weight:600; color:var(--ink-900);
+}
+.festival__desc{
+  margin-top:10px; font-size:14px; color:var(--ink-700); line-height:1.7; max-width:38ch;
+}
+.festival__link{
+  margin-top:18px; display:inline-flex; align-items:center; gap:8px;
+  min-height:var(--touch-min);
+  font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--brown);
+  cursor:pointer;
+}
+.festival__link span{transition:transform 200ms ease;}
+.festival__link:hover span{transform:translateX(3px);}
+
+/* =========================================================
+   7. 푸터
+   ========================================================= */
+.footer{
+  padding:32px var(--pad) 48px; border-top:1px solid var(--hairline);
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.footer__logo{font-family:var(--font-serif); font-size:14px; color:var(--ink-700);}
+.footer__meta{font-size:11px; color:#8A887E; letter-spacing:0.04em;}
+
+/* =========================================================
+   8. 데스크톱 — 여백을 더 넓히는 정도로만 대응 (레이아웃 근본 변화 없음)
+   ========================================================= */
+@media (min-width:768px){
+  :root{--pad:64px;}
+  .hero{padding-top:96px; padding-bottom:80px;}
+  .hero__sub{max-width:44ch;}
+  .board{padding-top:80px;}
+  .festival{margin-top:80px; margin-bottom:88px;}
+  main{max-width:760px; margin:0 auto;}
+  .nav{max-width:760px; margin:0 auto; width:100%;}
+  .nav-overlay__list a{font-size:32px;}
+}
+</style>
+</head>
+<body>
+
+<div class="variant-tag">
+  <span>숨은길 · 스타일 비교 시안 5/5</span>
+  미니멀 프리미엄
+</div>
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="nav__logo" href="#">숨은길</a>
+    <button class="nav__toggle" aria-label="메뉴 열기" aria-expanded="false" id="navToggle" onclick="toggleNav()">
+      <span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<div class="nav-overlay" id="navOverlay" role="dialog" aria-label="전체 메뉴">
+  <button class="nav-overlay__close" onclick="toggleNav()">닫기</button>
+  <nav class="nav-overlay__list">
+    <a href="#">여행지 추천</a>
+    <a href="#">AI 여행 경로</a>
+    <a href="#">저장한 코스</a>
+    <a href="#">여행 팁</a>
+  </nav>
+  <a class="nav-overlay__cta" href="#">시작하기 <span aria-hidden="true">→</span></a>
+</div>
+
+<main>
+
+<section class="hero">
+  <p class="hero__eyebrow">Sumeungil</p>
+  <h1 class="hero__title">사람 적은 곳으로,<br/>온 가족이 걷는<br/><b>숨은 길</b></h1>
+  <p class="hero__sub">서연님, 아이와 함께 걷기 좋은 한적한 숨은길이에요. 온보딩에서 알려주신 취향을 반영했어요.</p>
+
+  <div class="search">
+    <label class="search__label" for="destInput">어디로 떠나시나요</label>
+    <div class="search__row">
+      <input id="destInput" class="search__input" type="text" placeholder="지역·관광지 이름으로 검색 — 예: 경주, 전주" autocomplete="off" />
+      <button type="button" class="search__submit" aria-label="목적지 검색">→</button>
+    </div>
+    <div class="search__quick">
+      <button type="button" class="search__chip">경주</button>
+      <button type="button" class="search__chip">전주</button>
+      <button type="button" class="search__chip">강릉</button>
+      <button type="button" class="search__chip">부산</button>
+    </div>
+  </div>
+
+  <a class="hero__cta" href="#">맞춤 코스 보러가기 <span aria-hidden="true">→</span></a>
+</section>
+
+<hr class="hairline" />
+
+<section class="board">
+  <p class="board__eyebrow">실시간 전광판</p>
+  <h2 class="board__title">지금, 얼마나 붐빌까요</h2>
+  <p class="board__note">예시 데이터입니다 · API 연동 전</p>
+
+  <ol class="board__list">
+    <li class="board__row">
+      <span class="board__rank">01</span>
+      <span class="board__name">경주 불국사</span>
+      <span class="board__level board__level--busy">혼잡 · 82%</span>
+    </li>
+    <li class="board__row">
+      <span class="board__rank">02</span>
+      <span class="board__name">전주 한옥마을</span>
+      <span class="board__level board__level--busy">혼잡 · 76%</span>
+    </li>
+    <li class="board__row">
+      <span class="board__rank">03</span>
+      <span class="board__name">강릉 안목해변</span>
+      <span class="board__level board__level--mid">보통 · 54%</span>
+    </li>
+    <li class="board__row">
+      <span class="board__rank">04</span>
+      <span class="board__name">부산 해운대</span>
+      <span class="board__level board__level--mid">보통 · 48%</span>
+    </li>
+    <li class="board__row">
+      <span class="board__rank">05</span>
+      <span class="board__name">경주 대릉원 돌담길</span>
+      <span class="board__level board__level--calm">여유 · 22%</span>
+    </li>
+  </ol>
+</section>
+
+<section class="festival">
+  <p class="festival__eyebrow">지금 이 지역 축제</p>
+  <h3 class="festival__title">전주 한지문화축제</h3>
+  <p class="festival__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요.</p>
+  <a class="festival__link" href="#">자세히 보기 <span aria-hidden="true">→</span></a>
+</section>
+
+<footer class="footer">
+  <span class="footer__logo">숨은길</span>
+  <span class="footer__meta">SUMEUNGIL · DESIGN VARIANT 05</span>
+</footer>
+
+</main>
+
+<script>
+function toggleNav(){
+  var overlay = document.getElementById('navOverlay');
+  var toggle = document.getElementById('navToggle');
+  var isOpen = overlay.classList.toggle('is-open');
+  toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숨은길(Sumeungil) — 디자인 목업</title>
+<style>
+/* =========================================================
+   0. 디자인 토큰 (03-design-spec.md §1 그대로 적용)
+   ========================================================= */
+:root{
+  --color-green-50:#EFF7F3; --color-green-100:#D3E9DE; --color-green-200:#A8D0BC;
+  --color-green-300:#6FAB8B; --color-green-400:#3F8563; --color-green-500:#2C6349;
+  --color-green-600:#1B4332; --color-green-700:#153B2A; --color-green-800:#0F2E20; --color-green-900:#0A1F16;
+
+  --color-navy-50:#F0F4FA; --color-navy-100:#D6E0EE; --color-navy-200:#A6BAD6;
+  --color-navy-300:#6C88B0; --color-navy-400:#33578C; --color-navy-500:#1B3E6E;
+  --color-navy-600:#0B2545; --color-navy-700:#0A203D; --color-navy-800:#081A2E; --color-navy-900:#050E1B;
+
+  --color-brown-50:#F8F1EC; --color-brown-100:#EEDFD5; --color-brown-200:#DCC3B4;
+  --color-brown-300:#BC9A87; --color-brown-400:#997562; --color-brown-500:#7A5A48;
+  --color-brown-600:#5C4033; --color-brown-700:#4A3329; --color-brown-800:#3A2A21; --color-brown-900:#241A15;
+
+  --color-white:#FFFFFF; --color-surface:#FFFFFF; --color-surface-2:#F7F5F0; --color-border:#E2E0DA;
+  --color-text-900:#16201B; --color-text-700:#475569; --color-text-500:#64748B;
+
+  --color-success-600:#1E6B41; --color-success-100:#DCEFE2; --color-success-700:#164F30;
+  --color-warning-600:#8A5A00; --color-warning-100:#F5E6C8; --color-warning-700:#6B4600;
+  --color-danger-600:#B3261E;  --color-danger-100:#FBE2E0;  --color-danger-700:#8C1D17;
+
+  --color-focus-ring:#33578C;
+
+  --font-family-base:'Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  /* 2026-07-22 비주얼 톤 재작업(§12): 헤드라인 전용 세리프 — 시스템 설치 폰트만 사용(CDN 로드 없음),
+     본문 산세리프(Pretendard)와 대비시켜 "에디토리얼" 톤을 부여한다. 폴백까지 전부 OS 기본 탑재 서체. */
+  --font-family-display:'Noto Serif KR','Nanum Myeongjo','Apple SD Gothic Neo',Georgia,'Times New Roman',serif;
+
+  --text-xs:12px; --text-sm:14px; --text-base:16px; --text-lg:18px; --text-xl:20px;
+  --text-2xl:24px; --text-3xl:clamp(28px,5vw,32px); --text-4xl:clamp(32px,6vw,48px);
+
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px;
+  --space-6:24px; --space-8:32px; --space-10:40px; --space-12:48px; --space-16:64px; --space-20:80px;
+
+  --radius-sm:6px; --radius-md:12px; --radius-lg:20px; --radius-full:999px;
+  --shadow-sm:0 1px 2px rgba(11,37,69,0.06);
+  --shadow-md:0 4px 12px rgba(11,37,69,0.10);
+  --shadow-lg:0 12px 32px rgba(11,37,69,0.16);
+  --touch-min:44px;
+
+  /* 등고선(contour) 텍스처 — 지도/트레일 모티프. 인라인 SVG data URI(외부 요청 없음).
+     stroke-opacity를 0.06~0.08로 낮게 고정해 위에 얹히는 텍스트 대비비에 실질적 영향이 없도록 함
+     (근거는 03-design-spec.md §12.3 참고). 밝은 서페이스용/어두운 서페이스용 2종. */
+  --texture-contour-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%231B4332' stroke-opacity='0.07' stroke-width='1.4'%3E%3Cpath d='M-10 24 Q 35 4 70 24 T 150 24'/%3E%3Cpath d='M-10 54 Q 35 34 70 54 T 150 54'/%3E%3Cpath d='M-10 84 Q 35 64 70 84 T 150 84'/%3E%3Cpath d='M-10 114 Q 35 94 70 114 T 150 114'/%3E%3C/g%3E%3C/svg%3E");
+  --texture-contour-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='white' stroke-opacity='0.08' stroke-width='1.4'%3E%3Cpath d='M-10 24 Q 35 4 70 24 T 150 24'/%3E%3Cpath d='M-10 54 Q 35 34 70 54 T 150 54'/%3E%3Cpath d='M-10 84 Q 35 64 70 84 T 150 84'/%3E%3Cpath d='M-10 114 Q 35 94 70 114 T 150 114'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* =========================================================
+   1. 리셋 / 기본
+   ========================================================= */
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font-family-base);
+  color:var(--color-text-900);
+  background:var(--color-surface-2);
+  font-size:var(--text-base);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,ul{margin:0;}
+ul{list-style:none;padding:0;}
+button{font-family:inherit;cursor:pointer;}
+a{color:inherit;text-decoration:none;}
+img,svg{display:block;max-width:100%;}
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible{
+  outline:3px solid var(--color-focus-ring);
+  outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+}
+
+/* =========================================================
+   2. 프로토타입 뷰어(탭) — 제품 UI가 아니라 이 목업 파일을 탐색하기 위한 장치
+   ========================================================= */
+.viewer{
+  position:sticky; top:0; z-index:100;
+  background:var(--color-navy-900); color:var(--color-white);
+  padding:var(--space-3) var(--space-4);
+}
+.viewer__title{font-size:var(--text-sm); color:var(--color-navy-200); margin-bottom:var(--space-2);}
+.viewer__title b{color:var(--color-white);}
+.viewer__tabs{display:flex; gap:var(--space-2); overflow-x:auto; padding-bottom:var(--space-1);}
+.viewer__tabs::-webkit-scrollbar{height:4px;}
+.viewer__tab{
+  flex:0 0 auto;
+  min-height:var(--touch-min);
+  padding:var(--space-2) var(--space-4);
+  border:1px solid var(--color-navy-500);
+  background:transparent; color:var(--color-navy-100);
+  border-radius:var(--radius-full); font-size:var(--text-sm); font-weight:600;
+  white-space:nowrap; transition:background .2s,color .2s;
+}
+.viewer__tab.is-active{background:var(--color-white); color:var(--color-navy-800); border-color:var(--color-white);}
+.viewer__hint{font-size:var(--text-xs); color:var(--color-navy-300); margin-top:var(--space-2);}
+
+/* =========================================================
+   3. 화면 컨테이너
+   ========================================================= */
+.screen{display:none;}
+.screen.is-active{display:block;}
+.page{max-width:1200px; margin:0 auto;}
+
+/* =========================================================
+   4. GNB (제품 실제 컴포넌트)
+   ========================================================= */
+.gnb{
+  position:sticky; top:0; z-index:20;
+  background:var(--color-surface); border-bottom:1px solid var(--color-border);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--space-4); height:56px;
+}
+/* §12 — 브랜드 3색(그린·브라운·네이비)을 "트레일 마커" 띠로 상시 노출.
+   모든 화면 공통 GNB에 CSS만으로 적용 — HTML/구조 변경 없음, 위치·로직에 영향 없음.
+   .gnb는 이미 position:sticky이므로 absolute 자식의 포함 블록 역할을 한다. */
+.gnb::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, var(--color-green-600) 0%, var(--color-green-600) 33%, var(--color-brown-500) 33%, var(--color-brown-500) 66%, var(--color-navy-600) 66%);
+}
+.gnb__logo{font-family:var(--font-family-display); font-size:var(--text-lg); font-weight:800; color:var(--color-green-600); letter-spacing:-0.01em;}
+.gnb__logo span{color:var(--color-brown-600);}
+.gnb__menu{display:none; gap:var(--space-6); align-items:center;}
+.gnb__menu a{font-size:var(--text-sm); font-weight:600; color:var(--color-text-700); min-height:var(--touch-min); display:flex; align-items:center;}
+.gnb__menu a:hover{color:var(--color-green-600);}
+.gnb__actions{display:none; align-items:center; gap:var(--space-3);}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:var(--touch-min); padding:0 var(--space-5);
+  border-radius:var(--radius-sm); font-size:var(--text-sm); font-weight:700;
+  border:1px solid transparent; transition:filter .15s, background .15s;
+}
+.btn:hover{filter:brightness(0.94);}
+.btn--primary{background:var(--color-green-600); color:var(--color-white);}
+.btn--ghost{background:transparent; color:var(--color-green-600); border-color:var(--color-green-600);}
+.btn--text{background:transparent; color:var(--color-text-700); font-weight:600;}
+.btn--block{width:100%;}
+.btn--disabled{background:var(--color-border); color:var(--color-text-500); cursor:not-allowed;}
+
+.gnb__burger{
+  display:flex; align-items:center; justify-content:center;
+  width:var(--touch-min); height:var(--touch-min);
+  background:none; border:none;
+}
+.gnb__burger span, .gnb__burger::before, .gnb__burger::after{
+  content:""; display:block; width:22px; height:2px; background:var(--color-green-600);
+  position:relative;
+}
+.gnb__burger{flex-direction:column; gap:5px;}
+.gnb__burger i{display:block; width:22px; height:2px; background:var(--color-green-600); border-radius:2px;}
+
+.mobile-nav{
+  position:fixed; inset:0; z-index:200;
+  background:var(--color-green-600); color:var(--color-white);
+  display:none; flex-direction:column; padding:var(--space-4);
+}
+.mobile-nav.is-open{display:flex;}
+.mobile-nav__top{display:flex; justify-content:flex-end;}
+.mobile-nav__close{width:var(--touch-min); height:var(--touch-min); background:none; border:none; color:var(--color-white); font-size:24px;}
+.mobile-nav__list{margin-top:var(--space-6); display:flex; flex-direction:column;}
+.mobile-nav__list a{
+  min-height:56px; display:flex; align-items:center;
+  font-size:var(--text-xl); font-weight:700; border-bottom:1px solid rgba(255,255,255,0.15);
+}
+.mobile-nav__cta{margin-top:var(--space-8);}
+
+@media (min-width:1024px){
+  .gnb{height:72px; padding:0 var(--space-10);}
+  .gnb__menu{display:flex;}
+  .gnb__actions{display:flex;}
+  .gnb__burger{display:none;}
+}
+
+/* =========================================================
+   5. 공통 섹션/카드
+   ========================================================= */
+.section{padding:var(--space-8) var(--space-4);}
+/* §12 — eyebrow를 "옅은 텍스트"에서 브랜드 필 배지로 전환(노션류 텍스트 라벨과 차별화).
+   대비: 흰 텍스트 on green-600 = 11.08:1 (§2 실측표와 동일 스와치, 재계산 불필요) */
+.section__eyebrow{
+  display:inline-flex; align-items:center;
+  font-size:var(--text-xs); font-weight:800; color:var(--color-white); background:var(--color-green-600);
+  text-transform:uppercase; letter-spacing:0.04em; padding:4px 12px; border-radius:var(--radius-full);
+}
+.section__title{font-family:var(--font-family-display); font-size:var(--text-2xl); font-weight:700; margin-top:var(--space-3); margin-bottom:var(--space-1); letter-spacing:-0.01em;}
+.section__desc{font-size:var(--text-sm); color:var(--color-text-700); margin-bottom:var(--space-5);}
+.sample-tag{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:var(--text-xs); color:var(--color-warning-700); background:var(--color-warning-100);
+  padding:2px 10px; border-radius:var(--radius-full); font-weight:700; margin-bottom:var(--space-4);
+}
+@media (min-width:1024px){ .section{padding:var(--space-16) var(--space-10);} }
+
+/* =========================================================
+   6. 배지 (혼잡도) — 색+아이콘 모양+텍스트 3중 표기
+   ========================================================= */
+.badge{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:var(--text-sm); font-weight:600; padding:4px 12px; border-radius:var(--radius-full);
+  height:28px;
+}
+.badge__icon{width:10px; height:10px; flex:0 0 auto;}
+.badge--danger.badge--fill{background:var(--color-danger-600); color:var(--color-white);}
+.badge--warning.badge--fill{background:var(--color-warning-600); color:var(--color-white);}
+.badge--success.badge--fill{background:var(--color-success-600); color:var(--color-white);}
+.badge--danger.badge--soft{background:var(--color-danger-100); color:var(--color-danger-700);}
+.badge--warning.badge--soft{background:var(--color-warning-100); color:var(--color-warning-700);}
+.badge--success.badge--soft{background:var(--color-success-100); color:var(--color-success-700);}
+.badge--danger .badge__icon{background:currentColor; border-radius:50%;}
+.badge--warning .badge__icon{background:currentColor; clip-path:polygon(50% 0%,0% 100%,100% 100%);}
+.badge--success .badge__icon{background:currentColor; border-radius:3px;}
+.badge--muted{background:var(--color-border); color:var(--color-text-500);}
+
+/* =========================================================
+   7. 칩
+   ========================================================= */
+.chip-row{display:flex; flex-wrap:wrap; gap:var(--space-2);}
+.chip{
+  min-height:40px; display:inline-flex; align-items:center;
+  padding:0 var(--space-4); border-radius:var(--radius-full);
+  border:1.5px solid var(--color-green-600); background:var(--color-white);
+  color:var(--color-green-600); font-size:var(--text-sm); font-weight:600;
+  transition:background .15s,color .15s;
+}
+.chip.is-selected{background:var(--color-green-600); color:var(--color-white);}
+
+/* =========================================================
+   8. 카드
+   ========================================================= */
+.card{
+  background:var(--color-surface); border:1px solid var(--color-border);
+  /* §12 — "리프 컷(leaf-cut)" 비대칭 라운드: 상단은 크게, 하단은 작게.
+     6~20px 균질 라운드 규칙에서 의도적으로 벗어나 브랜드 서명 형태로 사용(콘텐츠 카드류에 한정). */
+  border-radius:24px 24px 10px 10px; overflow:hidden; transition:box-shadow .15s,border-color .15s;
+}
+.card:hover{box-shadow:var(--shadow-md); border-color:var(--color-green-300);}
+
+.thumb{
+  aspect-ratio:16/9; width:100%;
+  background-image:var(--texture-contour-light), linear-gradient(135deg, var(--color-green-100), var(--color-brown-100));
+  background-repeat:repeat, no-repeat;
+  background-size:120px 120px, cover;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  color:var(--color-green-600); font-size:var(--text-xs); font-weight:700; padding:var(--space-3);
+}
+.thumb__motif{width:76px; height:52px;}
+.thumb__cap{font-size:11px; font-weight:600; color:var(--color-text-700); text-align:center;}
+
+/* 로컬 상권 카드 */
+.spot-card{display:flex; flex-direction:column;}
+.spot-card__body{padding:var(--space-4); display:flex; flex-direction:column; gap:var(--space-2);}
+.spot-card__cat{
+  align-self:flex-start; font-size:var(--text-xs); font-weight:700;
+  background:var(--color-brown-100); color:var(--color-brown-700);
+  padding:2px 10px; border-radius:var(--radius-full);
+}
+.spot-card__name{font-size:var(--text-lg); font-weight:800;}
+.spot-card__desc{font-size:var(--text-sm); color:var(--color-text-700);}
+.spot-card__meta{display:flex; align-items:center; justify-content:space-between; margin-top:var(--space-2); font-size:var(--text-xs); color:var(--color-text-500);}
+
+/* 전광판 카드 (가로 스크롤) */
+.board{display:flex; gap:var(--space-3); overflow-x:auto; padding-bottom:var(--space-2);}
+.board-card{
+  flex:0 0 148px; background:var(--color-surface); border:1px solid var(--color-border);
+  border-radius:18px 18px 8px 8px; padding:var(--space-3); display:flex; flex-direction:column; gap:var(--space-2);
+}
+.board-card__rank{font-size:var(--text-xs); font-weight:800; color:var(--color-text-500);}
+.board-card__name{font-size:var(--text-base); font-weight:800;}
+
+/* =========================================================
+   9. 그리드 유틸
+   ========================================================= */
+.grid-1{display:grid; grid-template-columns:1fr; gap:var(--space-4);}
+@media (min-width:640px){ .grid-2-sm{grid-template-columns:repeat(2,1fr);} }
+@media (min-width:1024px){
+  .grid-3-lg{grid-template-columns:repeat(3,1fr);}
+  .grid-4-lg{grid-template-columns:repeat(4,1fr);}
+}
+
+/* =========================================================
+   10. 온보딩
+   ========================================================= */
+.onboard-wrap{
+  max-width:520px; margin:0 auto; padding:var(--space-8) var(--space-4) var(--space-16);
+}
+.onboard-progress{font-size:var(--text-xs); color:var(--color-text-500); font-weight:700; margin-bottom:var(--space-2);}
+textarea.field{
+  width:100%; min-height:110px; border:1.5px solid var(--color-border); border-radius:var(--radius-md);
+  padding:var(--space-3); font-size:var(--text-base); font-family:inherit; color:var(--color-text-900);
+  resize:vertical;
+}
+textarea.field:focus{border-color:var(--color-green-600); outline:none;}
+.onboard-label{font-size:var(--text-sm); font-weight:700; color:var(--color-text-700); margin:var(--space-6) 0 var(--space-3);}
+.guest-link{display:block; text-align:center; margin-top:var(--space-4); font-size:var(--text-sm); font-weight:700; color:var(--color-text-700); min-height:var(--touch-min); display:flex; align-items:center; justify-content:center;}
+.guest-banner{
+  display:none; background:var(--color-warning-100); color:var(--color-warning-700);
+  font-size:var(--text-xs); font-weight:700; padding:var(--space-2) var(--space-4); text-align:center;
+}
+.guest-banner.is-visible{display:block;}
+/* §12 — 기존 목업은 .onboard-hero에 인라인 style="display:none"이 걸려 있어
+   데스크톱(1024px+)에서도 항상 숨겨져 있었다(미디어쿼리보다 인라인 스타일이 항상 우선하기 때문).
+   좌측 브랜드 비주얼 패널은 원래 스펙 §4 0️⃣ 의도(desktop split-view)였으므로 표시 버그를 고치고
+   내용을 보강했다 — 화면/기능 추가가 아니라 이미 설계돼 있던 영역을 실제로 노출한 것. */
+.onboard-hero{display:none;}
+@media (min-width:1024px){
+  .onboard-hero{
+    background-image:var(--texture-contour-dark), linear-gradient(160deg, var(--color-green-700), var(--color-green-600));
+    background-repeat:repeat, no-repeat; background-size:140px 140px, cover;
+    color:var(--color-white);
+    padding:var(--space-16); display:flex; flex-direction:column; justify-content:center; gap:var(--space-5);
+  }
+  .onboard-hero__word{font-family:var(--font-family-display); font-size:14px; font-weight:700; letter-spacing:.14em;}
+  .onboard-hero__headline{font-family:var(--font-family-display); font-size:32px; font-weight:700; line-height:1.35;}
+  .onboard-hero__sub{font-size:14px; color:var(--color-green-100); max-width:340px;}
+  .onboard-split{display:grid; grid-template-columns:1fr 1fr; min-height:560px;}
+}
+
+/* =========================================================
+   11. 홈 히어로
+   ========================================================= */
+.hero{
+  background-image:var(--texture-contour-dark), linear-gradient(160deg, var(--color-green-700), var(--color-green-600));
+  background-repeat:repeat, no-repeat;
+  background-size:140px 140px, cover;
+  color:var(--color-white); padding:var(--space-10) var(--space-4);
+}
+.hero__title{font-family:var(--font-family-display); font-size:var(--text-4xl); font-weight:700; line-height:1.3; letter-spacing:-0.01em;}
+.hero__sub{margin-top:var(--space-3); font-size:var(--text-base); color:var(--color-green-100); max-width:520px;}
+.hero__cta{margin-top:var(--space-6);}
+@media (min-width:1024px){
+  .hero{padding:var(--space-20) var(--space-10); display:flex; align-items:center; gap:var(--space-16);}
+  .hero__col{flex:1;}
+  .hero__art{flex:1; display:flex; justify-content:center;}
+}
+
+.festival-banner{
+  background-image:var(--texture-contour-dark), linear-gradient(135deg, var(--color-brown-500), var(--color-brown-600));
+  background-repeat:repeat, no-repeat; background-size:140px 140px, cover;
+  color:var(--color-white); border-radius:28px 28px 10px 10px;
+  padding:var(--space-5); display:flex; align-items:center; justify-content:space-between; gap:var(--space-4);
+}
+.festival-banner__title{font-family:var(--font-family-display); font-weight:700; font-size:var(--text-lg);}
+.festival-banner__desc{font-size:var(--text-sm); color:var(--color-brown-100); margin-top:4px;}
+
+/* =========================================================
+   12. AI 경로 비교 — 핵심 화면
+   ========================================================= */
+.compare-head{padding:var(--space-6) var(--space-4) 0;}
+.compare-title{font-family:var(--font-family-display); font-size:var(--text-2xl); font-weight:700;}
+.compare-sub{font-size:var(--text-sm); color:var(--color-text-700); margin-top:4px;}
+
+.score-card{
+  position:relative; overflow:visible;
+  margin:var(--space-8) var(--space-4) var(--space-5); background-color:var(--color-surface);
+  background-image:var(--texture-contour-light); background-repeat:repeat; background-size:150px 150px;
+  border:1.5px solid var(--color-border); border-radius:28px 28px 10px 10px; box-shadow:var(--shadow-sm);
+  padding:var(--space-5);
+}
+/* §12 — "숨은길 발견" 스탬프. 데이터 필드(verdict.congestion_delta_pct 등)와 무관한 순수 장식 요소,
+   score-col 내부 텍스트/값은 그대로 두고 카드 바깥쪽 모서리에 절대배치만 추가. */
+.score-card__seal{
+  position:absolute; top:-16px; right:18px; width:60px; height:60px; border-radius:50%;
+  border:2px dashed var(--color-brown-500); background:var(--color-surface-2);
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  transform:rotate(-9deg); box-shadow:var(--shadow-sm);
+  font-family:var(--font-family-display); font-weight:700; font-size:10.5px; line-height:1.25;
+  color:var(--color-brown-700);
+}
+.score-card__row{display:flex; align-items:stretch; gap:var(--space-4);}
+.score-col{flex:1; text-align:center; padding:var(--space-3); border-radius:var(--radius-md);}
+.score-col--hot{background:var(--color-danger-100);}
+.score-col--hidden{background:var(--color-success-100);}
+.score-col__label{font-size:var(--text-xs); font-weight:700; color:var(--color-text-700);}
+.score-col__value{font-family:var(--font-family-display); font-size:var(--text-3xl); font-weight:700; margin-top:4px;}
+.score-col--hot .score-col__value{color:var(--color-danger-700);}
+.score-col--hidden .score-col__value{color:var(--color-success-700);}
+.score-col__state{font-size:var(--text-sm); font-weight:700; margin-top:2px;}
+.score-delta{text-align:center; margin-top:var(--space-3); font-size:var(--text-sm); font-weight:800; color:var(--color-green-700);}
+
+.compare-list{padding:0 var(--space-4) var(--space-8); display:flex; flex-direction:column; gap:var(--space-3);}
+.compare-row{
+  background:var(--color-surface); border:1px solid var(--color-border);
+  border-radius:var(--radius-md); padding:var(--space-4);
+}
+.compare-row__title{font-size:var(--text-sm); font-weight:700; color:var(--color-text-700); margin-bottom:var(--space-3);}
+.compare-row__item{display:flex; align-items:flex-start; gap:8px; padding:6px 0;}
+.compare-row__dot{width:8px; height:8px; border-radius:50%; margin-top:7px; flex:0 0 auto;}
+.compare-row__dot--hot{background:var(--color-navy-500);}
+.compare-row__dot--hidden{background:var(--color-green-500);}
+.compare-row__label{font-size:var(--text-xs); font-weight:700; color:var(--color-text-500); width:52px; flex:0 0 auto;}
+.compare-row__text{font-size:var(--text-sm); color:var(--color-text-900);}
+.compare-row__pending{font-size:var(--text-xs); color:var(--color-text-500); font-style:italic; margin-top:4px;}
+
+.bar-graph{display:flex; height:8px; border-radius:var(--radius-full); overflow:hidden; margin-top:var(--space-3); background:var(--color-border);}
+.bar-graph__hot{background:var(--color-danger-600); height:100%;}
+.bar-graph__hidden{background:var(--color-success-600); height:100%;}
+.bar-graph__nums{display:flex; justify-content:space-between; font-size:var(--text-xs); color:var(--color-text-500); margin-top:4px;}
+
+.map-cta{padding:0 var(--space-4) var(--space-4);}
+
+/* --- 데스크톱: 원래 의도대로 2컬럼 사이드바이사이드 테이블로 전환 --- */
+.compare-table{display:none;}
+@media (min-width:1024px){
+  .compare-list, .score-card{display:none;} /* 모바일 행 기반 UI 숨김 */
+  .compare-table{
+    display:block; margin:var(--space-8) var(--space-10); border:1px solid var(--color-border);
+    border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-sm);
+  }
+  .compare-table table{width:100%; border-collapse:collapse;}
+  .compare-table th, .compare-table td{padding:var(--space-4) var(--space-5); text-align:left; vertical-align:top; border-bottom:1px solid var(--color-border);}
+  .compare-table thead th{background:var(--color-surface-2); font-size:var(--text-sm); color:var(--color-text-700);}
+  .compare-table thead th:first-child{width:160px;}
+  .compare-table thead th.col-hot{color:var(--color-navy-700);}
+  .compare-table thead th.col-hidden{color:var(--color-green-700);}
+  .compare-table tbody tr:hover td{background:var(--color-green-50);}
+  .compare-table td.row-label{font-weight:700; font-size:var(--text-sm); color:var(--color-text-700); background:var(--color-surface-2);}
+}
+
+/* =========================================================
+   13. 지도 SVG 플레이스홀더
+   ========================================================= */
+.map-wrap{margin:0 var(--space-4) var(--space-10); border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--color-border);}
+.map-legend{display:flex; gap:var(--space-5); padding:var(--space-3) var(--space-4); background:var(--color-surface); font-size:var(--text-xs); color:var(--color-text-700); flex-wrap:wrap;}
+.map-legend__item{display:flex; align-items:center; gap:6px;}
+.map-legend__dot{width:10px; height:10px; border-radius:50%;}
+.map-popup{
+  position:absolute; background:var(--color-white); border-radius:var(--radius-md); box-shadow:var(--shadow-lg);
+  padding:var(--space-3); max-width:220px; font-size:var(--text-xs);
+}
+@media (min-width:1024px){ .map-wrap{margin:var(--space-8) var(--space-10);} }
+
+/* =========================================================
+   14. 저장한 코스 / 여행 팁
+   ========================================================= */
+.saved-card{padding:var(--space-4); display:flex; flex-direction:column; gap:var(--space-2);}
+.saved-card__meta{display:flex; justify-content:space-between; align-items:center; font-size:var(--text-xs); color:var(--color-text-500);}
+.review-question{margin-top:var(--space-3); font-size:var(--text-sm); font-weight:700;}
+.review-btns{display:flex; gap:var(--space-2); margin-top:var(--space-2);}
+.review-btns .btn{flex:1;}
+
+.tab-switch{display:flex; gap:var(--space-2); margin:var(--space-5) 0;}
+.tab-switch button{
+  flex:1; min-height:44px; border-radius:var(--radius-sm); border:1.5px solid var(--color-green-600);
+  background:var(--color-white); color:var(--color-green-600); font-weight:700; font-size:var(--text-sm);
+}
+.tab-switch button.is-active{background:var(--color-green-600); color:var(--color-white);}
+
+.audio-row{
+  display:flex; align-items:center; gap:var(--space-3); padding:var(--space-3);
+  border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface);
+  transition:background .15s, border-color .15s;
+}
+/* M9 — 오디오 가이드 실 플레이어 UI (재생/일시정지 토글 + 진행바), 재생 중인 행 강조 */
+.audio-row.is-playing{background:var(--color-green-50); border-color:var(--color-green-300);}
+.audio-play{
+  width:var(--touch-min); height:var(--touch-min); border-radius:50%;
+  background:var(--color-green-600); color:var(--color-white); font-size:14px;
+  display:flex; align-items:center; justify-content:center; flex:0 0 auto; border:none; cursor:pointer;
+}
+.audio-play:hover{filter:brightness(0.94);}
+.audio-body{flex:1; min-width:0;}
+.audio-title{font-weight:700; font-size:var(--text-sm);}
+.audio-progress{height:6px; border-radius:var(--radius-full); background:var(--color-border); margin:6px 0 4px; overflow:hidden;}
+.audio-progress__fill{height:100%; width:0%; background:var(--color-green-600); transition:width .9s linear;}
+@media (prefers-reduced-motion: reduce){ .audio-progress__fill{transition:none;} }
+.audio-time{font-size:var(--text-xs); color:var(--color-text-500);}
+
+.tip-list{display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-4);}
+.tip-item{display:flex; gap:var(--space-3); align-items:flex-start; padding:var(--space-3); background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md);}
+.tip-item__icon{width:32px; height:32px; border-radius:50%; background:var(--color-green-100); color:var(--color-green-700); display:flex; align-items:center; justify-content:center; font-weight:800; flex:0 0 auto;}
+
+/* =========================================================
+   15. 빈 상태 / 에러 상태 데모
+   ========================================================= */
+.state-box{
+  border:1px dashed var(--color-border); border-radius:var(--radius-md); padding:var(--space-6);
+  text-align:center; color:var(--color-text-700); font-size:var(--text-sm); background:var(--color-surface);
+}
+.state-box b{display:block; font-size:var(--text-base); color:var(--color-text-900); margin-bottom:6px;}
+.footer-note{padding:var(--space-8) var(--space-4); text-align:center; color:var(--color-text-500); font-size:var(--text-xs);}
+.footer-legal{display:block; margin-top:var(--space-2);}
+
+/* =========================================================
+   16. 재작업 추가 컴포넌트 (08-interface-contract.md D2/D4/J7/J8 반영)
+   ========================================================= */
+
+/* 동의 카드 (온보딩 — 개인정보/국외이전, 법률 J8-a/b) */
+.consent-card{
+  background:var(--color-surface); border:1.5px solid var(--color-border);
+  border-radius:var(--radius-md); padding:var(--space-4); margin-top:var(--space-5);
+}
+.consent-card b{display:block; font-size:var(--text-sm); font-weight:800; margin-bottom:4px;}
+.consent-card p{font-size:var(--text-xs); color:var(--color-text-700); line-height:1.5; margin:0;}
+.legal-draft-tag{display:inline-block; margin-top:6px; font-size:11px; font-weight:700; color:var(--color-text-500);}
+.consent-check{display:flex; align-items:flex-start; gap:10px; cursor:pointer;}
+.consent-check input{width:20px; height:20px; margin-top:2px; accent-color:var(--color-green-600); flex:0 0 auto;}
+.consent-card--transfer{border-color:var(--color-warning-600); background:var(--color-warning-100);}
+.consent-card--transfer b{color:var(--color-warning-700);}
+.consent-card--transfer p{color:var(--color-warning-700);}
+.consent-card--transfer.is-agreed{border-color:var(--color-green-600); background:var(--color-green-50);}
+.consent-card--transfer.is-agreed b, .consent-card--transfer.is-agreed p{color:var(--color-green-700);}
+.consent-actions{display:flex; flex-wrap:wrap; gap:var(--space-2); margin-top:var(--space-3);}
+.consent-actions .btn{min-height:40px; font-size:13px; padding:0 var(--space-3);}
+.transfer-status{font-size:11px; font-weight:700; color:var(--color-warning-700); margin-top:var(--space-2);}
+.consent-card--transfer.is-agreed .transfer-status{color:var(--color-green-700);}
+textarea.field:disabled{background:var(--color-surface-2); color:var(--color-text-500); cursor:not-allowed;}
+
+/* 로드밸런싱 분산 안내 배너 (J7) */
+.lb-banner{
+  margin:var(--space-5) var(--space-4) 0; background:var(--color-navy-50);
+  border:1.5px solid var(--color-navy-200); border-radius:var(--radius-md);
+  padding:var(--space-4); display:flex; gap:var(--space-3); align-items:flex-start;
+}
+.lb-banner__icon{
+  width:32px; height:32px; border-radius:50%; background:var(--color-navy-600); color:var(--color-white);
+  display:flex; align-items:center; justify-content:center; font-weight:800; flex:0 0 auto; font-size:16px;
+}
+.lb-banner__title{font-size:var(--text-sm); font-weight:800; color:var(--color-navy-700);}
+.lb-banner__text{font-size:var(--text-sm); color:var(--color-text-900); margin-top:2px;}
+.lb-banner__meta{font-size:11px; color:var(--color-text-500); margin-top:6px; font-weight:700;}
+@media (min-width:1024px){ .lb-banner{margin:var(--space-8) var(--space-10) 0;} }
+
+/* 데이터 정확도(tier) 배지 + 신선도 고지 */
+.tier-badge{
+  display:inline-flex; align-items:center; font-size:11px; font-weight:700;
+  padding:1px 8px; border-radius:var(--radius-full); border:1px solid var(--color-border);
+  color:var(--color-text-700); margin-left:6px;
+}
+.tier-badge--a{border-color:var(--color-success-600); color:var(--color-success-700);}
+.tier-badge--b{border-color:var(--color-warning-600); color:var(--color-warning-700);}
+.tier-badge--c{border-color:var(--color-danger-600); color:var(--color-danger-700);}
+.tier-badge--none{border-color:var(--color-text-500); color:var(--color-text-500);}
+
+.freshness-note{
+  margin:var(--space-4) var(--space-4) 0; background:var(--color-surface-2);
+  border:1px dashed var(--color-border); border-radius:var(--radius-md);
+  padding:var(--space-3) var(--space-4); font-size:12px; color:var(--color-text-700);
+}
+.freshness-note b{font-size:12px; margin-right:6px;}
+.freshness-note__notice{display:block; margin-top:4px; color:var(--color-text-500);}
+@media (min-width:1024px){ .freshness-note{margin:var(--space-4) var(--space-10) 0;} }
+
+/* 방문 신뢰도 지표 밖 — 인증 리뷰 준비중 안내 (D4: 비교표 지표 행 밖으로 이동) */
+.pending-feature-note{
+  margin:0 var(--space-4) var(--space-6); padding:var(--space-3) var(--space-4);
+  border:1px dashed var(--color-border); border-radius:var(--radius-md);
+  display:flex; align-items:center; gap:var(--space-3); background:var(--color-surface); flex-wrap:wrap;
+}
+@media (min-width:1024px){ .pending-feature-note{margin:0 var(--space-10) var(--space-8);} }
+
+/* 지도 SDK 저작권 표시 (법률 J8-d) */
+.map-sdk-credit{
+  padding:var(--space-2) var(--space-4); text-align:right; font-size:11px; color:var(--color-text-500);
+  border-top:1px solid var(--color-border); min-height:28px; display:flex; align-items:center; justify-content:flex-end;
+}
+
+/* 무장애(barrier_free) tri-state 배지 — null(미확인)은 회색, false(없음)와 구분 */
+.a11y-badge{font-size:11px; font-weight:700; padding:2px 8px; border-radius:var(--radius-full);}
+.a11y-badge--yes{background:var(--color-success-100); color:var(--color-success-700);}
+.a11y-badge--no{background:var(--color-surface-2); color:var(--color-text-700); border:1px solid var(--color-border);}
+.a11y-badge--unknown{background:var(--color-border); color:var(--color-text-500);}
+
+/* 게스트 저장 로그인 유도 모달 (G9) */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(11,37,69,0.5); z-index:300;
+  display:none; align-items:center; justify-content:center; padding:var(--space-4);
+}
+.modal-overlay.is-open{display:flex;}
+.modal-box{
+  background:var(--color-white); border-radius:26px 26px 10px 10px; padding:var(--space-6);
+  max-width:360px; width:100%; box-shadow:var(--shadow-lg);
+}
+.modal-box h3{font-family:var(--font-family-display); font-size:var(--text-lg); font-weight:700;}
+.modal-box p{font-size:var(--text-sm); color:var(--color-text-700); margin-top:var(--space-2); line-height:1.5;}
+.modal-box__actions{display:flex; flex-direction:column; gap:var(--space-2); margin-top:var(--space-5);}
+.guest-context-banner{
+  margin:var(--space-4) 0; padding:var(--space-3) var(--space-4);
+  background:var(--color-warning-100); color:var(--color-warning-700); border-radius:var(--radius-md);
+  font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:var(--space-3); flex-wrap:wrap;
+}
+
+/* =========================================================
+   17. M8 — 방문 인증 캡처 플로우 (2026-07-23 스코프 개정, ex-N1)
+   PRD R10: 쿠폰/금전 유인과 절대 엮지 않는다. 배지(비금전) 표시만.
+   ========================================================= */
+.visit-status{margin-top:2px;}
+/* 인증 완료 배지 — 혼잡도 danger/warning/success 배지 체계와 겹치지 않도록 브랜드 그린 파생 톤만 사용 (경품성 색 연상 방지) */
+.visit-badge{
+  display:inline-flex; align-items:center; gap:6px; padding:4px 12px;
+  border-radius:var(--radius-full); background:var(--color-green-100); color:var(--color-green-700);
+  font-size:12px; font-weight:800;
+}
+.visit-badge__icon{
+  width:16px; height:16px; border-radius:50%; background:var(--color-green-600); color:var(--color-white);
+  display:flex; align-items:center; justify-content:center; font-size:10px; flex:0 0 auto;
+}
+.visit-badge--lg{font-size:16px; padding:10px 20px; gap:10px;}
+.visit-badge--lg .visit-badge__icon{width:28px; height:28px; font-size:16px;}
+
+.verify-modal{max-width:420px; max-height:88vh; overflow-y:auto; text-align:left;}
+.verify-intro{
+  font-size:13px; color:var(--color-text-700); background:var(--color-surface-2);
+  border-radius:var(--radius-md); padding:var(--space-3); line-height:1.5; margin-top:var(--space-3);
+}
+.verify-intro b{display:block; font-size:13px; margin-bottom:2px; color:var(--color-text-900);}
+.verify-step{margin-top:var(--space-4); padding-top:var(--space-4); border-top:1px dashed var(--color-border);}
+.verify-step__title{font-size:13px; font-weight:800; margin-bottom:2px;}
+.verify-step__desc{font-size:12px; color:var(--color-text-700); margin-bottom:var(--space-2); line-height:1.5;}
+.verify-status-text{font-size:12px; color:var(--color-text-500); margin-top:6px;}
+/* 파일 입력은 접근성 유지한 채 시각적으로만 숨기고, label(button 스타일)을 실제 컨트롤로 노출 */
+.verify-photo-input{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;}
+.verify-photo-label{display:inline-flex; cursor:pointer;}
+.verify-photo-label[aria-disabled="true"]{opacity:.5; cursor:not-allowed;}
+.verify-result{text-align:center;}
+
+/* =========================================================
+   18. M10 — Tmap Route API 연동 버튼 (2026-07-23 스코프 개정, ex-N4)
+   ========================================================= */
+.btn--tmap{
+  background:var(--color-navy-600); color:var(--color-white);
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+}
+.tmap-mark{
+  display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px;
+  border-radius:4px; background:var(--color-white); color:var(--color-navy-600);
+  font-size:11px; font-weight:900; flex:0 0 auto;
+}
+
+/* =========================================================
+   19. M14 — 날씨 연동 경로 보정 (2026-07-23 스코프 개정, 신규 채택)
+   AI 5축 스코어링은 그대로 두고, 강수확률이 높을 때 실내 대안을 우선 노출하는
+   재정렬(rerank) 레이어의 표시 UI만 담당한다 (§3.9, M6 로드밸런싱과 동일한 방식).
+   ========================================================= */
+/* 날씨 배지 — 혼잡도 배지(.badge) 쉘 재사용, 아이콘 모양만 물방울로 분리(§2.2 원칙) */
+.badge--weather .badge__icon{
+  background:currentColor; border-radius:2px;
+  clip-path:polygon(50% 0%, 88% 58%, 72% 100%, 28% 100%, 12% 58%);
+}
+.weather-note{margin:6px var(--space-4) 0; font-size:11px; color:var(--color-text-500);}
+@media (min-width:1024px){ .weather-note{margin-left:var(--space-10);} }
+
+/* 실내 대안 안내 배너 — .lb-banner와 동일 톤(딥네이비 notice), 아이콘만 물방울로 구분 */
+.weather-banner{
+  margin:var(--space-3) var(--space-4) 0; background:var(--color-navy-50);
+  border:1.5px solid var(--color-navy-200); border-radius:var(--radius-md);
+  padding:var(--space-4); display:flex; gap:var(--space-3); align-items:flex-start;
+}
+.weather-banner__icon{
+  width:32px; height:32px; border-radius:50%; background:var(--color-navy-600);
+  display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+}
+.weather-banner__icon i{
+  display:block; width:13px; height:15px; background:var(--color-white);
+  clip-path:polygon(50% 0%, 88% 58%, 72% 100%, 28% 100%, 12% 58%);
+}
+.weather-banner__title{font-size:var(--text-sm); font-weight:800; color:var(--color-navy-700);}
+.weather-banner__text{font-size:var(--text-sm); color:var(--color-text-900); margin-top:2px;}
+.weather-banner__meta{font-size:11px; color:var(--color-text-500); margin-top:6px; font-weight:700;}
+@media (min-width:1024px){ .weather-banner{margin:var(--space-3) var(--space-10) 0;} }
+
+/* 맞춤 스팟 행 — 실내 대안 태그 (M14 rerank로 우선 노출된 실내 스팟임을 시각적으로 연결) */
+.indoor-tag{
+  display:inline-flex; align-items:center; font-size:11px; font-weight:700;
+  padding:1px 8px; border-radius:var(--radius-full);
+  background:var(--color-green-100); color:var(--color-green-700); margin-left:6px;
+}
+
+/* =========================================================
+   20. M15 — 지도 위 혼잡도 히트맵/오버레이 (2026-07-24 신규 채택)
+   M2 예측 혼잡도 데이터(D1)를 지도에 원형 오버레이로 시각화한다.
+   새 색은 없다 — §1 danger/warning/success 팔레트를 반투명도로 강도
+   변주하고, 색맹 대응으로 반지름·테두리 굵기도 강도에 따라 달리한다.
+   오버레이 테두리는 항상 실선 — 점선은 path_source 전용 신호(§3.6 G8)
+   와 충돌하므로 강도 표현에 쓰지 않는다.
+   ========================================================= */
+.congestion-legend__swatch{display:inline-block; border-radius:50%; flex:0 0 auto; box-sizing:content-box;}
+.congestion-legend__swatch--danger{width:16px; height:16px; background:var(--color-danger-600); opacity:.34; border:2.5px solid var(--color-danger-700);}
+.congestion-legend__swatch--warning{width:12px; height:12px; background:var(--color-warning-600); opacity:.24; border:2px solid var(--color-warning-700);}
+.congestion-legend__swatch--success{width:8px; height:8px; background:var(--color-success-600); opacity:.15; border:1.5px solid var(--color-success-700);}
+
+/* =========================================================
+   21. M16 — 목적지 검색 (2026-07-24 신규 발견)
+   자유 텍스트 NLP가 아니라 지명 자동완성(구조화 입력)이다 — 08 정본의
+   태그 축/LLM 파이프라인과 무관하게 후보 생성 단계에서만 region_code를
+   좁힌다. 홈 히어로에 배치한 근거는 03-design-spec.md §16.1 참고.
+   ========================================================= */
+.dest-search{
+  position:relative; margin-top:var(--space-6); max-width:480px;
+  background:var(--color-white); border-radius:var(--radius-lg);
+  padding:var(--space-4); box-shadow:var(--shadow-lg);
+}
+.dest-search__label{display:block; font-size:var(--text-sm); font-weight:800; color:var(--color-green-700); margin-bottom:var(--space-2);}
+.dest-search__box{
+  display:flex; align-items:center; gap:var(--space-2);
+  border:1.5px solid var(--color-border); border-radius:var(--radius-md);
+  padding:0 var(--space-3); min-height:var(--touch-min);
+}
+.dest-search__box:focus-within{border-color:var(--color-green-600);}
+.dest-search__icon{width:18px; height:18px; flex:0 0 auto; position:relative;}
+.dest-search__icon::before{
+  content:""; position:absolute; top:0; left:0; width:11px; height:11px;
+  border:2px solid var(--color-text-500); border-radius:50%;
+}
+.dest-search__icon::after{
+  content:""; position:absolute; bottom:1px; right:0; width:7px; height:2px;
+  background:var(--color-text-500); border-radius:1px;
+  transform:rotate(45deg); transform-origin:right center;
+}
+.dest-search__input{
+  flex:1; border:none; outline:none; background:transparent;
+  font-size:var(--text-base); font-family:inherit; color:var(--color-text-900);
+  min-height:var(--touch-min);
+}
+.dest-search__input::placeholder{color:var(--color-text-500);}
+.dest-search__clear{
+  width:28px; height:28px; border-radius:50%; border:none; flex:0 0 auto;
+  background:var(--color-surface-2); color:var(--color-text-700); font-size:16px; line-height:1; cursor:pointer;
+}
+.dest-search__list{
+  position:absolute; left:var(--space-4); right:var(--space-4); top:100%; margin-top:var(--space-2);
+  list-style:none; padding:var(--space-1) 0; z-index:20; max-height:240px; overflow-y:auto;
+  background:var(--color-white); border:1px solid var(--color-border); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-md);
+}
+.dest-search__item{
+  min-height:var(--touch-min); display:flex; align-items:center;
+  padding:0 var(--space-4); font-size:var(--text-base); color:var(--color-text-900); cursor:pointer;
+}
+.dest-search__item:hover, .dest-search__item:focus{background:var(--color-green-50); outline:none;}
+.dest-search__item-note{font-size:var(--text-xs); color:var(--color-text-500); margin-left:6px;}
+.dest-search__empty{padding:var(--space-3) var(--space-4); font-size:var(--text-sm); color:var(--color-text-500);}
+.dest-search__quick{margin-top:var(--space-3); display:flex; align-items:center; flex-wrap:wrap; gap:var(--space-2);}
+.dest-search__quick-label{font-size:var(--text-xs); font-weight:700; color:var(--color-text-500); margin-right:2px;}
+/* 스크린리더 전용 상태 안내 (verify-photo-input과 동일한 시각적 숨김 기법 재사용) */
+.dest-search__status{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;}
+
+/* 온보딩 역할 분리 안내문 — .verify-intro와 동일한 "안내 박스" 관례 재사용 */
+.onboard-hint{
+  font-size:var(--text-sm); color:var(--color-text-700); line-height:1.5;
+  background:var(--color-surface-2); border-radius:var(--radius-sm);
+  padding:var(--space-3); margin:var(--space-2) 0 var(--space-5);
+}
+</style>
+</head>
+<body>
+
+<!-- ============ 프로토타입 뷰어 (실제 제품 UI 아님) ============ -->
+<div class="viewer">
+  <div class="viewer__title"><b>숨은길(Sumeungil)</b> 디자인 목업 — 화면 6종을 탭으로 전환해 확인하세요</div>
+  <div class="viewer__tabs" role="tablist" aria-label="화면 선택">
+    <button class="viewer__tab is-active" data-target="s-onboard">0 온보딩</button>
+    <button class="viewer__tab" data-target="s-home">1 홈 랜딩</button>
+    <button class="viewer__tab" data-target="s-discover">2 여행지 추천</button>
+    <button class="viewer__tab" data-target="s-compare">3 AI 경로 비교</button>
+    <button class="viewer__tab" data-target="s-saved">4 저장한 코스</button>
+    <button class="viewer__tab" data-target="s-tips">5 여행 팁</button>
+  </div>
+  <div class="viewer__hint">브라우저 폭을 1024px 이상으로 넓히면 데스크톱 레이아웃(특히 3번 화면의 좌우 비교 테이블)으로 전환됩니다.</div>
+</div>
+
+<!-- ============ 공용 모바일 GNB 오버레이 ============ -->
+<div class="mobile-nav" id="mobileNav" role="dialog" aria-label="모바일 메뉴">
+  <div class="mobile-nav__top">
+    <button class="mobile-nav__close" aria-label="메뉴 닫기" onclick="closeMobileNav()">&times;</button>
+  </div>
+  <nav class="mobile-nav__list">
+    <a href="#">여행지 추천</a>
+    <a href="#">AI 여행 경로</a>
+    <a href="#">저장한 코스</a>
+    <a href="#">여행 팁</a>
+  </nav>
+  <div class="mobile-nav__cta">
+    <button class="btn btn--block" style="background:var(--color-white); color:var(--color-green-700);">시작하기</button>
+  </div>
+</div>
+
+<!-- =====================================================================
+     0. 온보딩
+     ===================================================================== -->
+<section class="screen is-active" id="s-onboard">
+  <div class="onboard-split">
+  <div class="onboard-hero">
+    <div class="onboard-hero__word">SUMEUNGIL</div>
+    <div class="onboard-hero__headline">사람 적은 곳으로,<br/>온 가족이 걷는<br/>숨은 길</div>
+    <svg width="200" height="120" viewBox="0 0 200 120" aria-hidden="true" style="margin:4px 0;">
+      <path d="M6 100 Q 50 60 80 78 T 194 30" stroke="rgba(255,255,255,.55)" stroke-width="3" fill="none" stroke-dasharray="2 11" stroke-linecap="round"/>
+      <circle cx="6" cy="100" r="6" fill="#5C4033" stroke="#fff" stroke-width="2"/>
+      <path d="M188 24 c0 9 -9 15 -9 15 s-9 -6 -9 -15 a9 9 0 0 1 18 0z" fill="#A8D0BC"/>
+      <circle cx="130" cy="52" r="4" fill="#F5E6C8"/>
+    </svg>
+    <div class="onboard-hero__sub">몇 문장만 적어주시면 동행자와 취향에 맞는 로컬 경로를 찾아드려요. 브라운 점은 시작점, 나뭇잎 핀은 숨은길의 도착지를 뜻해요 — AI 경로 비교 화면의 지도 범례와 동일한 기호예요.</div>
+  </div>
+  <div>
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--primary">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+  </div>
+  <div class="guest-banner" id="guestBanner">체험 모드 — 24시간 임시 보관되며, 가입하시면 그대로 이어집니다</div>
+
+  <div class="onboard-wrap">
+    <div class="onboard-progress">진행 1 / 2</div>
+    <h1 style="font-family:var(--font-family-display); font-size:24px; font-weight:700; line-height:1.4;">어떤 여행을 꿈꾸시나요?<br/>자유롭게 적어주세요.</h1>
+
+    <!-- M16(2026-07-24 신규) — 목적지는 여기서 묻지 않는다. 배치 근거: 03-design-spec.md §16.1
+         (region_code는 태그 스키마 밖의 후보생성 필터라 온보딩 태그 흐름과 분리, 완료율 보호). -->
+    <p class="onboard-hint">동행자와 분위기만 알려주세요 — "어디로 갈지"는 다음 화면(홈)의 검색창에서 골라요.</p>
+
+    <!-- 법률 J8-(a) 개인정보 수집·이용 동의 (필수) -->
+    <div class="consent-card">
+      <label class="consent-check">
+        <input type="checkbox" id="privacyCheckbox" onchange="onPrivacyConsentChange()" aria-describedby="privacyDesc" />
+        <span>
+          <b>개인정보 수집·이용 동의 (필수)</b>
+          <p id="privacyDesc">입력하신 내용은 맞춤 여행 코스 추천을 위한 취향·동행 유형 분석에만 사용됩니다. 이름, 정확한 나이 등 특정 개인을 알아볼 수 있는 정보는 가급적 적지 말아 주세요.</p>
+          <span class="legal-draft-tag">문구 확정 전 임시 — 07-legal-review.md §3 초안</span>
+        </span>
+      </label>
+    </div>
+
+    <!-- 법률 J8-(b) 국외이전 고지 — 자유 텍스트 입력 "활성화 이전"에 배치 (S-M10) -->
+    <div class="consent-card consent-card--transfer" id="transferGate">
+      <b>국외이전 고지 — 자유 입력 사용 전 확인해주세요</b>
+      <p>자유롭게 입력하신 내용 중 일부는 AI 분석을 위해 국외(해외) 서버로 전송되어 처리될 수 있습니다. 전송받는 사업자명·국가는 확인 중입니다.</p>
+      <span class="legal-draft-tag">문구 확정 전 임시 — 07-legal-review.md §3 초안</span>
+      <div class="consent-actions">
+        <button class="btn btn--primary" onclick="agreeTransfer()">동의하고 자유 입력 사용</button>
+        <button class="btn btn--ghost" onclick="declineTransfer()">동의하지 않고 칩으로 선택하기</button>
+      </div>
+      <div class="transfer-status" id="transferStatus">현재 상태: 미동의 — 아래 자유 입력창은 비활성화되어 있어요. 칩을 선택해서도 진행할 수 있어요.</div>
+    </div>
+
+    <textarea class="field" id="nlpInput" placeholder="칩을 선택해 진행해주세요 (자유 입력은 국외이전 동의 후 사용 가능)" disabled></textarea>
+
+    <div class="onboard-label">빠른 선택 — 동행 · 분위기</div>
+    <div class="chip-row">
+      <button class="chip is-selected">#연인</button>
+      <button class="chip">#혼자</button>
+      <button class="chip">#아이 동반</button>
+      <button class="chip is-selected">#반려동물 동반</button>
+      <button class="chip">#부모님 동반</button>
+      <button class="chip">#힐링</button>
+      <button class="chip">#맛집</button>
+    </div>
+
+    <div class="onboard-label">이동 수단</div>
+    <div class="chip-row">
+      <button class="chip">#도보</button>
+      <button class="chip">#자전거</button>
+      <button class="chip">#차량/드라이브</button>
+      <button class="chip">#대중교통</button>
+    </div>
+
+    <div class="onboard-label">편의·접근성</div>
+    <div class="chip-row">
+      <button class="chip">#주차 필요</button>
+      <button class="chip">#유모차 접근</button>
+      <button class="chip">#휠체어 접근</button>
+      <button class="chip">#반려동물 동반 가능</button>
+    </div>
+
+    <button class="btn btn--primary btn--block btn--disabled" id="nextBtn" style="margin-top:32px;" disabled>다음 (개인정보 동의 후 활성화)</button>
+    <button class="guest-link" onclick="document.getElementById('guestBanner').classList.add('is-visible')">지금 바로 둘러보기 (비회원)</button>
+  </div>
+  </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     1. 홈 랜딩
+     ===================================================================== -->
+<section class="screen" id="s-home">
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--primary">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+  </div>
+
+  <div class="hero">
+    <div class="hero__col">
+      <div class="hero__title">사람 적은 곳으로,<br/>온 가족이 걷는 숨은 길</div>
+      <div class="hero__sub">서연님, 아이와 함께 걷기 좋은 한적한 숨은길이에요. 온보딩에서 알려주신 취향을 반영했어요.</div>
+
+      <!-- M16(2026-07-24 신규) — 목적지 검색 자동완성. 자유 텍스트 NLP가 아니라 지명 후보 검색(구조화 입력)이며,
+           선택 시 region_code로 후보를 좁힌다(08 정본 태그/LLM 파이프라인과 무관). 배치 근거는 03-design-spec.md §16.1.
+           자동완성 후보 엔드포인트는 01-backend-design.md에 미정의 — backend와 조율 필요(§16.5 D18/D19). -->
+      <div class="dest-search" id="destSearch">
+        <label class="dest-search__label" for="destInput">어디로 떠나시나요?</label>
+        <div class="dest-search__box">
+          <span class="dest-search__icon" aria-hidden="true"></span>
+          <input type="text" id="destInput" class="dest-search__input"
+                 placeholder="지역/관광지 이름으로 검색 (예: 경주, 전주)"
+                 role="combobox" aria-expanded="false" aria-controls="destListbox" aria-autocomplete="list"
+                 autocomplete="off" oninput="onDestInput(this.value)" onfocus="onDestInput(this.value)" onkeydown="onDestKeydown(event)" />
+          <button type="button" class="dest-search__clear" id="destClearBtn" aria-label="목적지 검색어 지우기" onclick="clearDestination()" hidden>&times;</button>
+        </div>
+        <ul class="dest-search__list" id="destListbox" role="listbox" aria-label="목적지 추천 검색어" hidden></ul>
+        <div class="dest-search__quick">
+          <span class="dest-search__quick-label">인기 검색지</span>
+          <div class="chip-row">
+            <button type="button" class="chip" onclick="selectDestination('경주')">경주</button>
+            <button type="button" class="chip" onclick="selectDestination('전주')">전주</button>
+            <button type="button" class="chip" onclick="selectDestination('강릉')">강릉</button>
+            <button type="button" class="chip" onclick="selectDestination('부산')">부산</button>
+          </div>
+        </div>
+        <div class="dest-search__status" id="destStatus" aria-live="polite"></div>
+      </div>
+
+      <div class="hero__cta"><button class="btn" style="background:var(--color-white); color:var(--color-green-700);">맞춤 코스 보러가기</button></div>
+    </div>
+    <div class="hero__art">
+      <svg width="220" height="160" viewBox="0 0 220 160" aria-hidden="true">
+        <path d="M10 140 Q 60 100 90 120 T 210 90" stroke="#EFF7F3" stroke-width="4" fill="none" stroke-dasharray="2 10" stroke-linecap="round"/>
+        <circle cx="10" cy="140" r="7" fill="#F5E6C8"/>
+        <path d="M205 84 c0 10 -10 16 -10 16 s-10 -6 -10 -16 a10 10 0 0 1 20 0z" fill="#A8D0BC"/>
+        <circle cx="150" cy="40" r="18" fill="#3F8563" opacity="0.5"/>
+        <circle cx="70" cy="30" r="10" fill="#6FAB8B" opacity="0.6"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section__eyebrow">실시간 전광판</div>
+    <h2 class="section__title" id="boardHeading">지금 이 관광지, 얼마나 붐빌까요?</h2>
+    <span class="sample-tag" id="boardCaption">예시 데이터입니다 · API 연동 전</span>
+    <div class="board" role="list" id="boardList">
+      <div class="board-card" role="listitem" data-region="경주"><div class="board-card__rank">TOP 1</div><div class="board-card__name">경주 불국사</div><span class="badge badge--danger badge--fill"><span class="badge__icon"></span>혼잡 82%</span></div>
+      <div class="board-card" role="listitem" data-region="전주"><div class="board-card__rank">TOP 2</div><div class="board-card__name">전주 한옥마을</div><span class="badge badge--danger badge--fill"><span class="badge__icon"></span>혼잡 76%</span></div>
+      <div class="board-card" role="listitem" data-region="강릉"><div class="board-card__rank">TOP 3</div><div class="board-card__name">강릉 안목해변</div><span class="badge badge--warning badge--fill"><span class="badge__icon"></span>보통 54%</span></div>
+      <div class="board-card" role="listitem" data-region="부산"><div class="board-card__rank">TOP 4</div><div class="board-card__name">부산 해운대</div><span class="badge badge--warning badge--fill"><span class="badge__icon"></span>보통 48%</span></div>
+      <div class="board-card" role="listitem" data-region="경주"><div class="board-card__rank">TOP 5</div><div class="board-card__name">경주 대릉원 돌담길</div><span class="badge badge--success badge--fill"><span class="badge__icon"></span>여유 22%</span></div>
+    </div>
+  </div>
+
+  <div class="section" style="padding-top:0;">
+    <div class="section__eyebrow">지금 이 지역 축제</div>
+    <div class="festival-banner">
+      <div>
+        <div class="festival-banner__title">전주 한지문화축제</div>
+        <div class="festival-banner__desc">한옥마을 혼잡을 피해 인근 공방 골목 코스로 연결돼요</div>
+      </div>
+      <button class="btn" style="background:var(--color-white); color:var(--color-brown-700); flex:0 0 auto;">보기</button>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     2. 여행지 추천
+     ===================================================================== -->
+<section class="screen" id="s-discover">
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--primary">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+  </div>
+  <div class="section">
+    <div class="section__eyebrow">여행지 추천</div>
+    <h2 class="section__title">로컬 상권 &amp; 테마</h2>
+    <span class="sample-tag">예시 데이터입니다 · 공공데이터 연동 전</span>
+    <div class="chip-row" style="margin-bottom:24px;">
+      <button class="chip is-selected">온보딩 맞춤</button>
+      <button class="chip">연인/데이트</button>
+      <button class="chip">혼여행</button>
+      <button class="chip">가족여행</button>
+      <button class="chip">반려동물</button>
+      <button class="chip">무장애</button>
+      <button class="chip">웰니스</button>
+      <button class="chip">두루누비</button>
+      <button class="chip">축제</button>
+    </div>
+
+    <div class="grid-1 grid-2-sm grid-3-lg">
+      <div class="card spot-card">
+        <div class="thumb">
+          <svg class="thumb__motif" viewBox="0 0 120 80" aria-hidden="true">
+            <path d="M6 62 Q34 40 50 52 T96 30" stroke="#1B4332" stroke-width="2.5" fill="none" stroke-dasharray="2 8" stroke-linecap="round" opacity="0.5"/>
+            <circle cx="6" cy="62" r="4" fill="#5C4033"/>
+            <path d="M108 22 c0 8 -8 14 -8 14 s-8 -6 -8 -14 a8 8 0 0 1 16 0z" fill="#1B4332" opacity="0.75"/>
+          </svg>
+          <span class="thumb__cap">공방 사진 자리 · 실제 이미지로 교체 예정</span>
+        </div>
+        <div class="spot-card__body">
+          <span class="spot-card__cat">공방 · 전주</span>
+          <div class="spot-card__name">한지공방 결</div>
+          <div class="spot-card__desc">한옥마을 뒷골목, 조용한 한지 체험 공방</div>
+          <div class="spot-card__meta">
+            <span>도보 8분 · 350m</span>
+            <span class="a11y-badge a11y-badge--unknown" title="themes.barrier_free: null — 데이터 미확인">무장애 확인 안 됨</span>
+          </div>
+        </div>
+      </div>
+      <div class="card spot-card">
+        <div class="thumb">
+          <svg class="thumb__motif" viewBox="0 0 120 80" aria-hidden="true">
+            <path d="M6 62 Q34 40 50 52 T96 30" stroke="#1B4332" stroke-width="2.5" fill="none" stroke-dasharray="2 8" stroke-linecap="round" opacity="0.5"/>
+            <circle cx="6" cy="62" r="4" fill="#5C4033"/>
+            <path d="M108 22 c0 8 -8 14 -8 14 s-8 -6 -8 -14 a8 8 0 0 1 16 0z" fill="#1B4332" opacity="0.75"/>
+          </svg>
+          <span class="thumb__cap">둘레길 사진 자리 · 실제 이미지로 교체 예정</span>
+        </div>
+        <div class="spot-card__body">
+          <span class="spot-card__cat">둘레길 · 경주</span>
+          <div class="spot-card__name">대릉원 돌담길</div>
+          <div class="spot-card__desc">유모차·휠체어 접근 가능한 평지 산책로</div>
+          <div class="spot-card__meta">
+            <span>도보 12분 · 700m</span>
+            <span class="a11y-badge a11y-badge--yes" title="themes.barrier_free: true">♿ 무장애 접근 가능</span>
+          </div>
+        </div>
+      </div>
+      <div class="card spot-card">
+        <div class="thumb">
+          <svg class="thumb__motif" viewBox="0 0 120 80" aria-hidden="true">
+            <path d="M6 62 Q34 40 50 52 T96 30" stroke="#1B4332" stroke-width="2.5" fill="none" stroke-dasharray="2 8" stroke-linecap="round" opacity="0.5"/>
+            <circle cx="6" cy="62" r="4" fill="#5C4033"/>
+            <path d="M108 22 c0 8 -8 14 -8 14 s-8 -6 -8 -14 a8 8 0 0 1 16 0z" fill="#1B4332" opacity="0.75"/>
+          </svg>
+          <span class="thumb__cap">카페 사진 자리 · 실제 이미지로 교체 예정</span>
+        </div>
+        <div class="spot-card__body">
+          <span class="spot-card__cat">로컬 카페 · 강릉</span>
+          <div class="spot-card__name">안반데기 옆 산자락 카페</div>
+          <div class="spot-card__desc">반려동물 동반 가능, 통유리 뷰</div>
+          <div class="spot-card__meta">
+            <span>차량 6분 · 주차 가능</span>
+            <span class="a11y-badge a11y-badge--no" title="themes.barrier_free: false — 확인된 사실(없음)">무장애 시설 없음</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     3. AI 경로 비교 — 핵심 화면
+     ===================================================================== -->
+<section class="screen" id="s-compare">
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--primary">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+  </div>
+
+  <div class="compare-head">
+    <div class="compare-title">경주 불국사 vs 숨은길 추천</div>
+    <div class="compare-sub">서연님의 온보딩 맞춤 프로필이 반영된 비교예요</div>
+    <span class="sample-tag" style="margin-top:8px;">예시 데이터입니다 · 08-interface-contract.md D2 정본 필드 기준</span>
+    <!-- M14 — 날씨 배지: 지역 단위 예보이므로 코스 비교 행이 아니라 화면 상단에 1개만 표기 (§3.9.1) -->
+    <div>
+      <span class="badge badge--danger badge--soft badge--weather"><span class="badge__icon" aria-hidden="true"></span>비 예보 · 강수확률 72%</span>
+    </div>
+    <div class="weather-note">기상청 단기예보 API(D18) 기준 · 확인 필요: 정확한 응답 필드/배치주기(backend 확정 전)</div>
+  </div>
+
+  <!-- J7 — M6 동적 로드밸런싱: load_balancing.reason 상태 렌더 (여기서는 primary_over_threshold) -->
+  <div class="lb-banner">
+    <div class="lb-banner__icon" aria-hidden="true">i</div>
+    <div>
+      <div class="lb-banner__title">방문 분산 안내</div>
+      <div class="lb-banner__text">이 코스에 방문이 몰리고 있어요 — 비슷한 대안 코스를 함께 보여드릴게요.</div>
+      <div class="lb-banner__meta">load_balancing.reason: primary_over_threshold · assigned_rank: B</div>
+    </div>
+  </div>
+
+  <!-- M14 — 날씨 연동 경로 보정: 강수확률이 높아 실내 대안을 우선 노출했음을 안내 (§3.9.2) -->
+  <div class="weather-banner">
+    <div class="weather-banner__icon" aria-hidden="true"><i></i></div>
+    <div>
+      <div class="weather-banner__title">실내 대안 안내</div>
+      <div class="weather-banner__text">오늘 이 지역은 비 소식이 있어요 — 실내에서 즐길 수 있는 카페·공방 코스를 먼저 보여드릴게요.</div>
+      <div class="weather-banner__meta">weather.precip_probability: 72% · rerank.reason: rain_indoor_alt (M14, AI 5축 점수는 그대로 · 재정렬만 적용, 필드명은 designer 제안)</div>
+    </div>
+  </div>
+
+  <!-- 신선도(tier) 고지 — data_freshness -->
+  <div class="freshness-note">
+    <b>데이터 정확도</b>실측 A · 추정 B · 추정(저신뢰) C · 데이터 없음 none
+    <span class="freshness-note__notice">혼잡도는 최근 방문 통계 기반 추정치입니다. (data_freshness.tier: B · 출처 D2+D3)</span>
+  </div>
+
+  <!-- 모바일: 요약 스코어카드 + 행 기반 비교 리스트 -->
+  <div class="score-card">
+    <div class="score-card__seal" aria-hidden="true">숨은길<br/>발견</div>
+    <div class="score-card__row">
+      <div class="score-col score-col--hot">
+        <div class="score-col__label">기존 핫플 코스</div>
+        <div class="score-col__value">82</div>
+        <div class="score-col__state">🔴 혼잡</div>
+      </div>
+      <div class="score-col score-col--hidden">
+        <div class="score-col__label">숨은길 AI 추천</div>
+        <div class="score-col__value">24</div>
+        <div class="score-col__state">🟢 여유</div>
+      </div>
+    </div>
+    <div class="score-delta">↓ 71% 낮음 (verdict.congestion_delta_pct)</div>
+  </div>
+
+  <div class="compare-list">
+    <div class="compare-row">
+      <div class="compare-row__title">혼잡도 지수 (congestion.index / .level / .tier)</div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hot"></span><span class="compare-row__label">핫플</span><span class="compare-row__text badge badge--danger badge--soft">혼잡 82</span><span class="tier-badge tier-badge--b">추정</span></div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hidden"></span><span class="compare-row__label">숨은길</span><span class="compare-row__text badge badge--success badge--soft">여유 24</span><span class="tier-badge tier-badge--b">추정</span></div>
+      <div class="bar-graph"><div class="bar-graph__hot" style="width:82%"></div><div class="bar-graph__hidden" style="width:24%"></div></div>
+      <div class="bar-graph__nums"><span>82</span><span>24</span></div>
+    </div>
+
+    <div class="compare-row">
+      <div class="compare-row__title">이동 동선 (total_distance_m / est_duration_min / bottleneck_segments)</div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hot"></span><span class="compare-row__label">핫플</span><span class="compare-row__text">14.2km · 52분 · 병목: 불국사 진입로(18분 지연)</span></div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hidden"></span><span class="compare-row__label">숨은길</span><span class="compare-row__text">16.8km · 61분 · 병목 없음</span></div>
+    </div>
+
+    <div class="compare-row">
+      <div class="compare-row__title">맞춤 스팟 (spot_fit.score / matched_spots[].name)</div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hot"></span><span class="compare-row__label">핫플</span><span class="compare-row__text">적합도 0.31 · 일치 스팟 없음</span></div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hidden"></span><span class="compare-row__label">숨은길</span><span class="compare-row__text">적합도 0.86 · 한지공방 결<span class="indoor-tag">실내</span>, 대릉원 돌담길 카페<span class="indoor-tag">실내</span></span></div>
+      <div class="compare-row__pending">M14: 비 예보로 실내 스팟을 우선 정렬했어요 (matched_spots[].indoor 필드는 designer 제안, backend 확인 필요)</div>
+    </div>
+
+    <div class="compare-row">
+      <div class="compare-row__title">동행 유형 일치 리뷰 (review_trust.companion_matched_count / .count)</div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hot"></span><span class="compare-row__label">핫플</span><span class="compare-row__text">6건 / 전체 214건</span></div>
+      <div class="compare-row__item"><span class="compare-row__dot compare-row__dot--hidden"></span><span class="compare-row__label">숨은길</span><span class="compare-row__text">19건 / 전체 31건</span></div>
+    </div>
+  </div>
+
+  <!-- D4 — "인증 방문" 배지는 비교표 지표 행 밖으로 이동 (우위 근거로 읽히지 않게). M8 승격 후에도 이 원칙은 유지된다 -->
+  <div class="pending-feature-note">
+    <span class="badge badge--muted">인증 방문 배지는 별도 진행</span>
+    <span style="font-size:12px; color:var(--color-text-700);">현장 방문 사진 인증(M8)은 저장한 코스 화면에서 배지로만 남으며, 위 비교 지표 산정에는 반영되지 않습니다.</span>
+  </div>
+
+  <div class="map-cta"><button class="btn btn--primary btn--block" onclick="document.getElementById('compareMap').scrollIntoView({behavior:'smooth'})">지도로 보기</button></div>
+
+  <!-- 데스크톱: 2컬럼 사이드바이사이드 테이블 -->
+  <div class="compare-table">
+    <table>
+      <thead>
+        <tr><th>구분</th><th class="col-hot">기존 유명 핫플 코스</th><th class="col-hidden">숨은길 AI 추천 코스</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="row-label">혼잡도 지수<br/><span style="font-weight:400; font-size:11px; color:var(--color-text-500);">index / level / tier</span></td>
+          <td><span class="badge badge--danger badge--fill"><span class="badge__icon"></span>혼잡 82</span><span class="tier-badge tier-badge--b">추정</span></td>
+          <td><span class="badge badge--success badge--fill"><span class="badge__icon"></span>여유 24</span><span class="tier-badge tier-badge--b">추정</span></td>
+        </tr>
+        <tr>
+          <td class="row-label">이동 동선<br/><span style="font-weight:400; font-size:11px; color:var(--color-text-500);">total_distance_m / est_duration_min</span></td>
+          <td>14.2km · 52분 · 병목: 불국사 진입로(18분 지연)</td>
+          <td>16.8km · 61분 · 병목 없음</td>
+        </tr>
+        <tr>
+          <td class="row-label">맞춤 스팟<br/><span style="font-weight:400; font-size:11px; color:var(--color-text-500);">spot_fit.score / matched_spots</span></td>
+          <td>적합도 0.31 · 일치 스팟 없음</td>
+          <td>적합도 0.86 · 한지공방 결<span class="indoor-tag">실내</span>, 대릉원 돌담길 카페<span class="indoor-tag">실내</span><br/><span style="font-weight:400; font-size:11px; color:var(--color-text-500);">M14: 비 예보로 실내 스팟 우선 정렬 (matched_spots[].indoor 제안, backend 확인 필요)</span></td>
+        </tr>
+        <tr>
+          <td class="row-label">동행 유형 일치 리뷰<br/><span style="font-weight:400; font-size:11px; color:var(--color-text-500);">companion_matched_count / count</span></td>
+          <td>6건 / 전체 214건</td>
+          <td>19건 / 전체 31건</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="freshness-note" style="margin:0; border:none; border-top:1px dashed var(--color-border); border-radius:0;">
+      <b>데이터 정확도</b>실측 A · 추정 B · 추정(저신뢰) C · 데이터 없음 none
+      <span class="freshness-note__notice">혼잡도는 최근 방문 통계 기반 추정치입니다. (data_freshness.tier: B · 출처 D2+D3)</span>
+    </div>
+    <div class="pending-feature-note" style="margin:var(--space-4);">
+      <span class="badge badge--muted">인증 방문 배지는 별도 진행</span>
+      <span style="font-size:12px; color:var(--color-text-700);">현장 방문 사진 인증(M8)은 저장한 코스 화면에서 배지로만 남으며, 위 비교 지표 산정에는 반영되지 않습니다.</span>
+    </div>
+  </div>
+
+  <!-- 지도 SVG 플레이스홀더 -->
+  <div class="map-wrap" id="compareMap">
+    <!-- M15 (2026-07-24 신규) — 혼잡도 오버레이 범례. 색은 §3.1 배지와 동일 팔레트 재사용, 강도는 반투명도+원 크기+테두리 굵기로 표현(색맹 대응) -->
+    <div class="map-legend">
+      <span class="map-legend__item"><span class="congestion-legend__swatch congestion-legend__swatch--danger"></span>● 혼잡 (큰 원·굵은 테두리)</span>
+      <span class="map-legend__item"><span class="congestion-legend__swatch congestion-legend__swatch--warning"></span>▲ 보통 (중간 원)</span>
+      <span class="map-legend__item"><span class="congestion-legend__swatch congestion-legend__swatch--success"></span>■ 여유 (작은 원·얇은 테두리)</span>
+      <span style="margin-left:auto; color:var(--color-text-500);">예측 혼잡도 오버레이 · 예시 데이터(M2 데이터 재사용)</span>
+    </div>
+    <div class="map-legend" style="border-top:1px solid var(--color-border);">
+      <span class="map-legend__item"><span class="map-legend__dot" style="background:var(--color-navy-600); border-radius:50%;"></span>핫플 코스 (원형 핀)</span>
+      <span class="map-legend__item"><span class="map-legend__dot" style="background:var(--color-green-600); border-radius:2px;"></span>숨은길 코스 (나뭇잎형 핀)</span>
+      <span style="margin-left:auto; color:var(--color-text-500);">예시 경로 · SDK 연동 전</span>
+    </div>
+    <div class="map-legend" style="border-top:1px solid var(--color-border); padding-top:8px;">
+      <span class="map-legend__item"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="3"/></svg>실선 = path_source: public/snapped (좌표 확보)</span>
+      <span class="map-legend__item"><svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke="#475569" stroke-width="3" stroke-dasharray="1 6"/></svg>점선 = path_source: straight (좌표 미확보, 직선 추정)</span>
+    </div>
+    <svg viewBox="0 0 400 260" width="100%" height="260" role="img" aria-label="핫플 코스와 숨은길 코스를 비교하는 예시 지도">
+      <rect width="400" height="260" fill="#EFF7F3"/>
+      <rect x="0" y="0" width="400" height="260" fill="none"/>
+      <g opacity="0.5">
+        <rect x="30" y="40" width="40" height="30" fill="#D3E9DE"/>
+        <rect x="90" y="60" width="30" height="24" fill="#D3E9DE"/>
+        <rect x="300" y="180" width="50" height="34" fill="#D3E9DE"/>
+        <rect x="250" y="30" width="34" height="24" fill="#D3E9DE"/>
+      </g>
+      <!-- M15 (2026-07-24 신규) — 혼잡도 오버레이. M2 예측 데이터(D1) 재사용, 새 색 없음(§1 danger/warning/success 재사용).
+           강도는 반투명도로 표현하되, 색맹 대응을 위해 반지름·테두리 굵기도 강도에 비례해 함께 키운다.
+           테두리는 항상 실선 — 점선은 path_source 전용 신호(§3.6 G8)라 강도 표현에 쓰지 않는다.
+           경로선·핀보다 먼저 그려 배경 레이어로 깔리므로 위 요소를 가리지 않는다. -->
+      <g class="congestion-overlay-group" aria-hidden="true">
+        <!-- 혼잡(high) · 불국사 일대 · congestion.index 82 (§5.3 비교표와 동일 예시값) -->
+        <circle cx="215" cy="100" r="36" fill="#B3261E" fill-opacity="0.34" stroke="#8C1D17" stroke-width="3.5"/>
+        <!-- 보통(mid) · 시내 환승 구간 · congestion.index 51 (제3의 예시 지점) -->
+        <circle cx="110" cy="180" r="24" fill="#8A5A00" fill-opacity="0.24" stroke="#6B4600" stroke-width="2.5"/>
+        <!-- 여유(low) · 대릉원 돌담길 일대 · congestion.index 24 (§5.3 비교표와 동일 예시값) -->
+        <circle cx="300" cy="63" r="16" fill="#1E6B41" fill-opacity="0.15" stroke="#164F30" stroke-width="1.5"/>
+      </g>
+      <!-- 핫플 경로 (네이비, path_source: public → 실선) -->
+      <path d="M40 220 C 120 200, 140 120, 220 90" stroke="#0B2545" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <circle cx="180" cy="110" r="9" fill="#B3261E" stroke="#fff" stroke-width="2"/>
+      <text x="180" y="132" font-size="10" fill="#8C1D17" text-anchor="middle" font-weight="700">병목</text>
+      <!-- 숨은길 경로 (그린, path_source: public → 실선. 색+핀 형태로만 핫플과 구분) -->
+      <path d="M40 220 C 90 230, 250 230, 330 150 C 350 130, 340 90, 300 70" stroke="#1B4332" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <!-- 시작 마커 -->
+      <circle cx="40" cy="220" r="6" fill="#5C4033" stroke="#fff" stroke-width="2"/>
+      <!-- 핫플 도착 마커 (원형 핀) -->
+      <circle cx="220" cy="90" r="10" fill="#0B2545" stroke="#fff" stroke-width="2"/>
+      <text x="220" y="76" font-size="10" fill="#0B2545" text-anchor="middle" font-weight="700">불국사</text>
+      <!-- 숨은길 도착 마커 (나뭇잎형 핀) -->
+      <path d="M300 60 c0 12 -12 20 -12 20 s-12 -8 -12 -20 a12 12 0 0 1 24 0z" fill="#1B4332" stroke="#fff" stroke-width="2"/>
+      <text x="300" y="52" font-size="10" fill="#1B4332" text-anchor="middle" font-weight="700">대릉원 돌담길</text>
+      <!-- 로컬 스팟 마커 -->
+      <circle cx="310" cy="150" r="5" fill="#997562"/>
+      <!-- path_source: straight 예시 (좌표 미확보 시 점선으로 렌더되는 구간의 예시 표기) -->
+      <path d="M300 70 L 330 40" stroke="#997562" stroke-width="2" fill="none" stroke-dasharray="1 6"/>
+      <text x="345" y="38" font-size="8" fill="#997562" text-anchor="start">추정 구간 예시</text>
+      <!-- M15: 오버레이 강도 미니 라벨 — 색+모양(●▲■, §3.1 배지 아이콘 재사용)+수치 3중 표기. 맨 위에 그려 항상 보이게 함 -->
+      <g class="congestion-overlay-labels">
+        <circle cx="252" cy="128" r="5" fill="#B3261E" stroke="#fff" stroke-width="1.5"/>
+        <text x="261" y="131" font-size="9" fill="#8C1D17" font-weight="700">혼잡 82</text>
+        <path d="M60 199 l5.5 9 l-11 0 z" fill="#8A5A00" stroke="#fff" stroke-width="1.2"/>
+        <text x="69" y="209" font-size="9" fill="#6B4600" font-weight="700">보통 51</text>
+        <rect x="322" y="72" width="9" height="9" rx="2" fill="#1E6B41" stroke="#fff" stroke-width="1.2"/>
+        <text x="335" y="80" font-size="9" fill="#164F30" font-weight="700">여유 24</text>
+      </g>
+    </svg>
+    <div class="map-legend" style="border-top:1px solid var(--color-border);">
+      <span style="font-size:12px;">마커를 탭하면 상호명 · 카테고리 · 길안내 버튼이 담긴 팝업이 뜹니다 (아래는 팝업 예시)</span>
+    </div>
+    <div style="padding:16px;">
+      <div style="max-width:240px; background:var(--color-white); border-radius:12px; box-shadow:var(--shadow-md); padding:12px;">
+        <div style="font-weight:800; font-size:14px;">대릉원 돌담길</div>
+        <div style="font-size:12px; color:var(--color-text-700); margin:4px 0 8px;">둘레길 · 무장애 접근 가능</div>
+        <!-- M10 (ex-N4, 2026-07-23 승격) — 요강 5.2절이 Tmap Route API 연동을 병기 요구하므로 범용 "길안내 시작" 대신 Tmap을 명시한다 -->
+        <button class="btn btn--tmap" style="width:100%;"><span class="tmap-mark" aria-hidden="true">T</span>Tmap으로 길찾기</button>
+        <div style="font-size:11px; color:var(--color-text-500); margin-top:6px;">Tmap Route API 연동 자리 (M10) · 실제 경로 계산은 backend 연동 후 반영</div>
+      </div>
+    </div>
+    <!-- 법률 J8-(d) 지도 SDK 저작권 표시 자리 -->
+    <div class="map-sdk-credit">지도 제공 · 저작권 ⓒ 지도 SDK 사업자명 확인 중 (로고/저작권 표시 자리 — 확정 전 임시)</div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     4. 저장한 코스
+     ===================================================================== -->
+<section class="screen" id="s-saved">
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--primary">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+  </div>
+  <div class="section">
+    <div class="section__eyebrow">마이 페이지</div>
+    <h2 class="section__title">저장한 코스</h2>
+    <span class="sample-tag">예시 데이터입니다</span>
+    <!-- G9: 게스트(체험 모드) 저장 시도 시 로그인 유도 -->
+    <div class="guest-context-banner">
+      <span>체험 모드입니다 — 저장한 코스는 24시간 후 사라져요. 로그인하면 계속 보관돼요.</span>
+      <button class="btn btn--primary" style="min-height:36px; font-size:13px;" onclick="openLoginModal()">로그인하고 저장하기</button>
+    </div>
+    <div class="grid-1 grid-2-sm">
+      <div class="card saved-card">
+        <div class="thumb">
+          <svg class="thumb__motif" viewBox="0 0 120 80" aria-hidden="true">
+            <path d="M6 62 Q34 40 50 52 T96 30" stroke="#1B4332" stroke-width="2.5" fill="none" stroke-dasharray="2 8" stroke-linecap="round" opacity="0.5"/>
+            <circle cx="6" cy="62" r="4" fill="#5C4033"/>
+            <path d="M108 22 c0 8 -8 14 -8 14 s-8 -6 -8 -14 a8 8 0 0 1 16 0z" fill="#1B4332" opacity="0.75"/>
+          </svg>
+          <span class="thumb__cap">코스 썸네일 자리 · 실제 이미지로 교체 예정</span>
+        </div>
+        <div style="font-weight:800; font-size:18px;">경주 대릉원 돌담길 숨은 코스</div>
+        <div class="saved-card__meta">
+          <span>저장일 2026-07-10</span>
+          <span class="badge badge--success badge--soft"><span class="badge__icon"></span>여유</span>
+        </div>
+        <!-- M8 (ex-N1, 2026-07-23 승격) — 인증은 배지 표시만, 쿠폰/금전 보상과 엮지 않는다 (PRD R10) -->
+        <div class="visit-status"><span class="badge badge--muted">아직 방문 인증 전</span></div>
+        <button class="btn btn--ghost btn--block" onclick="openVerifyModal(this, '경주 대릉원 돌담길 숨은 코스')">방문 인증하기</button>
+        <div class="review-question">아이와 가기 좋았나요?</div>
+        <div class="review-btns">
+          <button class="btn btn--ghost">예</button>
+          <button class="btn btn--ghost">아니오</button>
+        </div>
+      </div>
+      <div class="card saved-card">
+        <div class="thumb">
+          <svg class="thumb__motif" viewBox="0 0 120 80" aria-hidden="true">
+            <path d="M6 62 Q34 40 50 52 T96 30" stroke="#1B4332" stroke-width="2.5" fill="none" stroke-dasharray="2 8" stroke-linecap="round" opacity="0.5"/>
+            <circle cx="6" cy="62" r="4" fill="#5C4033"/>
+            <path d="M108 22 c0 8 -8 14 -8 14 s-8 -6 -8 -14 a8 8 0 0 1 16 0z" fill="#1B4332" opacity="0.75"/>
+          </svg>
+          <span class="thumb__cap">코스 썸네일 자리 · 실제 이미지로 교체 예정</span>
+        </div>
+        <div style="font-weight:800; font-size:18px;">전주 한지공방 골목길</div>
+        <div class="saved-card__meta">
+          <span>저장일 2026-07-08</span>
+          <span class="badge badge--warning badge--soft"><span class="badge__icon"></span>보통</span>
+        </div>
+        <!-- M8 (ex-N1, 2026-07-23 승격) — 인증은 배지 표시만, 쿠폰/금전 보상과 엮지 않는다 (PRD R10) -->
+        <div class="visit-status"><span class="badge badge--muted">아직 방문 인증 전</span></div>
+        <button class="btn btn--ghost btn--block" onclick="openVerifyModal(this, '전주 한지공방 골목길')">방문 인증하기</button>
+        <div class="review-question">연인과 데이트하기 좋았나요?</div>
+        <div class="review-btns">
+          <button class="btn btn--ghost">예</button>
+          <button class="btn btn--ghost">아니오</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section__desc" style="margin-top:32px;">아직 저장한 코스가 없다면 아래처럼 보여요 (빈 상태 예시)</div>
+    <div class="state-box">
+      <b>저장한 코스가 없어요</b>
+      AI 경로 비교에서 마음에 드는 숨은길을 저장해보세요.
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     5. 여행 팁
+     ===================================================================== -->
+<section class="screen" id="s-tips">
+  <div class="gnb">
+    <div class="gnb__logo">숨은<span>길</span></div>
+    <nav class="gnb__menu">
+      <a href="#">여행지 추천</a><a href="#">AI 여행 경로</a><a href="#">저장한 코스</a><a href="#">여행 팁</a>
+    </nav>
+    <div class="gnb__actions">
+      <button class="btn btn--text">로그인</button>
+      <button class="btn btn--primary">시작하기</button>
+    </div>
+    <button class="gnb__burger" aria-label="메뉴 열기" onclick="openMobileNav()"><i></i><i></i><i></i></button>
+  </div>
+  <div class="section">
+    <div class="section__eyebrow">여행 팁</div>
+    <h2 class="section__title">오디오 가이드 &amp; 안내 수칙</h2>
+
+    <div class="tab-switch">
+      <button class="is-active" onclick="switchTipTab(this,'audio')">오디오 가이드</button>
+      <button onclick="switchTipTab(this,'rule')">안내 수칙</button>
+    </div>
+
+    <div id="tip-audio">
+      <!-- M9 (ex-N3, 2026-07-23 승격) — 실 플레이어 UI(재생/일시정지 토글 + 진행바), 실제 음원 연동은 backend 소관 -->
+      <span class="sample-tag">예시 데이터입니다 · 재생 버튼은 진행바가 움직이는 시각 시뮬레이션이며 실제 음원은 연동 전입니다</span>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div class="audio-row" data-duration="200" data-current="0">
+          <button class="audio-play" onclick="toggleAudioPlay(this)" aria-label="재생">▶</button>
+          <div class="audio-body">
+            <div class="audio-title">경주 대릉원 돌담길 이야기</div>
+            <div class="audio-progress"><div class="audio-progress__fill" style="width:0%"></div></div>
+            <div class="audio-time"><span class="audio-time__current">0:00</span> / <span class="audio-time__total">3:20</span></div>
+          </div>
+        </div>
+        <div class="audio-row" data-duration="245" data-current="0">
+          <button class="audio-play" onclick="toggleAudioPlay(this)" aria-label="재생">▶</button>
+          <div class="audio-body">
+            <div class="audio-title">전주 한지공방 장인 이야기</div>
+            <div class="audio-progress"><div class="audio-progress__fill" style="width:0%"></div></div>
+            <div class="audio-time"><span class="audio-time__current">0:00</span> / <span class="audio-time__total">4:05</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tip-rule" style="display:none;">
+      <div class="tip-list">
+        <div class="tip-item"><div class="tip-item__icon">♿</div><div><b>무장애 편의시설</b><div style="font-size:14px; color:var(--color-text-700); margin-top:2px;">경사로·점자블록 여부는 코스 상세에서 확인할 수 있어요</div></div></div>
+        <div class="tip-item"><div class="tip-item__icon">🐾</div><div><b>반려동물 에티켓</b><div style="font-size:14px; color:var(--color-text-700); margin-top:2px;">목줄 착용, 배변 봉투 지참은 로컬 상권 방문 시 필수예요</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="footer-note">
+  숨은길(Sumeungil) 디자인 목업 · 2026 관광데이터 활용 공모전 출품 준비용 · 모든 수치는 예시 데이터입니다
+  <span class="footer-legal">법률 J8-(c) 공공데이터 출처 표기: 본 서비스는 한국관광공사, 소상공인시장진흥공단 등이 제공하는 공공데이터를 활용합니다. (출처 표기 문구 — 확정 전 임시, 07-legal-review.md §3)</span>
+</div>
+
+<!-- G9: 게스트 저장 시도 시 로그인 유도 모달 -->
+<div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-label="로그인 유도">
+  <div class="modal-box">
+    <h3>로그인하고 계속 이어가요</h3>
+    <p>회원가입하면 체험 중 만든 취향 프로필을 그대로 이어받아요. 저장한 코스도 24시간 제한 없이 보관돼요.</p>
+    <div class="modal-box__actions">
+      <button class="btn btn--primary btn--block">로그인 / 회원가입</button>
+      <button class="btn btn--text btn--block" onclick="closeLoginModal()">나중에 할게요</button>
+    </div>
+  </div>
+</div>
+
+<!-- M8 (ex-N1, 2026-07-23 승격) — 방문 인증 캡처 플로우. 쿠폰/금전 보상 언급 없음, 배지(비금전) 표시만.
+     PRD R10: 인증은 신뢰도 절대 지표가 아니라 보조 신호 — 그 취지를 안내문에 그대로 노출한다. -->
+<div class="modal-overlay" id="verifyModal" role="dialog" aria-modal="true" aria-label="방문 인증">
+  <div class="modal-box verify-modal">
+    <h3>방문 인증하기</h3>
+    <p style="font-size:13px; color:var(--color-text-700); margin-top:4px;" id="verifyModalCourse">코스명</p>
+
+    <div id="verifyForm">
+      <div class="verify-intro">
+        <b>왜 필요한가요?</b>
+        AI가 실제 방문 여부를 보조적으로 참고해 추천 정확도를 높이기 위해서예요. 인증 결과는 코스 비교 순위를 뒤집는 절대 기준이 아니라, 참고용 보조 신호로만 쓰여요.
+      </div>
+
+      <!-- 개인정보(위치+사진) 재도입 — 온보딩 국외이전 고지와 동일한 consent-card 패턴 재사용 -->
+      <div class="consent-card">
+        <label class="consent-check">
+          <input type="checkbox" id="verifyConsent" onchange="onVerifyConsentChange()" aria-describedby="verifyConsentDesc" />
+          <span>
+            <b>촬영 위치 · 사진 정보 활용 동의 (필수)</b>
+            <p id="verifyConsentDesc">방문 인증을 위해 촬영 시점의 위치 정보와 사진 1장을 확인합니다. 이 정보는 방문 여부를 보조적으로 참고하는 데만 쓰이고, 코스 비교의 절대 신뢰 지표로 사용되지 않습니다.</p>
+            <span class="legal-draft-tag">문구 확정 전 임시 — M8 재도입분, 07-legal-review.md §3에서 legal-counsel이 확정 예정</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="verify-step">
+        <div class="verify-step__title">1. 위치 확인</div>
+        <div class="verify-step__desc">지금 계신 곳이 코스 인근인지 확인해요. 위·변조 방지의 절대 기준이 아니라 보조 신호로만 사용돼요.</div>
+        <button class="btn btn--ghost" id="verifyLocationBtn" onclick="requestVerifyLocation()" disabled>위치 정보 확인하기</button>
+        <div class="verify-status-text" id="verifyLocationStatus">위 동의 후 확인할 수 있어요</div>
+      </div>
+
+      <div class="verify-step">
+        <div class="verify-step__title">2. 사진 첨부</div>
+        <div class="verify-step__desc">방문한 곳에서 촬영한 사진 1장을 올려주세요 (더미 — 실제 촬영/업로드 연동은 backend 소관).</div>
+        <label class="btn btn--ghost verify-photo-label" id="verifyPhotoLabel" for="verifyPhotoInput" aria-disabled="true">사진 선택</label>
+        <input type="file" accept="image/*" id="verifyPhotoInput" class="verify-photo-input" onchange="onVerifyPhotoChange(this)" disabled />
+        <div class="verify-status-text" id="verifyPhotoStatus">위 동의 후 선택할 수 있어요</div>
+      </div>
+
+      <button class="btn btn--primary btn--block btn--disabled" id="verifySubmitBtn" style="margin-top:var(--space-5);" disabled onclick="submitVerify()">인증 제출</button>
+      <button class="btn btn--text btn--block" onclick="closeVerifyModal()">취소</button>
+    </div>
+
+    <div id="verifyResult" class="verify-result" style="display:none;">
+      <div class="visit-badge visit-badge--lg" style="margin-top:var(--space-4);">
+        <span class="visit-badge__icon" aria-hidden="true">✓</span>방문 배지 획득
+      </div>
+      <p style="font-size:13px; color:var(--color-text-700); margin-top:var(--space-3); line-height:1.5;">제출한 위치·사진 정보는 방문 여부를 보조적으로 참고하는 데만 쓰이고, 코스 비교의 절대 신뢰 지표로 사용되지 않아요.</p>
+      <button class="btn btn--ghost btn--block" style="margin-top:var(--space-5);" onclick="closeVerifyModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 화면 탭 전환
+  document.querySelectorAll('.viewer__tab').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      document.querySelectorAll('.viewer__tab').forEach(function(t){ t.classList.remove('is-active'); });
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('is-active'); });
+      tab.classList.add('is-active');
+      document.getElementById(tab.dataset.target).classList.add('is-active');
+      window.scrollTo({top:0, behavior:'auto'});
+    });
+  });
+
+  // 모바일 GNB 오버레이
+  function openMobileNav(){ document.getElementById('mobileNav').classList.add('is-open'); }
+  function closeMobileNav(){ document.getElementById('mobileNav').classList.remove('is-open'); }
+
+  // 온보딩 칩 선택 토글
+  document.querySelectorAll('#s-onboard .chip, #s-discover .chip').forEach(function(chip){
+    chip.addEventListener('click', function(){ chip.classList.toggle('is-selected'); });
+  });
+
+  // 법률 J8-(a) 개인정보 동의 체크 시 "다음" 버튼 활성화
+  function onPrivacyConsentChange(){
+    var checked = document.getElementById('privacyCheckbox').checked;
+    var nextBtn = document.getElementById('nextBtn');
+    nextBtn.disabled = !checked;
+    nextBtn.classList.toggle('btn--disabled', !checked);
+    nextBtn.textContent = checked ? '다음' : '다음 (개인정보 동의 후 활성화)';
+  }
+
+  // 법률 J8-(b) / 보안 S-M10 — 국외이전 동의는 자유 텍스트 입력 활성화보다 먼저 와야 한다
+  function agreeTransfer(){
+    var input = document.getElementById('nlpInput');
+    input.disabled = false;
+    input.placeholder = '예) 6세 아이랑 반려견이 함께 걷기 편하고 주차 넉넉한 곳';
+    document.getElementById('transferStatus').textContent = '현재 상태: 동의 완료 — 자유 입력을 사용할 수 있어요.';
+    document.getElementById('transferGate').classList.add('is-agreed');
+  }
+  function declineTransfer(){
+    var input = document.getElementById('nlpInput');
+    input.disabled = true;
+    input.value = '';
+    input.placeholder = '칩을 선택해 진행해주세요 (자유 입력은 국외이전 동의 후 사용 가능)';
+    document.getElementById('transferStatus').textContent = '현재 상태: 미동의 — 칩 선택 경로로 진행해주세요.';
+    document.getElementById('transferGate').classList.remove('is-agreed');
+    document.querySelector('#s-onboard .chip-row').scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  // G9 — 게스트 저장 시도 시 로그인 유도 모달
+  function openLoginModal(){ document.getElementById('loginModal').classList.add('is-open'); }
+  function closeLoginModal(){ document.getElementById('loginModal').classList.remove('is-open'); }
+
+  // 여행 팁 탭 전환
+  function switchTipTab(btn, target){
+    document.querySelectorAll('.tab-switch button').forEach(function(b){ b.classList.remove('is-active'); });
+    btn.classList.add('is-active');
+    document.getElementById('tip-audio').style.display = target === 'audio' ? 'block' : 'none';
+    document.getElementById('tip-rule').style.display = target === 'rule' ? 'block' : 'none';
+  }
+
+  // ===================================================================
+  // M8 (ex-N1, 2026-07-23 승격) — 방문 인증 캡처 플로우
+  // 더미 상태: 실제 Geolocation API 호출 없음, 사진은 로컬 파일 선택만(네트워크 요청 없음).
+  // 완료 시 "배지" 표시만 하고 쿠폰/금전 보상은 어디에도 등장하지 않는다 (PRD R10).
+  // ===================================================================
+  var verifyTargetBtn = null;
+  var verifyState = { location:false, photo:false };
+
+  function openVerifyModal(btn, courseName){
+    verifyTargetBtn = btn;
+    document.getElementById('verifyModalCourse').textContent = courseName;
+    resetVerifyModal();
+    document.getElementById('verifyModal').classList.add('is-open');
+  }
+  function closeVerifyModal(){
+    document.getElementById('verifyModal').classList.remove('is-open');
+  }
+  function resetVerifyModal(){
+    document.getElementById('verifyForm').style.display = 'block';
+    document.getElementById('verifyResult').style.display = 'none';
+    document.getElementById('verifyConsent').checked = false;
+    document.getElementById('verifyPhotoInput').value = '';
+    verifyState.location = false;
+    verifyState.photo = false;
+    onVerifyConsentChange();
+  }
+  function onVerifyConsentChange(){
+    var consent = document.getElementById('verifyConsent').checked;
+    var locBtn = document.getElementById('verifyLocationBtn');
+    var photoInput = document.getElementById('verifyPhotoInput');
+    var photoLabel = document.getElementById('verifyPhotoLabel');
+    locBtn.disabled = !consent;
+    photoInput.disabled = !consent;
+    photoLabel.setAttribute('aria-disabled', consent ? 'false' : 'true');
+    if(!consent){
+      verifyState.location = false;
+      verifyState.photo = false;
+      photoInput.value = '';
+      document.getElementById('verifyLocationStatus').textContent = '위 동의 후 확인할 수 있어요';
+      document.getElementById('verifyPhotoStatus').textContent = '위 동의 후 선택할 수 있어요';
+    } else {
+      document.getElementById('verifyLocationStatus').textContent = '아직 확인하지 않았어요';
+      document.getElementById('verifyPhotoStatus').textContent = '아직 선택한 사진이 없어요';
+    }
+    updateVerifySubmit();
+  }
+  function requestVerifyLocation(){
+    // 더미 — 실제 브라우저 Geolocation 권한 요청/좌표 수신은 backend·security 검토 후 연동
+    document.getElementById('verifyLocationStatus').textContent = '위치 확인됨 (예시: 경주시 인근, 오차범위 30m · 더미 값)';
+    verifyState.location = true;
+    updateVerifySubmit();
+  }
+  function onVerifyPhotoChange(input){
+    if(input.files && input.files.length > 0){
+      document.getElementById('verifyPhotoStatus').textContent = '선택됨: ' + input.files[0].name;
+      verifyState.photo = true;
+    } else {
+      document.getElementById('verifyPhotoStatus').textContent = '아직 선택한 사진이 없어요';
+      verifyState.photo = false;
+    }
+    updateVerifySubmit();
+  }
+  function updateVerifySubmit(){
+    var consent = document.getElementById('verifyConsent').checked;
+    var ready = consent && verifyState.location && verifyState.photo;
+    var btn = document.getElementById('verifySubmitBtn');
+    btn.disabled = !ready;
+    btn.classList.toggle('btn--disabled', !ready);
+  }
+  function submitVerify(){
+    document.getElementById('verifyForm').style.display = 'none';
+    document.getElementById('verifyResult').style.display = 'block';
+    if(verifyTargetBtn){
+      var card = verifyTargetBtn.closest('.saved-card');
+      if(card){
+        var statusEl = card.querySelector('.visit-status');
+        statusEl.innerHTML = '<span class="visit-badge"><span class="visit-badge__icon" aria-hidden="true">✓</span>방문 배지 획득</span>';
+      }
+      verifyTargetBtn.textContent = '인증 정보 다시 제출';
+    }
+  }
+
+  // ===================================================================
+  // M9 (ex-N3, 2026-07-23 승격) — 오디오 가이드 플레이어 (재생/일시정지 + 진행바 시각 시뮬레이션)
+  // 실제 음원 스트리밍/파일 없음 — 외부 네트워크 요청 0건 유지.
+  // ===================================================================
+  function formatAudioTime(sec){
+    var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function playAudioRow(row){
+    row.classList.add('is-playing');
+    var btn = row.querySelector('.audio-play');
+    btn.textContent = '❚❚';
+    btn.setAttribute('aria-label', '일시정지');
+    var duration = parseInt(row.dataset.duration, 10);
+    var fill = row.querySelector('.audio-progress__fill');
+    var currentText = row.querySelector('.audio-time__current');
+    var timerId = setInterval(function(){
+      var current = parseFloat(row.dataset.current || '0') + 1;
+      if(current >= duration){
+        current = 0;
+        clearInterval(timerId);
+        pauseAudioRow(row);
+      }
+      row.dataset.current = String(current);
+      fill.style.width = (current / duration * 100) + '%';
+      currentText.textContent = formatAudioTime(current);
+    }, 1000);
+    row.dataset.timerId = String(timerId);
+  }
+  function pauseAudioRow(row){
+    row.classList.remove('is-playing');
+    var btn = row.querySelector('.audio-play');
+    btn.textContent = '▶';
+    btn.setAttribute('aria-label', '재생');
+    if(row.dataset.timerId){ clearInterval(Number(row.dataset.timerId)); }
+  }
+  function toggleAudioPlay(btn){
+    var row = btn.closest('.audio-row');
+    document.querySelectorAll('.audio-row.is-playing').forEach(function(r){
+      if(r !== row){ pauseAudioRow(r); }
+    });
+    if(row.classList.contains('is-playing')){ pauseAudioRow(row); }
+    else{ playAudioRow(row); }
+  }
+
+  // ===================================================================
+  // M16 (2026-07-24 신규 발견) — 목적지 검색 자동완성 (지명 후보 검색, NLP 아님)
+  // 후보 데이터는 목업 예시일 뿐이며, 실제 자동완성 소스는 backend 조율 필요
+  // (03-design-spec.md §16.5 D18). true = 이 목업 전광판에 예시 카드가 있는 지역,
+  // false = 자동완성엔 뜨지만 예시 카드가 없어 "데이터 없음" 폴백을 시연하는 지역.
+  // ===================================================================
+  var DEST_DATA = { '경주':true, '전주':true, '강릉':true, '부산':true, '여수':false, '순천':false, '통영':false, '제주':false };
+  var DEST_NAMES = Object.keys(DEST_DATA);
+
+  function onDestInput(value){
+    var q = value.trim();
+    var list = document.getElementById('destListbox');
+    var input = document.getElementById('destInput');
+    document.getElementById('destClearBtn').hidden = !q;
+    if(!q){
+      list.hidden = true; list.innerHTML = '';
+      input.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    var matches = DEST_NAMES.filter(function(name){ return name.indexOf(q) !== -1; });
+    if(matches.length === 0){
+      list.innerHTML = '<li class="dest-search__empty" role="option" aria-disabled="true">일치하는 지역이 없어요</li>';
+    } else {
+      list.innerHTML = matches.map(function(name){
+        var note = DEST_DATA[name] ? '' : ' <span class="dest-search__item-note">(예시 데이터 준비 중)</span>';
+        return '<li role="option" tabindex="-1" class="dest-search__item" onclick="selectDestination(\'' + name + '\')">' + name + note + '</li>';
+      }).join('');
+    }
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function onDestKeydown(e){
+    var list = document.getElementById('destListbox');
+    var input = document.getElementById('destInput');
+    if(e.key === 'Escape'){
+      list.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+    } else if(e.key === 'Enter'){
+      e.preventDefault();
+      var first = list.querySelector('.dest-search__item');
+      if(first){ first.click(); }
+    }
+  }
+
+  function selectDestination(name){
+    var input = document.getElementById('destInput');
+    var list = document.getElementById('destListbox');
+    input.value = name;
+    list.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    document.getElementById('destClearBtn').hidden = false;
+    applyDestinationFilter(name);
+  }
+
+  function clearDestination(){
+    var input = document.getElementById('destInput');
+    input.value = '';
+    document.getElementById('destClearBtn').hidden = true;
+    document.getElementById('destListbox').hidden = true;
+    input.focus();
+    applyDestinationFilter(null);
+  }
+
+  // 목적지 미선택/데이터없음 2단계 폴백 (03-design-spec.md §16.2)
+  function applyDestinationFilter(name){
+    var cards = document.querySelectorAll('#boardList .board-card');
+    var heading = document.getElementById('boardHeading');
+    var caption = document.getElementById('boardCaption');
+    var status = document.getElementById('destStatus');
+
+    if(!name){
+      cards.forEach(function(c){ c.hidden = false; });
+      heading.textContent = '지금 이 관광지, 얼마나 붐빌까요?';
+      caption.textContent = '예시 데이터입니다 · API 연동 전';
+      status.textContent = '';
+      return;
+    }
+
+    var matchCount = 0;
+    cards.forEach(function(c){
+      var match = (c.dataset.region || '').indexOf(name) !== -1;
+      c.hidden = !match;
+      if(match){ matchCount++; }
+    });
+
+    if(matchCount === 0){
+      cards.forEach(function(c){ c.hidden = false; });
+      heading.textContent = "'" + name + "' 지역 관광지, 얼마나 붐빌까요?";
+      caption.textContent = "'" + name + "'의 예시 데이터가 아직 없어요 · 전국 TOP10을 보여드려요";
+      status.textContent = "'" + name + "' 지역의 예시 데이터가 없어 전국 데이터를 표시합니다.";
+    } else {
+      heading.textContent = "'" + name + "' 지역 관광지, 얼마나 붐빌까요?";
+      caption.textContent = '예시 데이터입니다 · API 연동 전 · ' + "'" + name + "' 지역 " + matchCount + '곳';
+      status.textContent = "'" + name + "' 지역에서 " + matchCount + '곳을 찾았습니다.';
+    }
+  }
+
+  // 바깥 클릭 시 자동완성 드롭다운 닫기 (선택 상태는 유지)
+  document.addEventListener('click', function(e){
+    var wrap = document.getElementById('destSearch');
+    if(wrap && !wrap.contains(e.target)){
+      document.getElementById('destListbox').hidden = true;
+      document.getElementById('destInput').setAttribute('aria-expanded', 'false');
+    }
+  });
+</script>
+</body>
+</html>
