@@ -862,7 +862,11 @@ input:focus-visible,
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
-  padding: 0 8vw;
+  /* §50(신규, 대표 지시 2026-08-11 "구석구석처럼 크게·화면 끝까지") — 트랙 좌우 여백을
+     8vw→4vw로 줄이고 카드 폭(아래 .hero-carousel__card)을 키워 사진이 화면 가장자리에 훨씬
+     가깝게 닿게 한다. 마케팅 문구·CTA 오버레이는 범위 밖(대표가 명시적으로 지금 형태 유지 지시)
+     — 크기·풀블리드만 구석구석에 맞춘다. */
+  padding: 0 4vw;
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-carousel__track {
@@ -874,7 +878,7 @@ input:focus-visible,
 }
 .hero-carousel__card {
   position: relative;
-  flex: 0 0 82%;
+  flex: 0 0 92%;
   aspect-ratio: 4 / 3;
   scroll-snap-align: center;
   border-radius: var(--r-xl);
@@ -973,21 +977,24 @@ input:focus-visible,
 }
 @media (min-width: 640px) {
   .hero-carousel__card {
-    flex-basis: 60%;
+    flex-basis: 82%;
     aspect-ratio: 16 / 9;
   }
 }
 @media (min-width: 1024px) {
+  /* §50 — 다른 섹션과 같은 컨테이너 박스(max-width+padding)에 가둬져 있던 것을 풀어
+     진짜 뷰포트 끝까지 닿게 한다(대표 지시 "화면 끝까지"). 다른 섹션들의 정렬 기준선은
+     .section이 그대로 유지하므로 이 컴포넌트만 예외적으로 풀블리드다. */
   .hero-carousel {
-    max-width: var(--container-1);
-    margin: 0 auto var(--sp-10);
-    padding: 0 var(--sp-10);
+    max-width: none;
+    margin: 0 0 var(--sp-10);
+    padding: 0;
   }
   .hero-carousel__track {
-    padding: 0 6%;
+    padding: 0 3%;
   }
   .hero-carousel__card {
-    flex-basis: 56%;
+    flex-basis: 74%;
     /* §43 — .hero-intro 제거로 확보된 세로 공간을 사진 캐러셀로 옮긴다(대표 지시 원문 2).
        고정 aspect-ratio(16:9) 대신 뷰포트 높이 기반 clamp로 바꿔 "창 크기에 따라 커지고
        줄어드는"(대표 지시 원문 3) 요구를 폭뿐 아니라 높이 축에서도 만족시킨다 — 컨테이너 폭이
