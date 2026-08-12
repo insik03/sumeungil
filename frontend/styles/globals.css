@@ -3,6 +3,10 @@
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap");
 @import "./tokens.css";
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* =========================================================================
    Base reset (variant-B 이식)
    ========================================================================= */
@@ -586,8 +590,9 @@ input:focus-visible,
   margin: var(--sp-6) var(--sp-4) var(--sp-6);
   padding: var(--sp-4);
   background: var(--white);
-  border: 1.5px solid var(--n-100);
+  border: 1px solid var(--n-100);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
 }
 .home-search-bar__label {
   font-size: var(--text-sm);
@@ -611,10 +616,11 @@ input:focus-visible,
   border-radius: var(--r-full);
   padding: 0 var(--sp-2) 0 var(--sp-4);
   min-height: 52px;
-  transition: border-color 0.18s;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .dest-search__box:focus-within {
   border-color: var(--n-500);
+  box-shadow: 0 0 0 4px var(--n-50);
 }
 .dest-search__icon {
   width: 18px;
@@ -680,6 +686,7 @@ input:focus-visible,
 }
 .chip:hover {
   transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
 }
 .chip--mint {
   background: var(--g-500);
@@ -855,6 +862,18 @@ input:focus-visible,
   position: relative;
   margin: 0 0 var(--sp-8);
 }
+/* 캐러셀 뒤에 은은하게 번지는 브랜드 그린 앰비언트 글로우 — 사진 카드가 배경 위에
+   "떠 있는" 느낌을 정지 화면에서도 바로 알아볼 수 있게 한다(호버 불필요). */
+.hero-carousel::before {
+  content: "";
+  position: absolute;
+  inset: -8% 6%;
+  z-index: -1;
+  background: radial-gradient(60% 60% at 50% 45%, var(--g-400) 0%, transparent 72%);
+  opacity: 0.22;
+  filter: blur(48px);
+  pointer-events: none;
+}
 .hero-carousel__track {
   display: flex;
   gap: var(--sp-3);
@@ -882,11 +901,19 @@ input:focus-visible,
   display: flex;
   align-items: flex-end;
   color: var(--white);
-  box-shadow: var(--shadow-md);
-  background-image: linear-gradient(180deg, rgba(5, 14, 27, 0) 42%, rgba(5, 14, 27, 0.82) 100%),
+  box-shadow: var(--shadow-lg);
+  background-image: linear-gradient(180deg, rgba(5, 14, 27, 0) 38%, rgba(5, 14, 27, 0.86) 100%),
     var(--slide-photo);
   background-size: cover;
   background-position: center;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* 데스크톱 포인터 전용 — 터치 기기는 hover가 유사 상태로 걸려 남는 문제(스크롤 후에도
+   마지막 터치 카드가 계속 확대돼 보임)를 피한다. */
+@media (hover: hover) and (pointer: fine) {
+  .hero-carousel__card:hover {
+    transform: scale(1.015);
+  }
 }
 .hero-carousel__card--noimg,
 .hero-carousel__card--fallback {
@@ -966,10 +993,12 @@ input:focus-visible,
   border: 1.5px solid var(--gray-300);
   background: var(--white);
   color: var(--ink-muted);
+  transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .hero-carousel__pause:hover {
   color: var(--ink);
   border-color: var(--gray-400);
+  box-shadow: var(--shadow-card);
 }
 @media (min-width: 640px) {
   .hero-carousel__card {
@@ -1038,6 +1067,11 @@ input:focus-visible,
 .quick-menu__item:focus-visible {
   background: var(--g-50);
 }
+.quick-menu__item:hover .quick-menu__icon,
+.quick-menu__item:focus-visible .quick-menu__icon {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
 .quick-menu__icon {
   width: 46px;
   height: 46px;
@@ -1045,8 +1079,11 @@ input:focus-visible,
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--g-50);
+  background: linear-gradient(145deg, var(--g-100), var(--g-50));
   color: var(--g-500);
+  /* 정지 상태에서도 은은한 브랜드 그린 글로우 — 호버 없이도 카드가 "떠 있는" 느낌을 준다. */
+  box-shadow: 0 4px 14px rgba(47, 122, 84, 0.16);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
 }
 .quick-menu__icon svg {
   width: 22px;
@@ -1614,12 +1651,17 @@ input:focus-visible,
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
+  transition: box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .featured-card-link:hover .featured-card,
 .featured-card-link:focus-visible .featured-card {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
+}
+.featured-card-link:hover .featured-card__img,
+.featured-card-link:focus-visible .featured-card__img {
+  transform: scale(1.06);
 }
 /* §33-4(2026-07-29) — 고정 px 높이(104px) 대신 고정 aspect-ratio로 통일했다. 720px↑에서
    .featured-scroll이 flex(가로 스크롤)→grid(3~4열)로 바뀌면 카드 폭이 늘어나는데, 높이만
@@ -1649,6 +1691,7 @@ input:focus-visible,
   object-fit: cover;
   object-position: center;
   display: block;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .featured-card__placeholder {
   width: 100%;
@@ -6314,4 +6357,58 @@ input:focus-visible,
 @media (max-width: 640px) {
   .admin-bar__value { width: auto; }
   .admin-hour__label { display: none; }
+}
+
+@layer base {
+  :root {
+    --chart-1: oklch(0.32 0 none);
+    --chart-2: oklch(0.41 0 none);
+    --chart-3: oklch(0.54 0 none);
+    --chart-4: oklch(0.71 0 none);
+    --chart-5: oklch(0.89 0 none);
+    --chart-background: oklch(1 0 0);
+    --chart-foreground: oklch(0.145 0.004 285);
+    --chart-foreground-muted: oklch(0.55 0.014 260);
+    --chart-line-primary: var(--chart-1);
+    --chart-line-secondary: var(--chart-2);
+    --chart-crosshair: oklch(0.4 0.1828 274.34);
+    --chart-grid: oklch(0.9 0 0);
+    --chart-brush-border: var(--chart-grid);
+    --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
+    --chart-tooltip-foreground: oklch(0.985 0 0);
+    --chart-tooltip-muted: oklch(0.65 0.01 260);
+    --chart-marker-background: oklch(0.97 0.005 260);
+    --chart-marker-border: oklch(0.85 0.01 260);
+    --chart-marker-foreground: oklch(0.3 0.01 260);
+    --chart-label: oklch(0.45 0.01 260);
+    --chart-scale-01: oklch(0.98 0.003 106);
+    --chart-scale-02: oklch(0.92 0.008 106);
+    --chart-scale-03: oklch(0.82 0.015 106);
+    --chart-scale-04: oklch(0.68 0.02 106);
+    --chart-scale-05: oklch(0.55 0.025 106);
+    --chart-scale-pattern-color: oklch(0.96 0.005 106);
+  }
+  .dark {
+    --chart-1: oklch(1 0 none);
+    --chart-2: oklch(0.73 0 none);
+    --chart-3: oklch(0.51 0 none);
+    --chart-4: oklch(0.39 0 none);
+    --chart-5: oklch(0.32 0 none);
+    --chart-background: oklch(0.145 0 0);
+    --chart-foreground: oklch(0.45 0 0);
+    --chart-foreground-muted: oklch(0.65 0.01 260);
+    --chart-crosshair: oklch(0.45 0 0);
+    --chart-grid: oklch(0.25 0 0);
+    --chart-brush-border: var(--chart-grid);
+    --chart-marker-background: oklch(0.25 0.01 260);
+    --chart-marker-border: oklch(0.4 0.01 260);
+    --chart-marker-foreground: oklch(0.9 0 0);
+    --chart-label: oklch(0.75 0.01 260);
+    --chart-scale-01: oklch(0.28 0.03 270);
+    --chart-scale-02: oklch(0.38 0.04 270);
+    --chart-scale-03: oklch(0.48 0.05 270);
+    --chart-scale-04: oklch(0.58 0.06 270);
+    --chart-scale-05: oklch(0.68 0.07 270);
+    --chart-scale-pattern-color: oklch(0.145 0 0);
+  }
 }

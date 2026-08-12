@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { animate, stagger } from "animejs";
 import { withRegionCode } from "../lib/regionQuery";
 
 interface QuickMenuItem {
@@ -182,11 +184,31 @@ interface ServiceQuickMenuProps {
   regionCode?: string | null;
 }
 
+/** 각 타일이 살짝 떠오르며 순서대로 나타나는 입장 애니메이션(anime.js). Hero.tsx의
+ * prefersReducedMotion 관례를 그대로 따라 모션 최소화 사용자에겐 아예 실행하지 않는다. */
+function useQuickMenuEnterAnimation(gridRef: React.RefObject<HTMLUListElement>) {
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const items = gridRef.current?.querySelectorAll("li");
+    if (!items || items.length === 0) return;
+    animate(items, {
+      opacity: [0, 1],
+      translateY: [12, 0],
+      delay: stagger(35),
+      duration: 420,
+      ease: "outQuad",
+    });
+  }, [gridRef]);
+}
+
 export default function ServiceQuickMenu({ regionCode = null }: ServiceQuickMenuProps) {
+  const gridRef = useRef<HTMLUListElement>(null);
+  useQuickMenuEnterAnimation(gridRef);
+
   return (
     <nav className="quick-menu" aria-label="숨은길 서비스 바로가기">
       <h2 className="quick-menu__title">숨은길 서비스</h2>
-      <ul className="quick-menu__grid">
+      <ul className="quick-menu__grid" ref={gridRef}>
         {QUICK_MENU_ITEMS.map((item) => (
           <li key={item.key}>
             <Link

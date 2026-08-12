@@ -8,6 +8,7 @@ import ConciergeSection from "./ConciergeSection";
 import FeaturedSpots from "./FeaturedSpots";
 import CoursePromo from "./CoursePromo";
 import FestivalBanner from "./FestivalBanner";
+import HomeSectionReveal from "./HomeSectionReveal";
 
 /**
  * 부록 A.3 — 지역 칩/검색 선택과 전광판을 이어주는 상태 소유자.
@@ -95,6 +96,7 @@ export default function HomeContent() {
           그 화면이 전국 지도 아래에 같은 전광판을 두므로, 홈에 남겨두면 두 번 나온다. */}
       <CoursePromo regionCode={regionCode} />
       <FestivalBanner regionCode={regionCode} />
+      <HomeSectionReveal />
     </>
   );
 }
