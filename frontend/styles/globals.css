@@ -3130,7 +3130,15 @@ input:focus-visible,
    blurb 발췌 2줄. 안쪽 .spot-card는 자체 그림자/배경을 끄고 이 카드 하나로 통합한다(카드 속
    카드 이중 그림자 방지) — /recommend 화면의 .spot-card 자체 스타일은 건드리지 않는다
    (셀렉터가 .course-step-card 안에 중첩된 경우로 한정, 특이도로만 재정의). */
+/* §51(2026-08-12, 대표 지적 "사진이 너무 크고 해서 한눈에 어떤 코스인지 잘 안들어온다") —
+   사진이 스텝마다 상단을 16:9 풀블리드로 덮어 코스 전체를 훑어보려면 사진들 사이 스크롤을
+   많이 해야 했다. 사진을 왼쪽 고정폭 썸네일로 줄이고 본문(이름·배지·매칭도·blurb)을 오른쪽에
+   나란히 둬 스텝 하나의 세로 높이를 줄인다 — 화면에 더 많은 스텝이 한 번에 들어와 코스 전체를
+   스캔하기 쉬워진다. 안쪽 .spot-card는 대표 지시("카드 크기는 바뀌지 않게")로 자체 크기·패딩을
+   그대로 두고(185px 좁은 폭에서도 배지 1열 스택되도록 이미 설계됨) box-shadow/radius만 죽인다. */
 .course-step-card {
+  display: flex;
+  align-items: stretch;
   background: var(--white);
   border-radius: var(--r-lg);
   overflow: hidden;
@@ -3138,9 +3146,15 @@ input:focus-visible,
 }
 .course-step-card__media {
   position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
+  width: 104px;
+  flex: 0 0 104px;
   background: var(--gray-100);
+}
+@media (min-width: 640px) {
+  .course-step-card__media {
+    width: 140px;
+    flex-basis: 140px;
+  }
 }
 .course-step-card__img {
   width: 100%;
@@ -3153,19 +3167,32 @@ input:focus-visible,
   width: 100%;
   height: 100%;
 }
-/* §34(신규, 부록 H.3) — 사진 바로 아래 저작권 출처 표기(오버레이 대신 캡션, 근거는 CourseStepCard.tsx
-   주석 참고). 카드 배경(흰색) 위라 별도 반투명 처리 없이 gray-500 텍스트만으로 4.6:1 대비를 그대로
-   확보한다. blurb과 같은 좌우 여백(sp-5)을 써서 아래 본문과 정렬을 맞춘다. */
+/* §34 → §51 갱신 — 사진 아래 별도 캡션 줄을 둘 공간이 없어져 FeaturedSpotCard와 동일한
+   사진 위 오버레이 캡션 패턴으로 바꿨다(반투명 흰 배경, 신규 CSS 문법 없음). */
 .course-step-card__credit {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 1;
   margin: 0;
-  padding: 6px var(--sp-5) 0;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.86);
   color: var(--gray-500);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.3;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.course-step-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .course-step-card__body .spot-card {
   box-shadow: none;

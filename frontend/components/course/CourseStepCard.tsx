@@ -71,15 +71,14 @@ export default function CourseStepCard({ spot, tagLabelMap }: CourseStepCardProp
             <PlaceholderGlyph />
           </div>
         )}
+        {/* §51(2026-08-12) — 사진이 스텝 전체를 덮던 상단 풀블리드 대신 왼쪽 고정폭 썸네일로
+            축소하면서, 출처 캡션도 사진 아래 별도 줄 대신 사진 위 오버레이로 옮겼다(FeaturedSpotCard의
+            .featured-card__credit과 동일 패턴 재사용, 신규 CSS 문법 없음). photo_credit이 없으면
+            아무것도 렌더하지 않는다(§34 그대로 유지). */}
+        {showImage && spot.photo_credit && (
+          <p className="course-step-card__credit">{spot.photo_credit}</p>
+        )}
       </div>
-      {/* §34(신규, 부록 H.3) — 사진이 실제로 뜰 때만 사진 바로 아래에 작게 출처를 표기한다(저작권
-          표기 준수용). FeaturedSpotCard는 사진 위 오버레이를 쓰지만, 이 카드는 사진 바로 아래
-          바디(RecommendSpotCard)가 이어지는 리스트형 레이아웃이라 오버레이보다 사진 아래 캡션이
-          "읽는 흐름"에 자연스럽다(03-design-spec.md §34 판단 근거). photo_credit이 없으면
-          아무것도 렌더하지 않는다. */}
-      {showImage && spot.photo_credit && (
-        <p className="course-step-card__credit">{spot.photo_credit}</p>
-      )}
       <div className="course-step-card__body">
         <RecommendSpotCard spot={spot} tagLabelMap={tagLabelMap} />
         {spot.blurb && <p className="course-step-card__blurb">{spot.blurb}</p>}
