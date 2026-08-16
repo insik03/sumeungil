@@ -999,24 +999,6 @@ input:focus-visible,
   width: 20px;
   border-radius: var(--r-full);
 }
-.hero-carousel__pause {
-  width: var(--touch-min);
-  height: var(--touch-min);
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1.5px solid var(--gray-300);
-  background: var(--white);
-  color: var(--ink-muted);
-  transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.hero-carousel__pause:hover {
-  color: var(--ink);
-  border-color: var(--gray-400);
-  box-shadow: var(--shadow-card);
-}
 @media (min-width: 640px) {
   .hero-carousel__card {
     flex-basis: 60%;
@@ -5191,8 +5173,8 @@ input:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 좌우 화살표 — .hero-carousel__pause와 동일한 44x44 원형 버튼 레시피 재사용(터치 타겟 기준 충족,
-   ui-ux-pro-max Touch Target Size 근거). 사진 위 오버레이라 항상 보이는 반투명 흰 배경으로 대비 확보. */
+/* 좌우 화살표 — 44x44 원형 버튼(터치 타겟 기준 충족, ui-ux-pro-max Touch Target Size 근거).
+   사진 위 오버레이라 항상 보이는 반투명 흰 배경으로 대비 확보. */
 .photo-carousel__arrow {
   position: absolute;
   top: 50%;

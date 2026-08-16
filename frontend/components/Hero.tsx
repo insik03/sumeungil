@@ -76,23 +76,6 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function PlayIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 4.5v15l13-7.5-13-7.5z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor" />
-      <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" />
-    </svg>
-  );
-}
-
 interface HeroProps {
   /** 현재 선택된 지역(칩/검색으로 선택). null이면 기본 지역(해운대) */
   selectedRegion: RegionSearchItem | null;
@@ -138,7 +121,6 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
   const [slides, setSlides] = useState<FeaturedSpot[]>([]);
   const [slidesStatus, setSlidesStatus] = useState<"loading" | "success" | "error">("loading");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef<number | null>(null);
   // 프로그램적(자동순환·인디케이터) 스크롤 진행 중 플래그. 이게 켜져 있는 동안 handleTrackScroll의
@@ -164,14 +146,14 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
     return () => controller.abort();
   }, [selectedRegion]);
 
-  // 5초 자동 순환 — 슬라이드 2개 이상 + 일시정지 아님 + prefers-reduced-motion 아닐 때만.
+  // 5초 자동 순환 — 슬라이드 2개 이상 + prefers-reduced-motion 아닐 때만.
   useEffect(() => {
-    if (slides.length < 2 || isPaused || prefersReducedMotion()) return;
+    if (slides.length < 2 || prefersReducedMotion()) return;
     const timer = setInterval(() => {
       setActiveIndex((i) => (i + 1) % slides.length);
     }, AUTO_ROTATE_MS);
     return () => clearInterval(timer);
-  }, [slides.length, isPaused]);
+  }, [slides.length]);
 
   // activeIndex가 바뀌면(자동 순환·인디케이터 클릭 공통) 트랙을 해당 카드로 스크롤.
   // ★ scrollIntoView 금지: 모든 스크롤 조상(페이지 세로 포함)을 움직여 5초마다 화면이
@@ -499,15 +481,6 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
                 />
               ))}
             </div>
-            <button
-              type="button"
-              className="hero-carousel__pause"
-              aria-pressed={isPaused}
-              aria-label={isPaused ? "자동 순환 재생" : "자동 순환 일시정지"}
-              onClick={() => setIsPaused((p) => !p)}
-            >
-              {isPaused ? <PlayIcon /> : <PauseIcon />}
-            </button>
           </div>
         )}
       </div>
