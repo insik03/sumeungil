@@ -874,11 +874,16 @@ input:focus-visible,
   /* overflow-x:auto + overflow-y:visible 조합은 스펙상 둘 다 auto로 강제 병합돼(실측으로
      확인) 아래 .hero-carousel__card:hover 팝업(scale 1.1)의 위아래 튀어나온 부분이 그대로
      잘린다. visible 선언 대신 padding-box를 세로로 넉넉히 키워(카드 최대 높이 640px 기준
-     5% 튀어나옴=약 32px보다 여유있게 --sp-10=40px) 그 안에서 끝나게 하고, 늘어난 만큼
-     음수 margin으로 상쇄해 평소(비호버) 레이아웃은 그대로 유지한다. */
+     5% 튀어나옴=약 32px보다 여유있게 --sp-10=40px) 그 안에서 끝나게 한다.
+     대표 지적(2026-08-17, 6차 — "슬라이드바랑 버튼 위치가 안 맞아서 클릭이 잘 안 됨") —
+     처음엔 이 padding을 음수 margin으로 완전히 상쇄해 평소 레이아웃을 그대로 유지하려
+     했는데, padding은 트랙 "자기 박스"(클릭/hover 히트 영역 포함)를 실제로 키우는 반면
+     음수 margin은 "다음 형제 요소가 당겨지는 효과"만 줘서 — 아래 도트 컨트롤이 트랙의
+     투명한 padding 영역과 28px 겹쳐 도트를 눌러도 트랙이 클릭을 가로채는 문제가 있었다
+     (실측: trackRect.bottom 612 > controlsRect.top 584). 음수 margin 상쇄를 없애 padding을
+     실제 여백으로 그대로 노출한다 — 평소보다 위아래 간격이 좀 넓어지지만 클릭 문제가
+     확실히 없어진다. */
   padding: var(--sp-10) 8vw;
-  margin-top: calc(-1 * var(--sp-10));
-  margin-bottom: calc(-1 * var(--sp-10));
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
@@ -1645,12 +1650,13 @@ input:focus-visible,
      강제 병합해버려서(둘 다 스크롤 가능 취급) 실제로는 위아래가 그대로 잘린다 — visible
      선언은 눈속임일 뿐 동작하지 않는다(실측으로 확인). 대신 padding-box 자체를 넉넉히
      키워서 hover 확대(scale 1.1, 아래 .featured-card-link:hover) 시 튀어나오는 양(사진
-     높이의 약 5%, 모바일 기준 ~6px)이 padding 안쪽에서 끝나게 하고, 늘어난 padding만큼
-     음수 margin으로 상쇄해 평소(비호버) 간격은 원래(--sp-2)와 동일하게 유지한다. */
+     높이의 약 5%, 모바일 기준 ~6px)이 padding 안쪽에서 끝나게 한다.
+     대표 지적(2026-08-17, 히어로 캐러셀에서 발견된 동일 버그 — padding을 음수 margin으로
+     "상쇄"하면 다음 형제 요소의 위치만 당겨질 뿐 이 요소 자신의 클릭/hover 히트 영역은
+     그대로 커진 채라 아래(예: 다음 섹션 상단부)와 겹쳐 클릭을 가로챌 수 있다) — 음수
+     margin 상쇄를 없애 padding을 실제 여백으로 노출한다. */
   padding-top: calc(var(--sp-2) + var(--sp-3));
   padding-bottom: calc(var(--sp-2) + var(--sp-3));
-  margin-top: calc(-1 * var(--sp-3));
-  margin-bottom: calc(-1 * var(--sp-3));
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   /* §49(신규, 대표 지시 2026-08-11 "사진이 여백 때문에 잘려 보인다, 구석구석처럼") — 모바일
