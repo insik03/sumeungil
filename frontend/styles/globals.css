@@ -863,14 +863,18 @@ input:focus-visible,
   margin: 0 0 var(--sp-8);
 }
 /* 캐러셀 뒤에 은은하게 번지는 브랜드 그린 앰비언트 글로우 — 사진 카드가 배경 위에
-   "떠 있는" 느낌을 정지 화면에서도 바로 알아볼 수 있게 한다(호버 불필요). */
+   "떠 있는" 느낌을 정지 화면에서도 바로 알아볼 수 있게 한다(호버 불필요).
+   대표 지적(2026-08-16) — 기존 --g-400은 토큰 정의상 "어두운(사진) 배경 위 강조 텍스트
+   전용"(tokens.css 주석)인 진한 민트라 흰 배경 위에서 튀는 색 얼룩처럼 보였다. 페이지의
+   옅은 톤(--n-50 등)과 더 가까운 --g-100(연한 민트)으로 바꾸고, 옅어진 만큼 존재감을
+   유지하려 opacity를 살짝 올렸다. */
 .hero-carousel::before {
   content: "";
   position: absolute;
   inset: -8% 6%;
   z-index: -1;
-  background: radial-gradient(60% 60% at 50% 45%, var(--g-400) 0%, transparent 72%);
-  opacity: 0.22;
+  background: radial-gradient(60% 60% at 50% 45%, var(--g-100) 0%, transparent 72%);
+  opacity: 0.55;
   filter: blur(48px);
   pointer-events: none;
 }
@@ -878,10 +882,17 @@ input:focus-visible,
   display: flex;
   gap: var(--sp-3);
   overflow-x: auto;
+  /* overflow-x:auto + overflow-y:visible 조합은 스펙상 둘 다 auto로 강제 병합돼(실측으로
+     확인) 아래 .hero-carousel__card:hover 팝업(scale 1.1)의 위아래 튀어나온 부분이 그대로
+     잘린다. visible 선언 대신 padding-box를 세로로 넉넉히 키워(카드 최대 높이 640px 기준
+     5% 튀어나옴=약 32px보다 여유있게 --sp-10=40px) 그 안에서 끝나게 하고, 늘어난 만큼
+     음수 margin으로 상쇄해 평소(비호버) 레이아웃은 그대로 유지한다. */
+  padding: var(--sp-10) 8vw;
+  margin-top: calc(-1 * var(--sp-10));
+  margin-bottom: calc(-1 * var(--sp-10));
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
-  padding: 0 8vw;
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-carousel__track {
@@ -906,13 +917,19 @@ input:focus-visible,
     var(--slide-photo);
   background-size: cover;
   background-position: center;
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
 }
-/* 데스크톱 포인터 전용 — 터치 기기는 hover가 유사 상태로 걸려 남는 문제(스크롤 후에도
-   마지막 터치 카드가 계속 확대돼 보임)를 피한다. */
+/* 대표 지시(2026-08-16) — 기존 scale(1.015)는 카드 자기 박스 안에서만 미세하게 커져
+   "확대되는 게 안 보인다"는 느낌이었다. .featured-card__media와 같은 "사진이 카드 밖으로
+   튀어나오는" 팝업 방식으로 교체(비율은 featured-card와 동일하게 절반 축소 1.1). 트랙이
+   가로 스크롤(overflow-x:auto)을 유지해야 해서 좌우로는 이웃 카드에 가려 일부 클리핑될 수
+   있지만, 위아래로는 트랙의 overflow-y:visible 덕에 온전히 튀어나온다. 데스크톱 포인터
+   전용(터치 기기는 hover가 유사 상태로 걸려 남는 문제를 피함). */
 @media (hover: hover) and (pointer: fine) {
   .hero-carousel__card:hover {
-    transform: scale(1.015);
+    transform: scale(1.1);
+    z-index: 2;
+    box-shadow: 0 24px 48px rgba(15, 35, 45, 0.38);
   }
 }
 .hero-carousel__card--noimg,
@@ -1013,7 +1030,8 @@ input:focus-visible,
     padding: 0 var(--sp-10);
   }
   .hero-carousel__track {
-    padding: 0 6%;
+    /* 상하 padding은 §hover-pop 세로 버퍼(--sp-10, 기본 규칙 참고) — 여기서는 좌우 값만 바꾼다. */
+    padding: var(--sp-10) 6%;
   }
   .hero-carousel__card {
     flex-basis: 56%;
@@ -1618,12 +1636,16 @@ input:focus-visible,
   display: flex;
   gap: var(--sp-3);
   overflow-x: auto;
-  /* overflow-x만 지정하면 브라우저가 overflow-y를 암묵적으로 auto로 취급해(스펙 quirk)
-     세로 방향도 같이 클리핑된다 — 대표 지시(2026-08-13)로 카드 hover 확대(아래
-     .featured-card-link:hover 참고)가 위아래로 잘리지 않게 명시적으로 visible 처리. */
-  overflow-y: visible;
-  padding-top: var(--sp-2);
-  padding-bottom: var(--sp-2);
+  /* overflow-x:auto + overflow-y:visible 조합은 스펙상 브라우저가 overflow-y도 auto로
+     강제 병합해버려서(둘 다 스크롤 가능 취급) 실제로는 위아래가 그대로 잘린다 — visible
+     선언은 눈속임일 뿐 동작하지 않는다(실측으로 확인). 대신 padding-box 자체를 넉넉히
+     키워서 hover 확대(scale 1.1, 아래 .featured-card-link:hover) 시 튀어나오는 양(사진
+     높이의 약 5%, 모바일 기준 ~6px)이 padding 안쪽에서 끝나게 하고, 늘어난 padding만큼
+     음수 margin으로 상쇄해 평소(비호버) 간격은 원래(--sp-2)와 동일하게 유지한다. */
+  padding-top: calc(var(--sp-2) + var(--sp-3));
+  padding-bottom: calc(var(--sp-2) + var(--sp-3));
+  margin-top: calc(-1 * var(--sp-3));
+  margin-bottom: calc(-1 * var(--sp-3));
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   /* §49(신규, 대표 지시 2026-08-11 "사진이 여백 때문에 잘려 보인다, 구석구석처럼") — 모바일
@@ -1700,7 +1722,8 @@ input:focus-visible,
    평소(작은 썸네일) 모양은 그대로 유지한다(부모 카드의 상단 라운드에 얹혀 있던 모습 불변). */
 .featured-card-link:hover .featured-card__media,
 .featured-card-link:focus-visible .featured-card__media {
-  transform: scale(2.2);
+  /* 대표 지시(2026-08-16) — 확대비율 절반(2.2→1.1). */
+  transform: scale(1.1);
   border-radius: var(--r-md);
   box-shadow: 0 24px 48px rgba(15, 35, 45, 0.38);
 }
