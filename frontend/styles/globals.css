@@ -901,7 +901,9 @@ input:focus-visible,
   display: flex;
   align-items: flex-end;
   color: var(--white);
-  box-shadow: var(--shadow-lg);
+  /* 대표 지적(2026-08-16, 3차) — 평소에도 켜져 있던 box-shadow(--shadow-lg)가 카드 주변에
+     늘 보이는 "경계"로 읽혔다(글로우를 없애니 더 도드라짐). 평상시엔 그림자를 아예 빼고,
+     hover 팝업(아래 :hover 규칙)에서만 뜨는 느낌을 준다. */
   background-image: linear-gradient(180deg, rgba(5, 14, 27, 0) 38%, rgba(5, 14, 27, 0.86) 100%),
     var(--slide-photo);
   background-size: cover;
