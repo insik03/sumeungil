@@ -48,3 +48,18 @@ export const SIDO_REGIONS: SidoRegion[] = [
  * 동일해 "지역 전환은 사이트 전체와 일관되게" 원칙을 별도 하드코딩 없이 만족한다.
  */
 export const DEFAULT_SIDO_CODE = "26";
+
+/**
+ * 특별시·광역시·특별자치시(8개) 코드 — SIDO_REGIONS 17개 중 이 8개를 뺀 나머지 9개가 "도"
+ * (제주·강원·전북 등 "특별자치도" 표기도 도 단위로 취급, §Hero.tsx 히어로 캐러셀 기본 슬라이드
+ * 근거). 대한민국 법정동 코드 체계상 고정값(backend seed.py와 동일 체계) — 새로 지어낸 값 아님.
+ */
+const METRO_SIDO_CODES = new Set(["11", "26", "27", "28", "29", "30", "31", "36"]);
+
+/**
+ * SIDO_REGIONS 중 "도"만 9개 — 히어로 캐러셀이 지역 미선택(첫 진입) 상태일 때 대표 지시
+ * (2026-08-16, "각 도의 대표 사진 하나씩 9개")로 쓰는 목록.
+ */
+export const PROVINCE_REGIONS: SidoRegion[] = SIDO_REGIONS.filter(
+  (r) => !METRO_SIDO_CODES.has(r.sidoCode)
+);

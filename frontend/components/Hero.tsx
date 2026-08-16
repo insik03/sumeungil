@@ -11,7 +11,7 @@ import {
 } from "../lib/api";
 import { AUTH_CHANGED_EVENT, getNickname } from "../lib/authStorage";
 import { loadOnboardingResult } from "../lib/onboardingStorage";
-import { SIDO_REGIONS, SidoRegion } from "./regions/constants";
+import { PROVINCE_REGIONS, SIDO_REGIONS, SidoRegion } from "./regions/constants";
 import ChipScrollRow from "./ChipScrollRow";
 
 /**
@@ -76,6 +76,24 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/**
+ * 대표 지시(2026-08-16) — 지역 미선택(첫 진입) 상태의 히어로 캐러셀은 "도" 9곳의 대표 스팟을
+ * 한 곳씩만 가져와 채운다. limit=1로 그 도의 trending 1위를 쓰고, trending이 비면(도에 따라
+ * congestion 랭킹 후보가 없을 수 있음) hidden_picks로 폴백한다. 실패한 도는 조용히 빠진다
+ * (지어내지 않는다 — 9개를 억지로 채우지 않고 성공한 만큼만 보여준다).
+ */
+async function fetchProvinceRepresentative(
+  regionCode: string,
+  signal: AbortSignal
+): Promise<FeaturedSpot | null> {
+  try {
+    const res = await fetchFeatured(regionCode, 1, signal);
+    return res.trending[0] ?? res.hidden_picks[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 interface HeroProps {
   /** 현재 선택된 지역(칩/검색으로 선택). null이면 기본 지역(해운대) */
   selectedRegion: RegionSearchItem | null;
@@ -132,17 +150,36 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
   useEffect(() => {
     const controller = new AbortController();
     setSlidesStatus("loading");
-    fetchFeatured(selectedRegion?.sigungu_cd ?? undefined, CAROUSEL_LIMIT, controller.signal)
-      .then((res) => {
-        setSlides(res.trending);
-        setSlidesStatus("success");
-        setActiveIndex(0);
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return;
-        setSlides([]);
-        setSlidesStatus("error");
-      });
+    if (selectedRegion) {
+      fetchFeatured(selectedRegion.sigungu_cd, CAROUSEL_LIMIT, controller.signal)
+        .then((res) => {
+          setSlides(res.trending);
+          setSlidesStatus("success");
+          setActiveIndex(0);
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setSlides([]);
+          setSlidesStatus("error");
+        });
+    } else {
+      // 지역 미선택(첫 진입) — 특정 지역에 쏠리지 않게 도 9곳의 대표 사진 한 장씩(9개 병렬 호출,
+      // 순차 왕복 아님 — 체감 지연은 가장 느린 1건 수준).
+      Promise.all(
+        PROVINCE_REGIONS.map((p) => fetchProvinceRepresentative(p.regionCode, controller.signal))
+      )
+        .then((results) => {
+          if (controller.signal.aborted) return;
+          setSlides(results.filter((s): s is FeaturedSpot => s !== null));
+          setSlidesStatus("success");
+          setActiveIndex(0);
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setSlides([]);
+          setSlidesStatus("error");
+        });
+    }
     return () => controller.abort();
   }, [selectedRegion]);
 
