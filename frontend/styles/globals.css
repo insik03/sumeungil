@@ -882,18 +882,21 @@ input:focus-visible,
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  /* 대표 지적(2026-08-16, 5차) — 페이드 폭을 padding과 똑같이 8vw로 잡았더니 peek되는
+     카드 전체가 흐릿해 보일 정도로 과했다. 진짜 잘리는 가장자리 쪽 얇은 띠(2vw)만 페이드하고
+     나머지는 선명하게 둔다. */
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0,
-    #000 8vw,
-    #000 calc(100% - 8vw),
+    #000 2vw,
+    #000 calc(100% - 2vw),
     transparent 100%
   );
   mask-image: linear-gradient(
     to right,
     transparent 0,
-    #000 8vw,
-    #000 calc(100% - 8vw),
+    #000 2vw,
+    #000 calc(100% - 2vw),
     transparent 100%
   );
 }
@@ -1023,15 +1026,15 @@ input:focus-visible,
     -webkit-mask-image: linear-gradient(
       to right,
       transparent 0,
-      #000 6%,
-      #000 94%,
+      #000 1.5%,
+      #000 98.5%,
       transparent 100%
     );
     mask-image: linear-gradient(
       to right,
       transparent 0,
-      #000 6%,
-      #000 94%,
+      #000 1.5%,
+      #000 98.5%,
       transparent 100%
     );
   }
