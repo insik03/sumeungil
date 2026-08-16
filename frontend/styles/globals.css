@@ -343,6 +343,13 @@ input:focus-visible,
   color: var(--gray-500); /* 실제 안내 문구 — 대비 4.5:1 확보(ux 도메인 Color Contrast) */
   line-height: 1.5;
 }
+.login-modal__note a {
+  /* 전역 리셋(a{color:inherit; text-decoration:none})이면 처리방침 링크가 안 보인다 —
+     법적 고지 링크는 눈에 띄어야 한다(2026-08-17). */
+  color: var(--g-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* 구글 로그인 버튼 — "Sign in with Google" 브랜딩 가이드라인 준수(2026-08-17, 대표 지시).
    흰 배경 + 회색 테두리 + 공식 4색 G 로고(LoginModal.tsx의 SVG, 색상 불변). 브랜드 컬러로
@@ -1190,6 +1197,52 @@ input:focus-visible,
    ========================================================================= */
 .section {
   padding: var(--sp-10) var(--sp-4) var(--sp-8);
+}
+/* 개인정보처리방침(app/privacy/page.tsx, 2026-08-17 신설) — 순수 텍스트 정책 문서용 프로즈
+   스타일. 전역 리셋(h1~h3/p/ul margin:0, ul list-style:none)이 걷어간 기본 여백·불릿을
+   이 페이지 안에서만 되살린다(다른 화면에 영향 없음). */
+.legal-content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.legal-content h1 {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.legal-content__updated {
+  margin-top: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+.legal-content > p {
+  margin-top: var(--sp-5);
+  line-height: 1.7;
+  color: var(--ink);
+}
+.legal-content h2 {
+  margin-top: var(--sp-8);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--ink);
+}
+.legal-content ul {
+  margin-top: var(--sp-3);
+  padding-left: var(--sp-5);
+  list-style: disc;
+}
+.legal-content li {
+  margin-top: var(--sp-2);
+  line-height: 1.7;
+  color: var(--ink);
+}
+.legal-content__note {
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--n-100);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
 }
 .section--mint {
   background: var(--g-50);
@@ -3611,6 +3664,14 @@ input:focus-visible,
   color: rgba(255, 255, 255, 0.5);
   font-weight: 600;
   text-align: center;
+}
+.footer__privacy-link {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.footer__privacy-link:hover {
+  color: var(--white);
 }
 @media (min-width: 1024px) {
   .footer__copyright {

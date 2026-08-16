@@ -59,7 +59,12 @@ export default function Footer() {
         </div>
       </div>
 
-      <p className="footer__copyright">© 2026 숨은길 · 한국관광공사 공공데이터 기반</p>
+      <p className="footer__copyright">
+        © 2026 숨은길 · 한국관광공사 공공데이터 기반 ·{" "}
+        <Link href="/privacy" className="footer__privacy-link">
+          개인정보처리방침
+        </Link>
+      </p>
     </footer>
   );
 }
