@@ -299,6 +299,41 @@ class Settings:
         # RATE_LIMIT_ENABLED 와 **무관하게 항상 동작**한다(로컬에서도 켜져 있다).
         self.admin_login_per_min: int = int(os.getenv("ADMIN_LOGIN_PER_MIN", "5"))
 
+        # --- 구글 로그인 (2026-08-17, 대표 지시 — "임시로 붙이자", 운영 배포 대상) ---
+        #
+        # 데모 닉네임 로그인(§R.0, authStorage.ts)을 완전히 대체한다. ADMIN_PASSWORD_HASH와
+        # 같은 원칙: **미설정이면 기능 전부 비활성**(라우터 미등록 → /api/v1/auth/* 404).
+        # 기본값을 만들지 않는다 — Google Cloud Console에서 대표가 직접 발급한 클라이언트
+        # ID/시크릿 없이는 아예 켜지지 않는다.
+        #
+        # 계정 테이블을 두지 않는다(부록 R.0과 동일 판단 — "임시" 스코프에 회원 DB는 과하다).
+        # 구글이 이미 이메일을 검증했으므로 그 사실 자체를 신뢰하고, 세션은 admin_auth.py와
+        # 동일한 "서버가 서명한 만료시각" 방식(HMAC, JWT 라이브러리 불필요)으로 이메일·이름을
+        # 쿠키에 담는다 — security/user_auth.py 참고.
+        self.google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        self.google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+        # Google Cloud Console의 "승인된 리디렉션 URI"에 등록한 값과 문자 그대로 일치해야 한다.
+        # 예: 로컬 http://localhost:8000/api/v1/auth/google/callback
+        #     운영 https://sumeungil.co.kr/api/v1/auth/google/callback (nginx가 /api를 backend로 프록시)
+        self.google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+        # 로그인 팝업이 postMessage로 결과를 돌려줄 때 origin 검증에 쓴다(다른 탭이 위조한
+        # 메시지를 프론트가 신뢰하지 않게). 로컬은 프론트/백엔드 포트가 달라 필수로 채워야 한다.
+        self.frontend_base_url: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").strip()
+        # 세션 서명 키 — 미설정이면 JWT_SECRET_KEY로 폴백(admin_session_secret과 동일 패턴).
+        # admin과 **다른 라벨**로 키를 파생하므로(user_auth.py) 같은 시크릿을 공유해도 관리자
+        # 세션 위조에 쓸 수 없다.
+        self.user_session_secret: str = (
+            os.getenv("USER_SESSION_SECRET", "").strip() or self.jwt_secret_key
+        )
+        # 30일 — 데모 닉네임 로그인이 사실상 "한번 로그인하면 계속 로그인"이었던 것과 비슷하게.
+        self.user_session_ttl_sec: int = int(
+            os.getenv("USER_SESSION_TTL_SEC", str(30 * 24 * 60 * 60))
+        )
+        self.user_cookie_name: str = os.getenv("USER_COOKIE_NAME", "sumeungil_user").strip()
+        self.user_cookie_secure: bool = (
+            os.getenv("USER_COOKIE_SECURE", "true").strip().lower() != "false"
+        )
+
     @property
     def sqlite_file(self) -> Path:
         """상대 경로는 **BACKEND_DIR 기준**으로 푼다(프로세스 cwd 에 의존하지 않게).

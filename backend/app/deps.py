@@ -19,6 +19,7 @@ from .repositories.congestion_repo import CongestionRepository, LiveCongestionRe
 from .repositories.region_repo import RegionRepository, StaticRegionRepository
 from .repositories.spot_repo import JsonSpotRepository, SpotRepository
 from .security.admin_auth import AdminAuth
+from .security.user_auth import UserAuth
 from .services.weather_provider import WeatherProvider, create_weather_provider
 
 
@@ -103,6 +104,22 @@ def get_admin_auth() -> AdminAuth:
         session_ttl_sec=settings.admin_session_ttl_sec,
         cookie_name=settings.admin_cookie_name,
         cookie_secure=settings.admin_cookie_secure,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_user_auth() -> UserAuth:
+    """구글 로그인 세션 핸들(임시, 2026-08-17 대표 지시). `.env`의 GOOGLE_CLIENT_ID/SECRET/
+    REDIRECT_URI 셋 다 있어야 `enabled=True` — main.py가 그 경우에만 auth 라우터를 등록한다.
+    """
+    return UserAuth(
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        redirect_uri=settings.google_redirect_uri,
+        session_secret=settings.user_session_secret,
+        session_ttl_sec=settings.user_session_ttl_sec,
+        cookie_name=settings.user_cookie_name,
+        cookie_secure=settings.user_cookie_secure,
     )
 
 

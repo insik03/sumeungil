@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api import (
     admin,
+    auth,
     collections,
     compare,
     concierge,
@@ -33,7 +34,7 @@ from .api import (
     weather,
 )
 from .config import settings
-from .deps import get_admin_auth, get_cache, get_database
+from .deps import get_admin_auth, get_cache, get_database, get_user_auth
 from .middleware.rate_limit import RateLimitMiddleware, build_limits_from_settings
 from .middleware.visit_log import VisitLogMiddleware
 from .services import festival_service, share_service
@@ -299,6 +300,31 @@ elif _admin_auth.misconfigured:
     )
 else:
     logger.info("관리자 기능 비활성(ADMIN_PASSWORD_HASH 미설정) — /api/v1/admin/* 라우트 미등록")
+
+# 구글 로그인(임시, 2026-08-17 대표 지시) — 데모 닉네임 로그인을 완전히 대체.
+#
+# **설정하지 않으면 존재하지 않는다** — admin과 동일 원칙. GOOGLE_CLIENT_ID/SECRET/
+# REDIRECT_URI 셋 다 없으면 이 라우터를 등록조차 하지 않는다 → /api/v1/auth/* 는 404.
+# Google Cloud Console에서 대표가 직접 OAuth 클라이언트를 발급해야만 켜진다.
+_user_auth = get_user_auth()
+if _user_auth.enabled:
+    app.include_router(auth.router)
+    logger.info(
+        "구글 로그인 활성화 — /api/v1/auth/* (세션 %d일, 쿠키 secure=%s)",
+        settings.user_session_ttl_sec // 86400,
+        settings.user_cookie_secure,
+    )
+    if not settings.user_session_secret:
+        logger.warning(
+            "USER_SESSION_SECRET 미설정 — 세션 서명키가 비어 있는 문자열에서 파생됩니다. "
+            "python3 -c \"import secrets;print(secrets.token_urlsafe(48))\" 결과를 .env 에 넣으세요."
+        )
+    if not settings.user_cookie_secure:
+        logger.warning("USER_COOKIE_SECURE=false — 로그인 쿠키가 평문(HTTP)으로도 전송됩니다.")
+else:
+    logger.info(
+        "구글 로그인 비활성(GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI 미설정) — /api/v1/auth/* 라우트 미등록"
+    )
 
 
 @app.get("/", tags=["root"])
