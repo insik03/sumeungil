@@ -862,11 +862,11 @@ input:focus-visible,
   position: relative;
   margin: 0 0 var(--sp-8);
 }
-/* 대표 지적(2026-08-16, 2차) — 캐러셀 뒤 색 있는 앰비언트 글로우(--g-400→--g-100로 한 번
-   조정했었음)를 아예 없앴다. 특정 색을 흰 배경에 맞춰 고르는 방식 자체가 근본적으로
-   배경이 바뀌면(예: 다크모드) 다시 어긋나는 접근이라는 지적 — 배경이 뭐든 자연스럽게
-   어울리는 중립적인 그림자만으로 "떠 있는" 느낌을 낸다. .hero-carousel__card가 이미
-   box-shadow: var(--shadow-lg)를 갖고 있어(아래) 추가 요소 없이 그걸로 충분하다. */
+/* 대표 지적(2026-08-16, 2~4차) — 캐러셀 뒤 색 있는 앰비언트 글로우도, 카드의 평소 box-shadow도
+   전부 제거했다(둘 다 흰 배경과 대비되는 "경계"로 보였음). 이제 뜨는 느낌은 hover 팝업에서만
+   준다. 대신 양옆으로 살짝 보이는 이웃 카드가 트랙 padding 경계에서 뚝 잘려 보이는 문제가
+   남아있어(4차 지적 "양옆 사진 경계가 확 보임"), 트랙 좌우 끝을 mask-image로 흰 배경에
+   서서히 녹아들게 페이드 처리한다(구석구석류 캐러셀에서 흔한 기법). */
 .hero-carousel__track {
   display: flex;
   gap: var(--sp-3);
@@ -882,6 +882,20 @@ input:focus-visible,
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 8vw,
+    #000 calc(100% - 8vw),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 8vw,
+    #000 calc(100% - 8vw),
+    transparent 100%
+  );
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-carousel__track {
@@ -918,9 +932,9 @@ input:focus-visible,
    전용(터치 기기는 hover가 유사 상태로 걸려 남는 문제를 피함). */
 @media (hover: hover) and (pointer: fine) {
   .hero-carousel__card:hover {
+    /* 대표 지시(2026-08-16, 4차) — 그림자는 hover 상태에도 완전히 뺀다. */
     transform: scale(1.1);
     z-index: 2;
-    box-shadow: 0 24px 48px rgba(15, 35, 45, 0.38);
   }
 }
 .hero-carousel__card--noimg,
@@ -1003,8 +1017,23 @@ input:focus-visible,
     padding: 0 var(--sp-10);
   }
   .hero-carousel__track {
-    /* 상하 padding은 §hover-pop 세로 버퍼(--sp-10, 기본 규칙 참고) — 여기서는 좌우 값만 바꾼다. */
+    /* 상하 padding은 §hover-pop 세로 버퍼(--sp-10, 기본 규칙 참고) — 여기서는 좌우 값만 바꾼다.
+       mask-image 페이드 폭도 padding과 같은 6%로 맞춘다(기본 규칙의 8vw 대응). */
     padding: var(--sp-10) 6%;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 6%,
+      #000 94%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 6%,
+      #000 94%,
+      transparent 100%
+    );
   }
   .hero-carousel__card {
     flex-basis: 56%;
