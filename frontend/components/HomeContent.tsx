@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RegionSearchItem } from "../lib/api";
 import { clearLastRegion, loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import Hero from "./Hero";
@@ -83,12 +83,15 @@ import FestivalBanner from "./FestivalBanner";
  */
 export default function HomeContent() {
   // 대표 지시(2026-08-17) — "모든 기본 화면의 기준 지역은 마지막으로 고른 지역"을 기준으로.
-  // 지연 초기화로 세션에 기억된 지역이 있으면 그걸로 시작(없으면 기존대로 null → 히어로가
-  // 도 9곳 모자이크를 보여준다, Hero.tsx 참고). 처음 아무것도 고른 적 없는 사용자는 그대로
-  // 중립 상태를 본다 — 지어낸 기본 지역을 강제하지 않는다.
-  const [selectedRegion, setSelectedRegionState] = useState<RegionSearchItem | null>(() =>
-    loadLastRegion()
-  );
+  // SSR/첫 클라이언트 렌더는 항상 중립값(null)으로 맞춘다 — sessionStorage는 서버에서
+  // 읽을 수 없어(Hero.tsx의 닉네임/동행 태그 처리와 동일 이유) 초기 state에서 바로 쓰면
+  // 서버 HTML과 클라이언트 첫 렌더가 달라져 하이드레이션 에러가 난다(실측으로 확인).
+  // mount 후 effect에서 반영한다.
+  const [selectedRegion, setSelectedRegionState] = useState<RegionSearchItem | null>(null);
+  useEffect(() => {
+    const last = loadLastRegion();
+    if (last) setSelectedRegionState(last);
+  }, []);
   const handleSelectRegion = (region: RegionSearchItem | null) => {
     setSelectedRegionState(region);
     // 검색창 지우기(대표: destInput의 × 버튼)로 명시적으로 지역을 비운 것도 하나의 선택이다

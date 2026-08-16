@@ -56,15 +56,23 @@ export default function RecommendContent() {
 
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 렌더부터 쿼리 지역으로 시작한다(기본 지역으로 한 번 조회한 뒤 다시 조회하는
-  // 이중 호출을 피하기 위함). 우선순위: URL 쿼리 > 마지막으로 고른 지역(세션 기억, 대표 지시
-  // 2026-08-17) > 하드코딩 기본 지역.
-  const [selectedRegion, setSelectedRegionState] = useState<SelectedRegion>(() => {
-    const fromQuery = regionSelectionFromCode(paramRegionCode);
-    if (fromQuery) return fromQuery;
+  // 이중 호출을 피하기 위함). URL 쿼리는 SSR에서도 동일하게 읽혀 하이드레이션이 안전하다 —
+  // 마지막으로 고른 지역(세션 기억)은 sessionStorage라 서버에서 못 읽으므로 초기 state에
+  // 넣지 않는다(넣으면 서버/클라이언트 첫 렌더가 갈려 하이드레이션 에러, 실측으로 확인된
+  // 버그 재발 방지) — 아래 effect에서 mount 후 반영한다.
+  const [selectedRegion, setSelectedRegionState] = useState<SelectedRegion>(
+    () =>
+      regionSelectionFromCode(paramRegionCode) ?? {
+        sigunguCd: DEFAULT_REGION.sigunguCd,
+        label: DEFAULT_REGION.label,
+      }
+  );
+  useEffect(() => {
+    if (regionSelectionFromCode(paramRegionCode)) return; // URL이 이미 명시했다면 건드리지 않음
     const last = loadLastRegion();
-    if (last) return { sigunguCd: last.sigungu_cd, label: last.label };
-    return { sigunguCd: DEFAULT_REGION.sigunguCd, label: DEFAULT_REGION.label };
-  });
+    if (last) setSelectedRegionState({ sigunguCd: last.sigungu_cd, label: last.label });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // useState 세터와 동일한 시그니처(값 또는 함수형 업데이터)를 유지해 기존 호출부(§35 동기화
   // effect의 함수형 업데이터 포함)를 그대로 쓸 수 있게 한다 — 실제로 바뀔 때만 기억해둔다.
   const setSelectedRegion = (value: SelectedRegion | ((prev: SelectedRegion) => SelectedRegion)) => {

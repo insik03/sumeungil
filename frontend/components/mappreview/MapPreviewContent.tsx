@@ -29,9 +29,14 @@ export default function MapPreviewContent() {
   const [data, setData] = useState<NationwideCongestionResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // 대표 지시(2026-08-17) — 이 화면도 마지막으로 고른 지역을 기본값으로 시작한다(지도가
-  // 처음부터 그 시·도를 골라둔 채로 열림). 지어낸 기본값이 아니라 사용자가 실제로 고른
-  // 시도 코드(area_cd)만 재사용 — 아예 고른 적 없으면 기존대로 미선택(null)에서 시작한다.
-  const [selected, setSelectedState] = useState<string | null>(() => loadLastRegion()?.area_cd ?? null);
+  // 처음부터 그 시·도를 골라둔 채로 열림). SSR/첫 클라이언트 렌더는 중립값(null)으로
+  // 맞추고(sessionStorage는 서버에서 못 읽음 — 하이드레이션 불일치 실측으로 확인된 버그
+  // 재발 방지) mount 후 effect에서 반영한다.
+  const [selected, setSelectedState] = useState<string | null>(null);
+  useEffect(() => {
+    const last = loadLastRegion()?.area_cd;
+    if (last) setSelectedState(last);
+  }, []);
   const handleSelect = (sidoCode: string) => {
     setSelectedState(sidoCode);
     const sido = SIDO_REGIONS.find((s) => s.sidoCode === sidoCode);

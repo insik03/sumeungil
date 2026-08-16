@@ -344,6 +344,40 @@ input:focus-visible,
   line-height: 1.5;
 }
 
+/* 구글 로그인 버튼 — "Sign in with Google" 브랜딩 가이드라인 준수(2026-08-17, 대표 지시).
+   흰 배경 + 회색 테두리 + 공식 4색 G 로고(LoginModal.tsx의 SVG, 색상 불변). 브랜드 컬러로
+   재도색하거나 로고 비율을 바꾸지 않는다 — 가이드라인이 명시적으로 금지한다. */
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: 100%;
+  height: 44px;
+  margin-top: var(--sp-5);
+  padding: 0 var(--sp-4);
+  background: var(--white);
+  border: 1px solid #747775;
+  border-radius: var(--r-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  font-family: inherit;
+  color: #1f1f1f;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-google:hover {
+  background: #f8f9fa;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3);
+}
+.btn-google:focus-visible {
+  outline: 2px solid #4285f4;
+  outline-offset: 2px;
+}
+.btn-google svg {
+  flex: 0 0 auto;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

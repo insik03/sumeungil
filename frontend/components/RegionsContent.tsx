@@ -91,24 +91,32 @@ export default function RegionsContent() {
   // §47(개편) 이후로는 SIDO_REGIONS의 하드코딩 대표값과 일치할 필요가 없다(임의의 실제 시군구
   // 코드를 그대로 드롭다운 선택값으로 쓴다). 매칭 실패 시에만 기본값(시도 26/전체)을 쓴다.
   const searchParams = useSearchParams();
-  // 대표 지시(2026-08-17) — URL 쿼리(명시적 딥링크)가 최우선, 그다음 마지막으로 고른 지역
-  // (세션 기억), 마지막에만 하드코딩 기본값(부산)으로 폴백한다.
+  // URL 쿼리는 SSR에서도 동일하게 읽혀 서버/클라이언트 첫 렌더가 일치한다(하이드레이션
+  // 안전) — 초기 state는 여기까지만 쓴다.
   const { initialSidoCode, initialSigunguCode } = (() => {
     const code = readRegionCode(searchParams.get("region_code"));
     if (code) {
       const bySido = SIDO_REGIONS.find((s) => s.sidoCode === code.slice(0, 2));
       if (bySido) return { initialSidoCode: bySido.sidoCode, initialSigunguCode: code };
     }
-    const last = loadLastRegion();
-    if (last) {
-      const bySido = SIDO_REGIONS.find((s) => s.sidoCode === last.area_cd);
-      if (bySido) return { initialSidoCode: bySido.sidoCode, initialSigunguCode: last.sigungu_cd };
-    }
     return { initialSidoCode: DEFAULT_SIDO_CODE, initialSigunguCode: null as string | null };
   })();
   const [selectedSidoCode, setSelectedSidoCode] = useState(initialSidoCode);
   // null = "전체"(§47 기본값). 시도를 바꾸면 항상 "전체"로 리셋한다(handleSelectSido).
   const [selectedSigunguCode, setSelectedSigunguCode] = useState<string | null>(initialSigunguCode);
+  // 대표 지시(2026-08-17) — URL 쿼리가 없을 때만 마지막으로 고른 지역(세션 기억)을 적용한다.
+  // sessionStorage는 서버에서 못 읽으므로 mount 후 effect에서 반영해야 하이드레이션이
+  // 깨지지 않는다(HomeContent.tsx와 동일 이유, 실측으로 확인된 버그 재발 방지).
+  useEffect(() => {
+    if (readRegionCode(searchParams.get("region_code"))) return; // URL이 이미 명시했다면 건드리지 않음
+    const last = loadLastRegion();
+    if (!last) return;
+    const bySido = SIDO_REGIONS.find((s) => s.sidoCode === last.area_cd);
+    if (!bySido) return;
+    setSelectedSidoCode(bySido.sidoCode);
+    setSelectedSigunguCode(last.sigungu_cd);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const selectedSido =
     SIDO_REGIONS.find((s) => s.sidoCode === selectedSidoCode) ?? SIDO_REGIONS[0];
   // "전체" 모드에서 /recommend·/course CTA에 실을 대표 시군구 — 그 두 화면은 여전히 구체적인
