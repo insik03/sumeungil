@@ -1649,11 +1649,10 @@ input:focus-visible,
   scroll-snap-align: start;
   border-radius: var(--r-md);
 }
-/* 대표 피드백(2026-08-13) — 사진만 클리핑된 박스(.featured-card__media) 안에서 확대되면
-   이미 좁은 썸네일(168px)이라 확대할수록 더 잘려 보였다. 사진만 줌 하는 대신 카드 전체
-   (사진+프레임)를 통째로 살짝 키운다 — 크롭 비율은 그대로 유지된 채 더 크게 보이기만 해서
-   "잘려 보임"이 생기지 않는다. 확대된 카드가 이웃 카드 위로 살짝 걸치므로 hover 중인 카드를
-   z-index로 맨 위에 올린다(.featured-scroll의 overflow-y: visible과 짝을 이룸). */
+/* 대표 피드백(2026-08-13, 2차) — 카드 전체를 살짝 키우는 1차 시도는 여전히 "정해진 칸 안에서만
+   커지는" 전광판 같은 느낌이라는 지적. 카드(그리드 슬롯)는 작게 그대로 두고, **사진만** hover 시
+   카드 테두리 밖으로 크게 튀어나오게 바꿨다(Netflix/Apple TV 미리보기 패턴) — 그리드 레이아웃은
+   전혀 안 흔들리고 사진만 순간적으로 확 커져 다른 카드 위로 떠오른다. */
 .featured-card-link:hover,
 .featured-card-link:focus-visible {
   z-index: 2;
@@ -1672,7 +1671,11 @@ input:focus-visible,
 .featured-card-link:hover .featured-card,
 .featured-card-link:focus-visible .featured-card {
   box-shadow: var(--shadow-lg);
-  transform: translateY(-4px) scale(1.08);
+  transform: translateY(-4px);
+  /* 사진(.featured-card__media)이 이 박스 밖으로 튀어나와야 해서 카드 자신의 클리핑을
+     hover 중에는 해제한다. 사진 쪽은 자기 own overflow:hidden(아래)을 계속 유지해서
+     크롭 비율 자체는 안 바뀐다 — 카드만 "구멍"을 열어주는 역할. */
+  overflow: visible;
 }
 /* §33-4(2026-07-29) — 고정 px 높이(104px) 대신 고정 aspect-ratio로 통일했다. 720px↑에서
    .featured-scroll이 flex(가로 스크롤)→grid(3~4열)로 바뀌면 카드 폭이 늘어나는데, 높이만
@@ -1687,6 +1690,19 @@ input:focus-visible,
   flex: 0 0 auto;
   /* 어떤 원본 비율(세로 사진 포함)이 와도 미디어 박스가 8/5를 넘지 못하게 이중 안전장치. */
   overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+/* hover/focus 시 사진 박스 자체를 확대해 카드 밖(위 .featured-card의 overflow:visible)으로
+   튀어나오게 한다. transform-origin 기본값(중심)이라 사방으로 고르게 커진다 — 이미지가 이미
+   이 박스 안에서 8/5로 크롭돼 있어(object-fit:cover) 박스와 함께 스케일되면 같은 크롭 그대로
+   커지기만 한다(추가로 잘려나가는 부분 없음). 뱃지(혼잡도·숨은스팟)도 이 박스의 자식이라 함께
+   확대돼 "떠 있는 포스터" 하나처럼 보인다. border-radius/box-shadow는 hover 때만 줘서
+   평소(작은 썸네일) 모양은 그대로 유지한다(부모 카드의 상단 라운드에 얹혀 있던 모습 불변). */
+.featured-card-link:hover .featured-card__media,
+.featured-card-link:focus-visible .featured-card__media {
+  transform: scale(2.2);
+  border-radius: var(--r-md);
+  box-shadow: 0 24px 48px rgba(15, 35, 45, 0.38);
 }
 /* 혼잡도 없는 카드의 높이 예약용 고스트 뱃지 — 화면·스크린리더 모두에 안 보이고 자리만 차지.
    ("정보없음" 문구는 신뢰성을 해친다는 대표 지시로 미표기.) */
@@ -1702,7 +1718,6 @@ input:focus-visible,
   object-fit: cover;
   object-position: center;
   display: block;
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .featured-card__placeholder {
   width: 100%;
