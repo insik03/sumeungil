@@ -10,12 +10,17 @@
 로그인 게이트가 "로그인 후 원래 하려던 동작을 이어서 실행"하는 기존 UX를 유지하기 위해서다).
     1. GET /google/login  → state(서명된 CSRF 토큰) 발급 → 구글 인가 화면으로 302
     2. 사용자가 구글에서 동의 → 구글이 GET /google/callback?code=&state= 로 리디렉션
-    3. state 검증 → code를 토큰으로 교환 → 사용자 정보(email/name) 조회 → 세션 쿠키 발급
-    4. 팝업 안에서 window.opener로 결과를 postMessage하고 스스로 닫는다(부모 창은 그대로)
+    3. state 검증 → code를 토큰으로 교환 → 사용자 정보(email/name/sub) 조회 →
+       users 테이블 upsert(최초 로그인만 display_name을 구글 이름으로 초기화) →
+       user_id를 담은 세션 쿠키 발급
+    4. 팝업 안에서 window.opener로 (DB의 현재) display_name을 postMessage하고 스스로
+       닫는다(부모 창은 그대로) — 프론트가 "표시 이름 정하기" 확인 단계를 보여준다
+    5. 사용자가 확인/수정한 이름을 PATCH /display-name 으로 저장
 
 ## 세션 쿠키
 관리자 쿠키(admin_auth.py)와 이름·서명 키가 다르다 — 서로 위조에 쓸 수 없다.
-계정 테이블이 없다(security/user_auth.py 모듈 docstring 참고) — 이메일/이름이 곧 세션이다.
+쿠키엔 user_id/email만 있고 display_name은 없다 — 매 요청마다 DB에서 최신값을 읽는다
+(security/user_auth.py 모듈 docstring 참고).
 """
 
 from __future__ import annotations
@@ -24,17 +29,32 @@ import html
 import json
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..clients.google_oauth_client import GoogleOAuthError, build_authorize_url, exchange_code, fetch_userinfo
 from ..config import settings
-from ..deps import get_user_auth
-from ..schemas.auth import UserSessionResponse
+from ..deps import get_database, get_user_auth
+from ..repositories import user_repo
+from ..schemas.auth import UpdateDisplayNameRequest, UserSessionResponse
+from ..schemas.community import NICKNAME_MAX
+from ..security.user_auth import UserAuth, UserIdentity
+from ..util.time import now_kst, to_iso_kst
+from ..util.user_text import clean_user_text, is_impersonating_staff
 
 logger = logging.getLogger("sumeungil.api.auth")
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+
+def _require_session(request: Request) -> tuple[UserAuth, UserIdentity]:
+    """세션 쿠키 검증. 통과하지 못하면 401(admin.py의 동일 이름 함수와 같은 패턴,
+    도메인이 달라 별도 모듈에 둔다)."""
+    auth = get_user_auth()
+    identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
+    if identity is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    return auth, identity
 
 
 @router.get("/google/login")
@@ -90,15 +110,33 @@ async def google_callback(request: Request, code: str | None = None, state: str 
         return _popup_close_html(ok=False, next_path=next_path)
 
     email = (userinfo.get("email") or "").strip()
+    google_sub = (userinfo.get("sub") or "").strip()
     # email_verified가 명시적으로 false인 경우만 거른다(필드 자체가 없는 계정 유형도 있어
     # 존재 여부만으로는 판단하지 않는다 — 과도한 차단 방지).
-    if not email or userinfo.get("email_verified") is False:
-        logger.warning("구글 로그인 실패: 이메일 없음/미검증")
+    if not email or not google_sub or userinfo.get("email_verified") is False:
+        logger.warning("구글 로그인 실패: 이메일/sub 없음 또는 이메일 미검증")
         return _popup_close_html(ok=False, next_path=next_path)
-    name = (userinfo.get("name") or email.split("@")[0]).strip()
+    google_name = (userinfo.get("name") or email.split("@")[0]).strip()
 
-    token, exp = auth.issue_token(email=email, name=name)
-    response = _popup_close_html(ok=True, name=name, next_path=next_path)
+    db = get_database()
+    try:
+        user = await db.awrite(
+            lambda conn: user_repo.upsert_login(
+                conn,
+                google_sub=google_sub,
+                email=email,
+                default_display_name=google_name,
+                now_iso=to_iso_kst(now_kst()),
+            )
+        )
+    except Exception:  # noqa: BLE001 — DB 장애로 팝업이 무한 로딩되지 않게 실패로 수렴
+        logger.exception("구글 로그인 계정 upsert 실패")
+        return _popup_close_html(ok=False, next_path=next_path)
+
+    token, _exp = auth.issue_token(user_id=user["id"], email=email)
+    # 팝업엔 구글 원본 이름이 아니라 **DB의 현재 display_name**을 돌려준다 — 재로그인한
+    # 사용자라면 이전에 직접 정한 이름이 그대로 뜬다(매번 구글 이름으로 되돌아가지 않음).
+    response = _popup_close_html(ok=True, name=user["display_name"], next_path=next_path)
     response.set_cookie(
         key=auth.cookie_name,
         value=token,
@@ -127,15 +165,38 @@ async def logout():
 
 @router.get("/me", response_model=UserSessionResponse)
 async def me(request: Request):
-    """프론트 가드용. 유효한 세션이면 이름·만료시각, 아니면 authenticated:false(401 아님 —
+    """프론트 가드용. 유효한 세션이면 이름·이메일, 아니면 authenticated:false(401 아님 —
     비로그인은 실패가 아니라 정상 상태다)."""
     auth = get_user_auth()
-    identity = auth.verify_token(request.cookies.get(auth.cookie_name))
+    identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
     if identity is None:
         return UserSessionResponse(authenticated=False)
-    # 만료시각을 다시 계산하려면 토큰을 재파싱해야 하는데(verify_token은 신원만 반환)
-    # 화면에서 실제로 쓰는 값이 아니라 생략한다 — 필요해지면 verify_token 반환 타입에 exp를 더한다.
-    return UserSessionResponse(authenticated=True, name=identity.name, email=identity.email)
+    db = get_database()
+    user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
+    if user is None:
+        # 세션은 유효한데 계정 행이 사라진 상태(수동 DB 조작 등) — 비로그인으로 취급.
+        return UserSessionResponse(authenticated=False)
+    return UserSessionResponse(authenticated=True, name=user["display_name"], email=user["email"])
+
+
+@router.patch("/display-name", response_model=UserSessionResponse)
+async def update_display_name(request: Request, body: UpdateDisplayNameRequest):
+    """로그인 직후 "표시 이름 정하기" 단계(LoginModal.tsx)와, 추후 설정 화면에서 재사용할
+    수 있는 닉네임 변경 엔드포인트. 리뷰 nickname과 동일한 정제·사칭차단 파이프라인을
+    통과시킨다(util/user_text.py — 이 값도 결국 리뷰 표시 이름으로 쓰이는 공개 텍스트다)."""
+    _auth, identity = _require_session(request)
+    cleaned = clean_user_text(body.display_name, max_chars=NICKNAME_MAX)
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="표시 이름을 입력해주세요.")
+    if is_impersonating_staff(cleaned):
+        raise HTTPException(status_code=400, detail="운영자로 오인될 수 있는 이름은 쓸 수 없어요.")
+    db = get_database()
+    user = await db.awrite(
+        lambda conn: user_repo.update_display_name(conn, user_id=identity.user_id, display_name=cleaned)
+    )
+    if user is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    return UserSessionResponse(authenticated=True, name=user["display_name"], email=user["email"])
 
 
 __all__ = ("router",)

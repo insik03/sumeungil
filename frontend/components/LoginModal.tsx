@@ -34,6 +34,8 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   const [step, setStep] = useState<"google" | "nickname">("google");
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [nickname, setNickname] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const startButtonRef = useRef<HTMLButtonElement>(null);
@@ -45,6 +47,8 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     setStep("google");
     setPopupBlocked(false);
     setNickname("");
+    setSaving(false);
+    setSaveError(null);
     const t = window.setTimeout(() => startButtonRef.current?.focus(), 30);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -102,9 +106,35 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     popup.focus();
   };
 
-  const confirmNickname = () => {
+  // 대표 지시(2026-08-17, "로그인 붙였으니 DB도 그에 맞게") — 확인한 표시 이름을 로컬
+  // 캐시(동기 UI 체크용, authStorage.ts)뿐 아니라 서버 계정(users 테이블)에도 저장한다.
+  // 저장 전까지는 로그인을 완료로 치지 않는다 — 서버 실패를 조용히 삼키면 다음 로그인
+  // 때 구글 원본 이름으로 되돌아가는 문제가 재발한다(user_repo.upsert_login 참고).
+  const confirmNickname = async () => {
     const trimmed = nickname.trim();
     if (trimmed.length === 0) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/auth/display-name`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: trimmed }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setSaveError(
+          typeof body?.detail === "string" ? body.detail : "표시 이름 저장에 실패했어요. 다시 시도해주세요."
+        );
+        return;
+      }
+    } catch {
+      setSaveError("네트워크 오류로 저장하지 못했어요. 다시 시도해주세요.");
+      return;
+    } finally {
+      setSaving(false);
+    }
     setLoggedInName(trimmed);
     onLoggedIn(trimmed);
     onClose();
@@ -205,17 +235,27 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 if (e.key === "Enter") confirmNickname();
               }}
             />
+            {saveError && (
+              <p className="login-modal__note" role="alert">
+                {saveError}
+              </p>
+            )}
             <div className="login-modal__actions">
-              <button type="button" className="btn btn--ghost-text" onClick={cancelAtNicknameStep}>
+              <button
+                type="button"
+                className="btn btn--ghost-text"
+                onClick={cancelAtNicknameStep}
+                disabled={saving}
+              >
                 취소
               </button>
               <button
                 type="button"
                 className="btn btn--mint"
-                disabled={nickname.trim().length === 0}
+                disabled={nickname.trim().length === 0 || saving}
                 onClick={confirmNickname}
               >
-                시작하기
+                {saving ? "저장 중…" : "시작하기"}
               </button>
             </div>
           </>

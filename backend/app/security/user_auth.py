@@ -2,14 +2,22 @@
 
 ## 이 모듈이 존재하는 이유
 데모 닉네임 로그인(§R.0)을 완전히 대체하는 임시 구글 로그인(2026-08-17, 대표 지시)의
-세션 저장소. 계정 테이블을 두지 않는다 — "임시" 스코프에 회원 DB·비밀번호 재설정 등을
-얹으면 공격면과 운영 부담만 늘어난다(admin_auth.py와 동일 판단, 그 주석 참고).
+세션 저장소.
+
+## 계정 테이블과의 관계 (2026-08-17 갱신)
+처음엔 계정 테이블 없이 이메일·이름을 토큰에 직접 담았다. 그런데 그러면 사용자가 표시
+이름을 바꿔도 **다음 로그인에서 토큰이 다시 발급되며 구글 원본 이름으로 되돌아가는**
+문제가 있었다(대표 지적, "로그인 붙였으니 DB도 그에 맞게"). 그래서 `users` 테이블
+(db/sqlite.py schema_version 4, repositories/user_repo.py)을 두고, **이 모듈은 그
+테이블의 정수 id(user_id)만 서명해 나른다** — 이메일은 참고용으로 함께 싣지만, 표시
+이름(display_name)은 토큰에 아예 넣지 않고 매 요청마다 DB에서 최신값을 읽는다
+(api/auth.py). 그래야 닉네임을 바꾼 즉시 모든 기존 세션에 반영되고, 토큰 재발급도
+필요 없다.
 
 ## 세션 토큰
-JWT 라이브러리를 쓰지 않는다. admin_auth.py의 토큰 스킴을 그대로 재사용하되
-페이로드만 다르다(만료시각 대신 이메일·이름도 함께 서명):
+JWT 라이브러리를 쓰지 않는다. admin_auth.py의 토큰 스킴을 그대로 재사용한다:
     v1.<b64url payload>.<b64url HMAC-SHA256>
-payload = `<만료 epoch>:<b64url(email)>:<b64url(name)>`
+payload = `<만료 epoch>:<user_id>:<b64url(email)>`
 
 admin과 **다른 도메인 라벨**로 서명 키를 파생한다(_KEY_LABEL) — 같은
 USER_SESSION_SECRET/JWT_SECRET_KEY를 공유하더라도 사용자 세션 토큰으로 관리자 세션을
@@ -37,7 +45,6 @@ _KEY_LABEL = b"sumeungil.user.session.v1"
 _STATE_LABEL = b"sumeungil.user.oauth-state.v1"
 STATE_TTL_SEC = 10 * 60  # 로그인 시작~구글 리디렉션 왕복이 10분을 넘으면 재시도하게 한다.
 
-NAME_MAX_LEN = 100
 EMAIL_MAX_LEN = 254
 
 
@@ -52,8 +59,8 @@ def _b64d(text: str) -> bytes:
 
 @dataclass(frozen=True)
 class UserIdentity:
+    user_id: int
     email: str
-    name: str
 
 
 class UserAuth:
@@ -135,12 +142,11 @@ class UserAuth:
 
     # --- 세션 토큰 -------------------------------------------------------------
 
-    def issue_token(self, *, email: str, name: str, now: int | None = None) -> tuple[str, int]:
+    def issue_token(self, *, user_id: int, email: str, now: int | None = None) -> tuple[str, int]:
         issued = int(time.time()) if now is None else int(now)
         exp = issued + self.session_ttl_sec
         e = email.strip()[:EMAIL_MAX_LEN]
-        n = (name or "").strip()[:NAME_MAX_LEN]
-        payload = f"{exp}:{_b64e(e.encode('utf-8'))}:{_b64e(n.encode('utf-8'))}".encode("utf-8")
+        payload = f"{exp}:{int(user_id)}:{_b64e(e.encode('utf-8'))}".encode("utf-8")
         body = f"{SCHEME_VERSION}.{_b64e(payload)}"
         sig = hmac.new(self._key, body.encode("ascii"), hashlib.sha256).digest()
         return f"{body}.{_b64e(sig)}", exp
@@ -160,16 +166,16 @@ class UserAuth:
         if not hmac.compare_digest(expected, actual):
             return None
         try:
-            exp_str, email_b64, name_b64 = _b64d(parts[1]).decode("utf-8").split(":", 2)
+            exp_str, user_id_str, email_b64 = _b64d(parts[1]).decode("utf-8").split(":", 2)
             exp = int(exp_str)
+            user_id = int(user_id_str)
             email = _b64d(email_b64).decode("utf-8")
-            name = _b64d(name_b64).decode("utf-8")
         except (ValueError, TypeError, UnicodeDecodeError, binascii.Error):
             return None
         current = int(time.time()) if now is None else int(now)
         if exp <= current:
             return None
-        return UserIdentity(email=email, name=name)
+        return UserIdentity(user_id=user_id, email=email)
 
 
 __all__ = ("UserAuth", "UserIdentity", "STATE_TTL_SEC")

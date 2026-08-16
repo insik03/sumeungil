@@ -43,13 +43,17 @@ logger = logging.getLogger("sumeungil.db.sqlite")
 
 T = TypeVar("T")
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # --- 스키마 (기동 시 CREATE TABLE IF NOT EXISTS 로 멱등 적용) ----------------------
 #
 # 설계 메모
 #  - `device_id` 는 **인증 수단이 아니다**(클라이언트가 만든 임의 UUID). 소유권 대조 용도로만
-#    쓰고 어떤 응답에도 내보내지 않는다. 개인정보(이메일·전화·비밀번호)는 컬럼 자체가 없다.
+#    쓰고 어떤 응답에도 내보내지 않는다.
+#  - **2026-08-17부터는 위 문장이 절대적이지 않다.** 구글 로그인 도입으로 `users` 테이블에
+#    이메일이 처음 들어왔다(schema_version 4 참고) — 이 DB가 처음으로 개인정보를 담게 된
+#    지점이다. `reviews`/`shared_courses`의 `device_id` 자체는 여전히 인증 수단이 아니라는
+#    원래 원칙 그대로다.
 #  - `target_id` 는 TEXT — 스팟 id(정수)와 축제 contentid(문자열)를 한 테이블에 담기 위해서.
 #    서비스 레이어에서 `[A-Za-z0-9_-]{1,40}` 로 강제한다.
 #  - 시각은 전부 ISO8601 + KST 오프셋 문자열(계약 §0 규약과 동일 — 프론트가 파싱 로직을
@@ -185,6 +189,33 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
     """
     CREATE INDEX IF NOT EXISTS ix_visit_daily_day ON visit_daily (day)
+    """,
+    # --- schema_version 4 (2026-08-17): 구글 로그인 계정 --------------------------
+    #
+    # 대표 지시: "구글로 로그인하고 닉네임 설정할 수 있게" + "로그인 붙였으니 DB도 그에
+    # 맞게". 그 전까지 로그인 세션은 DB에 전혀 닿지 않는 자체 서명 쿠키뿐이었다
+    # (security/user_auth.py) — 표시 이름을 사용자가 한 번 정해도 다음 로그인(다른
+    # 기기·브라우저 초기화)에서 다시 구글 원본 이름으로 되돌아가는 문제가 있었다.
+    #
+    # `google_sub`(구글 OpenID `sub` 클레임 — 이메일보다 안정적인 식별자, 이메일은
+    # 이론상 바뀔 수 있다)을 유니크 키로 쓴다. `display_name`은 **최초 로그인 때만**
+    # 구글 이름으로 초기화하고, 이후 로그인마다 덮어쓰지 않는다(사용자가 직접 바꾼 값을
+    # 보존 — user_repo.upsert_login 참고). 리뷰 등 게시물의 `nickname`은 여전히 그
+    # 게시물 자체에 스냅샷으로 저장된다(계정과 별개, §07-legal-review-google-login.md
+    # §1-④ — 리뷰를 지우지 않는 한 표시 이름이 바뀌어도 과거 리뷰의 이름은 그대로 남는
+    # 것이 맞는 동작이라는 판단, 실명 변경 이력 추적 방지 목적도 겸함).
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        google_sub    TEXT    NOT NULL UNIQUE,
+        email         TEXT    NOT NULL,
+        display_name  TEXT    NOT NULL,
+        created_at    TEXT    NOT NULL,
+        last_login_at TEXT    NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS ix_users_email ON users (email)
     """,
 )
 
