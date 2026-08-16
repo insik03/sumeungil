@@ -128,8 +128,8 @@ export default function KoreaSvgMap({
             key={r.sido_code}
             d={r.d}
             fill={fill}
-            stroke={isSel ? "#2f7d63" : "#ffffff"}
-            strokeWidth={isSel ? 2.6 : 1.1}
+            stroke="#ffffff"
+            strokeWidth={1.1}
             strokeLinejoin="round"
             tabIndex={0}
             role="button"
@@ -150,6 +150,27 @@ export default function KoreaSvgMap({
           />
         );
       })}
+
+      {/* 선택 지역 강조 테두리 — 대표 지시(2026-08-13, "내륙과 해안선의 선 두께 차이가 어색함").
+          위 루프에서 각 시·도가 자기 경계선을 각자 그리다 보니, 내륙 접경(이웃 시·도가 같은
+          선 위에 자기 테두리를 겹쳐 그리는 구간)과 해안선(겹치는 이웃이 없는 구간)의 시각적
+          두께가 달라 보였다. 선택된 지역의 경계만 모든 면 위에 한 번 더(맨 위 레이어로) 그려
+          이웃의 겹침과 무관하게 어디서나 균일한 두께로 보이게 한다. */}
+      {selected &&
+        (() => {
+          const sel = regions.find((r) => r.sido_code === selected);
+          if (!sel) return null;
+          return (
+            <path
+              d={sel.d}
+              fill="none"
+              stroke="#2f7d63"
+              strokeWidth={2.6}
+              strokeLinejoin="round"
+              style={{ pointerEvents: "none" }}
+            />
+          );
+        })()}
 
       {/* --- 랜드마크 + 라벨 알약 --- */}
       {regions.map((r) => {
