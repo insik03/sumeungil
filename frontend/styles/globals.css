@@ -862,22 +862,11 @@ input:focus-visible,
   position: relative;
   margin: 0 0 var(--sp-8);
 }
-/* 캐러셀 뒤에 은은하게 번지는 브랜드 그린 앰비언트 글로우 — 사진 카드가 배경 위에
-   "떠 있는" 느낌을 정지 화면에서도 바로 알아볼 수 있게 한다(호버 불필요).
-   대표 지적(2026-08-16) — 기존 --g-400은 토큰 정의상 "어두운(사진) 배경 위 강조 텍스트
-   전용"(tokens.css 주석)인 진한 민트라 흰 배경 위에서 튀는 색 얼룩처럼 보였다. 페이지의
-   옅은 톤(--n-50 등)과 더 가까운 --g-100(연한 민트)으로 바꾸고, 옅어진 만큼 존재감을
-   유지하려 opacity를 살짝 올렸다. */
-.hero-carousel::before {
-  content: "";
-  position: absolute;
-  inset: -8% 6%;
-  z-index: -1;
-  background: radial-gradient(60% 60% at 50% 45%, var(--g-100) 0%, transparent 72%);
-  opacity: 0.55;
-  filter: blur(48px);
-  pointer-events: none;
-}
+/* 대표 지적(2026-08-16, 2차) — 캐러셀 뒤 색 있는 앰비언트 글로우(--g-400→--g-100로 한 번
+   조정했었음)를 아예 없앴다. 특정 색을 흰 배경에 맞춰 고르는 방식 자체가 근본적으로
+   배경이 바뀌면(예: 다크모드) 다시 어긋나는 접근이라는 지적 — 배경이 뭐든 자연스럽게
+   어울리는 중립적인 그림자만으로 "떠 있는" 느낌을 낸다. .hero-carousel__card가 이미
+   box-shadow: var(--shadow-lg)를 갖고 있어(아래) 추가 요소 없이 그걸로 충분하다. */
 .hero-carousel__track {
   display: flex;
   gap: var(--sp-3);
