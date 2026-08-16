@@ -76,19 +76,28 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/** 사진이 없는 스팟(빈 카드/폴백 카드) 후보 목록에서 사진 있는 첫 번째를 고른다. */
+const PROVINCE_CANDIDATE_LIMIT = 10;
+
 /**
  * 대표 지시(2026-08-16) — 지역 미선택(첫 진입) 상태의 히어로 캐러셀은 "도" 9곳의 대표 스팟을
- * 한 곳씩만 가져와 채운다. limit=1로 그 도의 trending 1위를 쓰고, trending이 비면(도에 따라
- * congestion 랭킹 후보가 없을 수 있음) hidden_picks로 폴백한다. 실패한 도는 조용히 빠진다
- * (지어내지 않는다 — 9개를 억지로 채우지 않고 성공한 만큼만 보여준다).
+ * 한 곳씩만 가져와 채운다. trending 1위를 우선하고, trending이 비면(도에 따라 congestion 랭킹
+ * 후보가 없을 수 있음) hidden_picks로 폴백한다. 실패한 도는 조용히 빠진다(지어내지 않는다 —
+ * 9개를 억지로 채우지 않고 성공한 만큼만 보여준다).
+ *
+ * 대표 지적(2026-08-17) — "사진 없는 스팟이 캐러셀에 들어가니 어색함". limit=1로 순위 1위만
+ * 가져오면 그 스팟이 사진이 없어도 그대로 쓸 수밖에 없었다. limit을 넉넉히 올려 후보 풀을
+ * 받아온 뒤(trending 우선, 부족하면 hidden_picks) image_url이 있는 첫 후보를 고른다 — 순위
+ * 자체를 재판정하지 않고(§4.1 규약 준수) "사진 있는 것 중 1등"으로 좁히기만 한다.
  */
 async function fetchProvinceRepresentative(
   regionCode: string,
   signal: AbortSignal
 ): Promise<FeaturedSpot | null> {
   try {
-    const res = await fetchFeatured(regionCode, 1, signal);
-    return res.trending[0] ?? res.hidden_picks[0] ?? null;
+    const res = await fetchFeatured(regionCode, PROVINCE_CANDIDATE_LIMIT, signal);
+    const candidates = [...res.trending, ...res.hidden_picks];
+    return candidates.find((s) => !!s.image_url) ?? candidates[0] ?? null;
   } catch {
     return null;
   }
