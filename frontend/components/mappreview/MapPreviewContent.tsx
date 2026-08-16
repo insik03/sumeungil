@@ -10,6 +10,8 @@ import {
   fetchSpotDetail,
 } from "../../lib/api";
 import CongestionBoard from "../CongestionBoard";
+import { loadLastRegion, saveLastRegion } from "../../lib/lastRegionStorage";
+import { SIDO_REGIONS } from "../regions/constants";
 import KoreaSvgMap from "./KoreaSvgMap";
 import NationwideBoard from "./NationwideBoard";
 import { LANDMARKS } from "./landmarks";
@@ -26,7 +28,22 @@ import { LEVEL_TEXT } from "./shared";
 export default function MapPreviewContent() {
   const [data, setData] = useState<NationwideCongestionResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // 대표 지시(2026-08-17) — 이 화면도 마지막으로 고른 지역을 기본값으로 시작한다(지도가
+  // 처음부터 그 시·도를 골라둔 채로 열림). 지어낸 기본값이 아니라 사용자가 실제로 고른
+  // 시도 코드(area_cd)만 재사용 — 아예 고른 적 없으면 기존대로 미선택(null)에서 시작한다.
+  const [selected, setSelectedState] = useState<string | null>(() => loadLastRegion()?.area_cd ?? null);
+  const handleSelect = (sidoCode: string) => {
+    setSelectedState(sidoCode);
+    const sido = SIDO_REGIONS.find((s) => s.sidoCode === sidoCode);
+    if (sido) {
+      saveLastRegion({
+        region_id: `sido-${sido.sidoCode}`,
+        label: sido.representativeLabel,
+        area_cd: sido.sidoCode,
+        sigungu_cd: sido.regionCode,
+      });
+    }
+  };
   /** 추천 숨은 명소. null=로딩 전/중, "none"=이 지역엔 없음, 객체=표시할 내용. */
   const [hidden, setHidden] = useState<
     { name: string; image_url: string | null; address: string | null; summary: string | null } | "none" | null
@@ -110,7 +127,7 @@ export default function MapPreviewContent() {
       >
         <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16 }}>
           {items.length > 0 ? (
-            <KoreaSvgMap items={items} selected={selected} onSelect={setSelected} />
+            <KoreaSvgMap items={items} selected={selected} onSelect={handleSelect} />
           ) : (
             <p>불러오는 중…</p>
           )}
@@ -295,7 +312,7 @@ export default function MapPreviewContent() {
               시·도별 예상 혼잡도예요. 카드를 누르면 그 지역만 자세히 볼 수 있어요.
             </p>
             {items.length > 0 ? (
-              <NationwideBoard items={items} onSelect={setSelected} />
+              <NationwideBoard items={items} onSelect={handleSelect} />
             ) : (
               <p style={{ opacity: 0.7 }}>불러오는 중…</p>
             )}

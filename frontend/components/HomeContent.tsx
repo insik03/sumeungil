@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { RegionSearchItem } from "../lib/api";
+import { clearLastRegion, loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import Hero from "./Hero";
 import ServiceQuickMenu from "./ServiceQuickMenu";
 import ConciergeSection from "./ConciergeSection";
@@ -81,13 +82,26 @@ import FestivalBanner from "./FestivalBanner";
  * 참고) — 퀵메뉴(10개)는 지시서 제약대로 개수를 유지하며 건드리지 않았다.
  */
 export default function HomeContent() {
-  const [selectedRegion, setSelectedRegion] = useState<RegionSearchItem | null>(null);
+  // 대표 지시(2026-08-17) — "모든 기본 화면의 기준 지역은 마지막으로 고른 지역"을 기준으로.
+  // 지연 초기화로 세션에 기억된 지역이 있으면 그걸로 시작(없으면 기존대로 null → 히어로가
+  // 도 9곳 모자이크를 보여준다, Hero.tsx 참고). 처음 아무것도 고른 적 없는 사용자는 그대로
+  // 중립 상태를 본다 — 지어낸 기본 지역을 강제하지 않는다.
+  const [selectedRegion, setSelectedRegionState] = useState<RegionSearchItem | null>(() =>
+    loadLastRegion()
+  );
+  const handleSelectRegion = (region: RegionSearchItem | null) => {
+    setSelectedRegionState(region);
+    // 검색창 지우기(대표: destInput의 × 버튼)로 명시적으로 지역을 비운 것도 하나의 선택이다
+    // — 기억해둔 지역도 함께 지워야 다음 방문에서 도로 튀어나오지 않는다.
+    if (region) saveLastRegion(region);
+    else clearLastRegion();
+  };
   // 다른 섹션들이 쓰는 값과 동일한 sigungu_cd를 링크 쿼리에도 그대로 쓴다(별도 변환 없음).
   const regionCode = selectedRegion?.sigungu_cd ?? null;
 
   return (
     <>
-      <Hero selectedRegion={selectedRegion} onSelectRegion={setSelectedRegion} />
+      <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} />
       <ServiceQuickMenu regionCode={regionCode} />
       <ConciergeSection regionCode={regionCode} />
       <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />

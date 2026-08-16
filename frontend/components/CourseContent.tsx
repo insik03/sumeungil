@@ -13,6 +13,7 @@ import {
   fetchCourse,
 } from "../lib/api";
 import { loadOnboardingResult } from "../lib/onboardingStorage";
+import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
 import SaveToggleButton from "./recommend/SaveToggleButton";
@@ -374,13 +375,30 @@ export default function CourseContent() {
 
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 조회부터 쿼리 지역으로 나간다(기본 지역 조회 후 재조회하는 이중 호출 방지).
-  const [selectedRegion, setSelectedRegion] = useState<SelectedRegion>(
-    () =>
-      regionSelectionFromCode(paramRegionCode) ?? {
-        sigunguCd: DEFAULT_REGION.sigunguCd,
-        label: DEFAULT_REGION.label,
+  // 우선순위: URL 쿼리 > 마지막으로 고른 지역(세션 기억, 대표 지시 2026-08-17) > 하드코딩 기본값.
+  const [selectedRegion, setSelectedRegionState] = useState<SelectedRegion>(() => {
+    const fromQuery = regionSelectionFromCode(paramRegionCode);
+    if (fromQuery) return fromQuery;
+    const last = loadLastRegion();
+    if (last) return { sigunguCd: last.sigungu_cd, label: last.label };
+    return { sigunguCd: DEFAULT_REGION.sigunguCd, label: DEFAULT_REGION.label };
+  });
+  // useState 세터와 동일한 시그니처(값 또는 함수형 업데이터) 유지 — 아래 §35 동기화 effect의
+  // 함수형 업데이터 호출부를 그대로 쓸 수 있게 한다. 실제로 바뀔 때만 기억해둔다.
+  const setSelectedRegion = (value: SelectedRegion | ((prev: SelectedRegion) => SelectedRegion)) => {
+    setSelectedRegionState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      if (next !== prev) {
+        saveLastRegion({
+          region_id: `sigungu-${next.sigunguCd}`,
+          label: next.label,
+          area_cd: next.sigunguCd.slice(0, 2),
+          sigungu_cd: next.sigunguCd,
+        });
       }
-  );
+      return next;
+    });
+  };
 
   // 화면이 떠 있는 상태로 다른 region_code가 들어올 때만 동기화한다(사용자의 RegionPicker 선택은
   // paramCode가 그대로면 effect가 다시 돌지 않아 덮이지 않는다).

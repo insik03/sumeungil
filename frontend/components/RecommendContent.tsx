@@ -14,6 +14,7 @@ import {
   fetchReviewsSummaryBulk,
 } from "../lib/api";
 import { loadOnboardingResult } from "../lib/onboardingStorage";
+import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { safeDistanceKm } from "../lib/geo";
 import CategoryFilter from "./recommend/CategoryFilter";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
@@ -55,14 +56,31 @@ export default function RecommendContent() {
 
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 렌더부터 쿼리 지역으로 시작한다(기본 지역으로 한 번 조회한 뒤 다시 조회하는
-  // 이중 호출을 피하기 위함). 유효하지 않은 쿼리면 기존 기본 지역 그대로.
-  const [selectedRegion, setSelectedRegion] = useState<SelectedRegion>(
-    () =>
-      regionSelectionFromCode(paramRegionCode) ?? {
-        sigunguCd: DEFAULT_REGION.sigunguCd,
-        label: DEFAULT_REGION.label,
+  // 이중 호출을 피하기 위함). 우선순위: URL 쿼리 > 마지막으로 고른 지역(세션 기억, 대표 지시
+  // 2026-08-17) > 하드코딩 기본 지역.
+  const [selectedRegion, setSelectedRegionState] = useState<SelectedRegion>(() => {
+    const fromQuery = regionSelectionFromCode(paramRegionCode);
+    if (fromQuery) return fromQuery;
+    const last = loadLastRegion();
+    if (last) return { sigunguCd: last.sigungu_cd, label: last.label };
+    return { sigunguCd: DEFAULT_REGION.sigunguCd, label: DEFAULT_REGION.label };
+  });
+  // useState 세터와 동일한 시그니처(값 또는 함수형 업데이터)를 유지해 기존 호출부(§35 동기화
+  // effect의 함수형 업데이터 포함)를 그대로 쓸 수 있게 한다 — 실제로 바뀔 때만 기억해둔다.
+  const setSelectedRegion = (value: SelectedRegion | ((prev: SelectedRegion) => SelectedRegion)) => {
+    setSelectedRegionState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      if (next !== prev) {
+        saveLastRegion({
+          region_id: `sigungu-${next.sigunguCd}`,
+          label: next.label,
+          area_cd: next.sigunguCd.slice(0, 2),
+          sigungu_cd: next.sigunguCd,
+        });
       }
-  );
+      return next;
+    });
+  };
 
   // 이미 열려 있는 화면으로 다른 region_code가 들어오는 경우(홈 → 추천 → 뒤로 → 다른 지역 선택 →
   // 추천)를 위한 동기화. 의존성이 paramCode뿐이라 사용자가 RegionPicker로 바꾼 선택은 건드리지

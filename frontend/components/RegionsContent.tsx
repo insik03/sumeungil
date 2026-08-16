@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { readRegionCode } from "../lib/regionQuery";
+import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import Link from "next/link";
 import {
   FeaturedResponse,
@@ -90,12 +91,20 @@ export default function RegionsContent() {
   // §47(개편) 이후로는 SIDO_REGIONS의 하드코딩 대표값과 일치할 필요가 없다(임의의 실제 시군구
   // 코드를 그대로 드롭다운 선택값으로 쓴다). 매칭 실패 시에만 기본값(시도 26/전체)을 쓴다.
   const searchParams = useSearchParams();
+  // 대표 지시(2026-08-17) — URL 쿼리(명시적 딥링크)가 최우선, 그다음 마지막으로 고른 지역
+  // (세션 기억), 마지막에만 하드코딩 기본값(부산)으로 폴백한다.
   const { initialSidoCode, initialSigunguCode } = (() => {
     const code = readRegionCode(searchParams.get("region_code"));
-    if (!code) return { initialSidoCode: DEFAULT_SIDO_CODE, initialSigunguCode: null as string | null };
-    const bySido = SIDO_REGIONS.find((s) => s.sidoCode === code.slice(0, 2));
-    if (!bySido) return { initialSidoCode: DEFAULT_SIDO_CODE, initialSigunguCode: null as string | null };
-    return { initialSidoCode: bySido.sidoCode, initialSigunguCode: code };
+    if (code) {
+      const bySido = SIDO_REGIONS.find((s) => s.sidoCode === code.slice(0, 2));
+      if (bySido) return { initialSidoCode: bySido.sidoCode, initialSigunguCode: code };
+    }
+    const last = loadLastRegion();
+    if (last) {
+      const bySido = SIDO_REGIONS.find((s) => s.sidoCode === last.area_cd);
+      if (bySido) return { initialSidoCode: bySido.sidoCode, initialSigunguCode: last.sigungu_cd };
+    }
+    return { initialSidoCode: DEFAULT_SIDO_CODE, initialSigunguCode: null as string | null };
   })();
   const [selectedSidoCode, setSelectedSidoCode] = useState(initialSidoCode);
   // null = "전체"(§47 기본값). 시도를 바꾸면 항상 "전체"로 리셋한다(handleSelectSido).
@@ -200,6 +209,18 @@ export default function RegionsContent() {
         ? festivals.region.region_name
         : selectedSigunguCode;
   const selectedSigunguFullLabel = selectedChild?.label ?? fallbackSigunguLabel ?? "";
+
+  // 대표 지시(2026-08-17) — 이 화면에서 고른 지역도 "마지막으로 고른 지역"으로 기억해 다른
+  // 기본 화면(홈 등)의 기본값에 반영한다. 시군구 라벨이 아직 안 왔으면(children/featured
+  // 로딩 중) 시도 대표 라벨로 우선 저장하고, 나중에 더 구체적인 라벨이 오면 갱신된다.
+  useEffect(() => {
+    saveLastRegion({
+      region_id: selectedSigunguCode ? `sigungu-${selectedSigunguCode}` : `sido-${selectedSido.sidoCode}`,
+      label: selectedSigunguCode ? selectedSigunguFullLabel || selectedSido.representativeLabel : selectedSido.representativeLabel,
+      area_cd: selectedSido.sidoCode,
+      sigungu_cd: ctaRegionCode,
+    });
+  }, [selectedSido.sidoCode, selectedSigunguCode, ctaRegionCode, selectedSigunguFullLabel, selectedSido.representativeLabel]);
 
   const handleSelectSigungu = (e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;

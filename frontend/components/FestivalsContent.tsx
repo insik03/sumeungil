@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, FestivalsResponse, ReviewSummary, fetchFestivals, fetchReviewsSummaryBulk } from "../lib/api";
+import { saveLastRegion } from "../lib/lastRegionStorage";
 import { FestivalCard } from "./FestivalBanner";
 import { FeaturedCardSkeleton } from "./FeaturedSpots";
 import FestivalRegionFilter, { FestivalRegion } from "./festivals/FestivalRegionFilter";
@@ -31,7 +32,21 @@ const MONTH_FILTER_WINDOW_DAYS = 365;
  *   기능이 아예 없다고 오해할 수 있다(RecommendContent의 에러 처리와 동일 원칙).
  */
 export default function FestivalsContent() {
-  const [selectedRegion, setSelectedRegion] = useState<FestivalRegion | null>(null);
+  // §27 "전국=기본" 요구사항은 그대로 유지(이 화면 자체의 기본값은 여전히 미선택/전국) — 대표
+  // 지시(2026-08-17, 마지막 선택 지역을 기본 화면 기준으로)는 여기서 "고르면 기억한다" 쪽만
+  // 적용한다. 다른 화면(홈 등)이 그 기억을 기본값으로 쓴다.
+  const [selectedRegion, setSelectedRegionState] = useState<FestivalRegion | null>(null);
+  const setSelectedRegion = (region: FestivalRegion | null) => {
+    setSelectedRegionState(region);
+    if (region) {
+      saveLastRegion({
+        region_id: `sigungu-${region.sigunguCd}`,
+        label: region.label,
+        area_cd: region.sigunguCd.slice(0, 2),
+        sigungu_cd: region.sigunguCd,
+      });
+    }
+  };
   const [month, setMonth] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<FestivalStatusValue>("all");
 
