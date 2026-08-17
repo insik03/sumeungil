@@ -175,6 +175,11 @@ nano deploy/.env
 | `RATE_LIMIT_ENABLED` | **`true`** (공개 배포에서는 필수. 로컬 기본값은 false) |
 | `ADMIN_PASSWORD_HASH` | 선택. 관리자 콘솔을 쓸 때만. **평문이 아니라 scrypt 해시** — 아래 (h) 참고. 비우면 `/api/v1/admin/*` 자체가 없다(404) |
 | `ADMIN_COOKIE_SECURE` | **설정하지 않는다**(기본 true). HTTPS 운영이므로 false 금지 — (h-2) 이력 참고 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인. **로컬 개발용과 별도의 OAuth 클라이언트**로 발급받는다 — 아래 (h-3) 참고. 셋 중 하나라도 비면 `/api/v1/auth/*` 자체가 없다(404) |
+| `GOOGLE_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/google/callback` — 구글 클라이언트의 "승인된 리디렉션 URI"와 문자 그대로 일치해야 한다 |
+| `FRONTEND_BASE_URL` | `https://sumeungil.co.kr`. 로그인 팝업의 postMessage 대상 오리진 — 와일드카드 금지 |
+| `USER_SESSION_SECRET` | **필수, 로컬 값을 재사용하지 말고 새로 생성**: `py -c "import secrets; print(secrets.token_hex(32))"`. 비우면 `JWT_SECRET_KEY` 로 대체되지만, 그마저 없으면 세션 위조가 가능해진다(2026-08-17 보안검토 C-1) |
+| `USER_COOKIE_SECURE` | **설정하지 않는다**(기본 true). HTTPS 운영이므로 false 금지 — `ADMIN_COOKIE_SECURE`와 동일 이유 |
 
 > `NEXT_PUBLIC_*` 는 빌드타임에 JS 번들로 **인라인**된다. 값을 바꾸면
 > `docker compose build frontend` 재빌드가 필요하다(컨테이너 재시작만으로는 안 바뀐다).
@@ -383,6 +388,94 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/v1/admin/stats
 
 > 로그인 시도 한도는 IP 기준 분당 5회다(`ADMIN_LOGIN_PER_MIN`). 대표가 오타로 막혔다면
 > **1분만 기다리면** 풀린다(서버 재시작도 카운터를 지운다).
+
+---
+
+## (i) 구글 로그인 설정 (2026-08-17, 데모 닉네임 로그인 완전 대체)
+
+> 사용자 쪽 로그인 전체를 구글 계정으로 대체한 기능이다. (h)의 관리자 콘솔과는
+> 완전히 별개 — 구글로 로그인해도 관리자가 되지 않는다(둘은 다른 세션 쿠키·다른
+> 서명 키를 쓴다, `security/user_auth.py` 참고).
+
+### i-0. 설정하지 않으면 아예 없는 기능이다
+
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` / `USER_SESSION_SECRET`
+(또는 그 대체값 `JWT_SECRET_KEY`) 중 하나라도 비면 백엔드는 `/api/v1/auth/*` 라우터를
+**등록조차 하지 않는다.** 404 이고 `/docs` 에도 나타나지 않는다 — (h-0)의 관리자 콘솔과
+동일한 원칙이다.
+
+**특히 주의**: `GOOGLE_CLIENT_ID`/`SECRET` 만 채우고 `USER_SESSION_SECRET` 을 빠뜨리면
+`JWT_SECRET_KEY` 로 조용히 대체되어 기능은 켜진 것처럼 보인다. 이 자체는 안전하지만
+(둘 다 이미 무작위 값이라는 전제 하에), 로컬 개발용 `.env` 를 그대로 복사해 온 경우
+`USER_SESSION_SECRET` 값이 **로컬과 운영이 같아지는** 문제가 생긴다 — 로컬 서버가
+털리면 운영 세션도 위조 가능해진다. 운영용은 반드시 새로 생성한다(아래 i-1 ①).
+
+### i-1. 대표가 할 일 3단계
+
+**① 구글 OAuth 클라이언트 발급 (로컬 개발용과 별도로)**
+
+console.cloud.google.com → API 및 서비스 → 사용자 인증 정보 → OAuth 클라이언트 ID
+만들기(웹 애플리케이션):
+- 승인된 자바스크립트 원본: `https://sumeungil.co.kr`
+- 승인된 리디렉션 URI: `https://sumeungil.co.kr/api/v1/auth/google/callback`
+  (문자 그대로 일치해야 한다 — `/auth/google` 처럼 줄여 쓰면 구글이 거부한다)
+
+세션 서명 키도 새로 생성한다:
+
+```bash
+py -c "import secrets; print(secrets.token_hex(32))"
+```
+
+**② 서버 `.env` 에 붙여넣기**
+
+```bash
+cd /home/ubuntu/sumeungil/deploy
+nano .env
+```
+```dotenv
+GOOGLE_CLIENT_ID=...-....apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+GOOGLE_REDIRECT_URI=https://sumeungil.co.kr/api/v1/auth/google/callback
+FRONTEND_BASE_URL=https://sumeungil.co.kr
+USER_SESSION_SECRET=<위에서 새로 생성한 값>
+# USER_COOKIE_SECURE 는 넣지 않는다(기본 true) — ADMIN_COOKIE_SECURE 와 동일 이유.
+```
+
+**③ 반영**
+
+```bash
+docker compose up -d backend
+docker compose logs --tail=20 backend | grep -i 로그인
+#  "구글 로그인 활성화 — /api/v1/auth/* (세션 7일, 쿠키 secure=True)" 가 보이면 성공
+```
+
+### i-2. 검증 curl (VM 안에서)
+
+```bash
+# 비활성 상태(키 미설정)라면 404 여야 한다
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/v1/auth/me
+
+# 활성 상태: 로그인 없이 호출하면 200 + authenticated:false (401 아님 — 비로그인도 정상 응답)
+curl -s http://localhost/api/v1/auth/me
+
+# 로그인 시작 → 구글로 302 리다이렉트 되는지
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost/api/v1/auth/google/login?next=/"
+```
+
+실제 로그인 성공 여부(팝업 → 구글 인증 → 콜백 → 닉네임 확인)는 curl 로 확인할 수 없다 —
+브라우저에서 `https://sumeungil.co.kr` 접속 후 직접 "Google로 로그인"을 눌러 확인한다.
+
+### i-3. 계정 데이터 위치·보존
+
+구글 로그인 계정은 `users` 테이블(SQLite, (e) 표의 `SQLITE_PATH` 와 같은 파일 —
+후기·공유 코스와 동일한 named volume 에 있다)에 저장된다. 저장 항목은 이메일과
+사용자가 직접 정한 표시 이름뿐 — 구글 액세스 토큰은 저장하지 않는다(로그인 시
+1회 조회 후 즉시 버림, `security/user_auth.py` 모듈 docstring 참고).
+
+> **아직 없음**: 계정 삭제·탈퇴 절차(사용자가 직접 하거나 대표가 대신 지워주는 방법)가
+> 아직 구현돼 있지 않다 — 2026-08-17 보안검토에서 지적된 항목으로, legal-counsel 재검토
+> 후 별도로 추가할 예정이다. 그 전까지 탈퇴 요청이 오면 대표가 위 h-5 방식으로 직접
+> `users` 테이블에서 해당 행을 수동 삭제해야 한다.
 
 ---
 

@@ -61,4 +61,14 @@ def update_display_name(
     return get_by_id(conn, user_id)
 
 
-__all__ = ("get_by_google_sub", "get_by_id", "update_display_name", "upsert_login")
+def delete_account(conn: sqlite3.Connection, *, user_id: int) -> bool:
+    """계정 삭제(탈퇴, 2026-08-17 QA C-4 대응) — users 행을 즉시 영구 삭제한다.
+
+    리뷰 등 게시물의 `nickname`은 작성 시점에 텍스트로 복사돼 저장되므로(리뷰 테이블이
+    users를 FK로 참조하지 않는다) 계정을 지워도 기존 게시물은 그대로 남는다 — 이는
+    /privacy §4가 이미 설명하는 동작이고 이번 변경과 무관하다."""
+    cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    return cur.rowcount > 0
+
+
+__all__ = ("delete_account", "get_by_google_sub", "get_by_id", "update_display_name", "upsert_login")

@@ -306,10 +306,12 @@ class Settings:
         # 기본값을 만들지 않는다 — Google Cloud Console에서 대표가 직접 발급한 클라이언트
         # ID/시크릿 없이는 아예 켜지지 않는다.
         #
-        # 계정 테이블을 두지 않는다(부록 R.0과 동일 판단 — "임시" 스코프에 회원 DB는 과하다).
-        # 구글이 이미 이메일을 검증했으므로 그 사실 자체를 신뢰하고, 세션은 admin_auth.py와
-        # 동일한 "서버가 서명한 만료시각" 방식(HMAC, JWT 라이브러리 불필요)으로 이메일·이름을
-        # 쿠키에 담는다 — security/user_auth.py 참고.
+        # 2026-08-17 갱신(QA m-1) — 아래 주석은 한때 맞았으나 지금은 stale하다. **계정
+        # 테이블(users, db/sqlite.py schema_version 4)이 실제로 있고 이메일·표시이름을
+        # 영구 저장한다** — 표시 이름을 바꿔도 재로그인 시 구글 원본으로 되돌아가는 문제
+        # 때문에 도입됐다(대표 지적, user_repo.py). 세션 토큰은 admin_auth.py와 동일한
+        # "서버가 서명한 만료시각" 방식(HMAC)이지만, users_id만 서명해 나르고 이메일·이름은
+        # 토큰에 넣지 않는다 — 매 요청 DB에서 최신값을 읽는다 — security/user_auth.py 참고.
         self.google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "").strip()
         self.google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
         # Google Cloud Console의 "승인된 리디렉션 URI"에 등록한 값과 문자 그대로 일치해야 한다.
@@ -325,9 +327,14 @@ class Settings:
         self.user_session_secret: str = (
             os.getenv("USER_SESSION_SECRET", "").strip() or self.jwt_secret_key
         )
-        # 30일 — 데모 닉네임 로그인이 사실상 "한번 로그인하면 계속 로그인"이었던 것과 비슷하게.
+        # 2026-08-17 보안검토(M-2) — 원래 30일이었으나, 세션을 서버에서 강제로 끊을 수단이
+        # 없는 무상태 서명 토큰이라 "탈취 시 노출 시간 = TTL"이다(admin 세션이 같은 이유로
+        # 8h→4h로 줄인 전례, Mn-1). 개인정보(이메일)를 여는 /me가 걸린 세션이라 admin보다
+        # 길게 둘 이유가 없어 최소 조치로 7일로 단축한다. 완전한 해법(로그아웃 즉시 전
+        # 세션 무효화)은 users 테이블에 session_epoch 컬럼을 추가해야 하며 이번 스코프
+        # 밖 — 후속 과제로 남긴다.
         self.user_session_ttl_sec: int = int(
-            os.getenv("USER_SESSION_TTL_SEC", str(30 * 24 * 60 * 60))
+            os.getenv("USER_SESSION_TTL_SEC", str(7 * 24 * 60 * 60))
         )
         self.user_cookie_name: str = os.getenv("USER_COOKIE_NAME", "sumeungil_user").strip()
         self.user_cookie_secure: bool = (

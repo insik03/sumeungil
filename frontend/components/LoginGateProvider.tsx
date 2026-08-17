@@ -18,8 +18,9 @@ const LoginGateContext = createContext<LoginGateContextValue | null>(null);
 /**
  * §40(신규) — 로그인 유도 게이트. 하트/찜, 코스에 담기, 방문 스탬프 찍기 등 "사용자 데이터가 필요한
  * 동작"을 비로그인 상태에서 눌렀을 때 공용으로 재사용한다(호출부마다 모달을 재구현하지 않는다).
- * 새 인증 로직을 만들지 않고 기존 LoginModal.tsx(닉네임 전용 데모 로그인) + authStorage.login을
- * 그대로 재사용한다 — 이 컴포넌트는 "언제 모달을 띄우고, 로그인 후 무엇을 실행할지"만 조율한다.
+ * 새 인증 로직을 만들지 않고 기존 LoginModal.tsx(구글 로그인, 2026-08-17부터 데모 닉네임
+ * 로그인을 완전히 대체) + authStorage.getNickname을 그대로 재사용한다 — 이 컴포넌트는
+ * "언제 모달을 띄우고, 로그인 후 무엇을 실행할지"만 조율한다.
  */
 export function useLoginGate(): LoginGateContextValue {
   const ctx = useContext(LoginGateContext);

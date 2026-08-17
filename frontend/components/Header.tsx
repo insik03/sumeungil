@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LoginModal from "./LoginModal";
-import { AUTH_CHANGED_EVENT, getNickname, logout } from "../lib/authStorage";
+import {
+  AUTH_CHANGED_EVENT,
+  deleteAccount,
+  getNickname,
+  logout,
+  syncSessionFromServer,
+} from "../lib/authStorage";
 
 /**
  * 헤더 네비게이션 — GNB 개편(§39, 대표 지시: "키워드가 겹치는 건 하위 목록, 안 겹치면 새 메뉴").
@@ -91,6 +97,10 @@ export default function Header() {
   const [openLabel, setOpenLabel] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  // 계정 삭제 2단계 확인(QA C-4, 2026-08-17) — 새 모달 없이 버튼 텍스트만 바꿔 "정말?"을
+  // 한 번 더 묻는다. 5초 안에 다시 누르지 않으면 원상태로 되돌려 실수 클릭을 막는다.
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const deleteConfirmTimerRef = useRef<number | null>(null);
   const triggerRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   // Esc 로 닫은 직후 포커스를 트리거로 되돌리면 onFocus 가 즉시 다시 열어버린다(실측 확인).
   // "이 항목은 방금 Esc 로 닫았다"를 기억해 두고, 포커스가 그룹 밖으로 나가거나 마우스가
@@ -100,14 +110,30 @@ export default function Header() {
   // 데모 로그인 상태는 localStorage(authStorage)에서 읽는다. 다른 탭/컴포넌트 변화도 즉시 반영.
   useEffect(() => {
     setNickname(getNickname());
-    const sync = () => setNickname(getNickname());
+    const sync = () => {
+      setNickname(getNickname());
+      setDeleteConfirm(false);
+    };
     window.addEventListener(AUTH_CHANGED_EVENT, sync);
     window.addEventListener("storage", sync);
+    void syncSessionFromServer(); // QA M-2 — 부팅 시 1회, 서버 세션 진실과 로컬 캐시를 맞춘다.
     return () => {
       window.removeEventListener(AUTH_CHANGED_EVENT, sync);
       window.removeEventListener("storage", sync);
+      if (deleteConfirmTimerRef.current) window.clearTimeout(deleteConfirmTimerRef.current);
     };
   }, []);
+
+  const handleDeleteAccount = () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      deleteConfirmTimerRef.current = window.setTimeout(() => setDeleteConfirm(false), 5000);
+      return;
+    }
+    if (deleteConfirmTimerRef.current) window.clearTimeout(deleteConfirmTimerRef.current);
+    setDeleteConfirm(false);
+    void deleteAccount();
+  };
 
   // 관리자 콘솔(/admin)은 일반 서비스 셸을 공유하지 않는다(03-admin-console-design.md §4).
   //   - 운영 화면인 줄 모르고 조작하는 사고를 막으려면 시각적으로 확실히 갈라져야 한다.
@@ -216,6 +242,13 @@ export default function Header() {
                 >
                   로그아웃
                 </button>
+                <button
+                  className="btn btn--ghost-text gnb__delete-account"
+                  type="button"
+                  onClick={handleDeleteAccount}
+                >
+                  {deleteConfirm ? "정말 삭제할까요? 다시 누르면 삭제돼요" : "계정 삭제"}
+                </button>
               </>
             ) : (
               <button
@@ -308,16 +341,25 @@ export default function Header() {
         </nav>
         <div className="mobile-nav__cta">
           {nickname ? (
-            <button
-              className="btn btn--white btn--block btn--lg"
-              type="button"
-              onClick={() => {
-                logout();
-                setNavOpen(false);
-              }}
-            >
-              {nickname}님 · 로그아웃
-            </button>
+            <>
+              <button
+                className="btn btn--white btn--block btn--lg"
+                type="button"
+                onClick={() => {
+                  logout();
+                  setNavOpen(false);
+                }}
+              >
+                {nickname}님 · 로그아웃
+              </button>
+              <button
+                className="btn btn--ghost-text btn--block"
+                type="button"
+                onClick={handleDeleteAccount}
+              >
+                {deleteConfirm ? "정말 삭제할까요? 다시 누르면 삭제돼요" : "계정 삭제"}
+              </button>
+            </>
           ) : (
             <button
               className="btn btn--white btn--block btn--lg"

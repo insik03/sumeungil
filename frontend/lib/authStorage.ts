@@ -63,3 +63,53 @@ export function logout(): void {
     // 네트워크 실패해도 로컬은 이미 로그아웃 상태 — 쿠키는 만료되면 어차피 무효화된다.
   });
 }
+
+/** 서버 세션 진실과 localStorage 캐시를 맞춘다(QA M-2, 2026-08-17).
+ *
+ * 원래 이 캐시는 팝업이 로그인 직후 1회 채워줄 뿐, 그 뒤로는 **서버에 한 번도 물어보지
+ * 않았다** — 세션이 7일 뒤 만료되거나 다른 기기에서 표시 이름을 바꿔도 이 브라우저는
+ * 영원히 예전 상태를 보여줬다(만료 없는 로컬 캐시라 사실상 무기한). 앱 부팅 시(Header가
+ * 항상 마운트되므로 거기서) 한 번 GET /me 로 실제 서버 상태를 확인해 반영한다.
+ *
+ * LoginGateProvider의 동기 체크 계약(모듈 상단 주석)은 그대로 둔다 — 이 함수는 그 캐시를
+ * "가끔 서버와 맞추는" 백그라운드 보정일 뿐, 매 판정을 네트워크 왕복으로 바꾸지 않는다. */
+export async function syncSessionFromServer(): Promise<void> {
+  if (!isBrowser()) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/auth/me`, { credentials: "include" });
+    if (!res.ok) return; // 네트워크/서버 오류 — 로컬 캐시를 함부로 지우지 않는다(오프라인 등 오탐 방지).
+    const data: { authenticated: boolean; name?: string | null } = await res.json();
+    const cached = getNickname();
+    if (data.authenticated && data.name) {
+      if (data.name !== cached) setLoggedInName(data.name);
+    } else if (!data.authenticated && cached) {
+      // 서버는 비로그인인데 로컬엔 이름이 남아있다 — 세션 만료 등. 조용히 로컬만 정리
+      // (서버 쿠키는 이미 없으니 /logout 호출은 불필요).
+      window.localStorage.removeItem(NICKNAME_KEY);
+      window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+    }
+  } catch {
+    // 네트워크 실패 — 다음 페이지 이동/새로고침 때 다시 시도된다. 로컬 캐시는 유지.
+  }
+}
+
+/** 계정 삭제(탈퇴) — 로컬 표시 캐시를 지우고 서버 계정 행도 함께 삭제한다(users
+ *  테이블에서 DELETE, 세션 쿠키도 서버가 함께 지운다). `logout()`과 달리 **완료를
+ *  기다린다** — LoginModal의 "닉네임 확인 취소" 단계(QA M-3, 2026-08-17)가 "로그인
+ *  자체를 취소로 본다"고 안내하면서 실제로는 계정 행이 남던 문제를 고치는 용도라,
+ *  서버 삭제가 실제로 끝난 뒤에 취소를 완료로 쳐야 한다. */
+export async function deleteAccount(): Promise<void> {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.removeItem(NICKNAME_KEY);
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  } catch {
+    /* noop */
+  }
+  try {
+    await fetch(`${API_BASE}/api/v1/auth/me`, { method: "DELETE", credentials: "include" });
+  } catch {
+    // 네트워크 실패 — 로컬은 이미 로그아웃처럼 보이지만 서버 계정 행은 남을 수 있다.
+    // 위험하지 않다: 다음 로그인 때 upsert_login이 같은 google_sub 행을 재사용할 뿐이다.
+  }
+}

@@ -278,6 +278,15 @@ input:focus-visible,
   color: var(--ink);
   white-space: nowrap;
 }
+/* 계정 삭제(QA C-4, 2026-08-17) — 로그아웃보다 눈에 덜 띄게, 확인 대기 중엔 경고색으로. */
+.gnb__delete-account {
+  font-size: var(--text-xs);
+  color: var(--gray-400, #9aa5ab);
+  white-space: nowrap;
+}
+.gnb__delete-account:hover {
+  color: var(--coral-600, #d9534f);
+}
 
 /* 데모 로그인 모달 */
 .login-modal__backdrop {

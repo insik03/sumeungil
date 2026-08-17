@@ -314,16 +314,26 @@ if _user_auth.enabled:
         settings.user_session_ttl_sec // 86400,
         settings.user_cookie_secure,
     )
-    if not settings.user_session_secret:
-        logger.warning(
-            "USER_SESSION_SECRET 미설정 — 세션 서명키가 비어 있는 문자열에서 파생됩니다. "
-            "python3 -c \"import secrets;print(secrets.token_urlsafe(48))\" 결과를 .env 에 넣으세요."
-        )
     if not settings.user_cookie_secure:
         logger.warning("USER_COOKIE_SECURE=false — 로그인 쿠키가 평문(HTTP)으로도 전송됩니다.")
 else:
+    # QA M-6(2026-08-17) — 예전엔 GOOGLE_* 3개만 안내했는데, enabled 가 세션 시크릿까지
+    # 보게 되면서(C-1 수정) "GOOGLE_* 는 다 있는데 시크릿만 없는" 상태에서도 이 메시지가
+    # 나가 엉뚱한 변수를 가리켰다. 미설정 항목을 실제로 구분해 로그한다(값은 노출 안 함).
+    missing = [
+        name
+        for name, value in (
+            ("GOOGLE_CLIENT_ID", _user_auth.client_id),
+            ("GOOGLE_CLIENT_SECRET", _user_auth.client_secret),
+            ("GOOGLE_REDIRECT_URI", _user_auth.redirect_uri),
+        )
+        if not value
+    ]
+    if not settings.user_session_secret:
+        missing.append("USER_SESSION_SECRET(또는 JWT_SECRET_KEY)")
     logger.info(
-        "구글 로그인 비활성(GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI 미설정) — /api/v1/auth/* 라우트 미등록"
+        "구글 로그인 비활성(%s 미설정) — /api/v1/auth/* 라우트 미등록",
+        ", ".join(missing) if missing else "원인 불명",
     )
 
 

@@ -13,8 +13,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ..config import settings
-from ..deps import get_community_write_limiter
+from ..deps import get_community_write_limiter, get_database, get_user_auth
 from ..middleware.rate_limit import rate_limited_response
+from ..repositories import user_repo
 from ..services import community_errors as errors
 from ..services.community_errors import CommunityError
 from ..util.user_text import is_valid_device_id
@@ -87,6 +88,32 @@ def require_device_id(request: Request) -> str:
     return value
 
 
+async def session_display_name(request: Request) -> str | None:
+    """유효한 구글 로그인 세션이면 **DB의 현재 표시 이름**을, 아니면 None을 돌려준다.
+
+    2026-08-17 QA M-1 대응 — 로그인은 원래 "화면 게이트"일 뿐 리뷰·코스공유 같은 쓰기
+    API는 여전히 device_id(익명, §DEVICE_ID_HEADER 주석 참고) 기준이라 클라이언트가 보낸
+    nickname을 그대로 믿었다. 그래서 로그인 직후 "표시 이름 확인" 단계(LoginModal.tsx)를
+    거치고도, 같은 브라우저가 API를 직접 호출하면 그 확인을 우회한 임의 nickname으로
+    글을 쓸 수 있었다(clean_user_text/is_impersonating_staff는 여전히 걸려 사칭까지
+    뚫리진 않지만, "로그인 시 확인한 이름만 쓴다"는 처리방침 3항과 실제 동작이 달랐다).
+
+    로그인하지 않은 사용자의 **익명 작성 자체는 그대로 허용한다** — device_id 기반
+    비로그인 리뷰·공유는 이 서비스가 처음부터 의도한 기능이고(community_common.py 상단
+    주석, verify_community.py 회귀 스위트) 이번 변경의 대상이 아니다. 로그인한 사용자에
+    한해서만 클라이언트가 보낸 nickname을 서버가 무시하고 세션의 display_name으로
+    덮어쓴다 — 그래야 로그인의 "표시 이름 확인" 단계가 실제로 의미를 가진다."""
+    auth = get_user_auth()
+    if not auth.enabled:
+        return None
+    identity = auth.verify_token(request.cookies.get(auth.cookie_name))
+    if identity is None:
+        return None
+    db = get_database()
+    user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
+    return user["display_name"] if user else None
+
+
 def check_write_quota(device_id: str, bucket: str) -> JSONResponse | None:
     """device_id 기준 분당 쓰기 한도. 초과면 미들웨어와 **같은 429 봉투**를 돌려준다.
 
@@ -107,5 +134,6 @@ __all__ = (
     "error_response",
     "read_device_id",
     "require_device_id",
+    "session_display_name",
     "to_response",
 )

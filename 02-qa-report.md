@@ -489,3 +489,281 @@ REGION 52111  score mismatches: 0 | n a/b/c: 50/50/50 | a_has_rerank: False
 2. leg 캐시가 실패도 24h 유지 → 일시 Tmap 장애 구간은 최대 하루 "이동 정보 없음"일 수 있음. "항상 전 구간 경로 제공"으로 단정 금지.
 3. 코스는 있는 카테고리로만 4~5곳 조립(스팟 부족 지역은 더 적게, 지어내지 않음) — "어느 지역이든 완성형 5스팟 코스"로 과장 금지.
 ```
+
+---
+
+# 구글 로그인(Google OAuth 2.0) 풀검수 — 2026-08-17, qa-reviewer
+
+- **대상 커밋**: `bdebedd`(BE 최초) · `a473dc6`(FE 최초) · `114727d`(닉네임 확인단계+처리방침) · `6075e5a`(users 테이블 DB 연동)
+- **검수 등급**: 풀검수 (인증·개인정보를 건드리는 변경 — CLAUDE.md 규칙)
+- **검증 방식**: 코드 리뷰 + **실행 검증**(TestClient로 인증 전 경로 46건, 구글 호출만 monkeypatch) + 기존 회귀 스크립트 4종 실행 + `tsc --noEmit` + `next dev` 실기동
+- **검증 한계(중요)**: Google Cloud Console 크레덴셜이 아직 없어 **실제 구글 동의화면 → 토큰교환 경로는 한 번도 실행되지 않았다.** 아래 검증은 `exchange_code`/`fetch_userinfo`를 가짜 응답으로 치환한 상태의 것이다. 실크레덴셜 확보 후 redirect_uri 일치·팝업 실동작·CORS 재확인이 별도로 필요하다.
+
+## G.검증 항목 체크리스트
+
+| # | 항목 | 방법 | 결과 |
+|---|---|---|---|
+| 1 | 미설정 시 라우터 미등록(404) | 기동 로그 | OK — `GOOGLE_* 미설정 → /api/v1/auth/* 라우트 미등록` |
+| 2 | 세션 토큰 만료 거부 | 만료 토큰 주입 | OK 거부 |
+| 3 | 세션 토큰 서명 변조 거부 | 서명 4바이트 치환 | OK 거부 |
+| 4 | admin/user 서명키 분리 | `derive_signing_key` vs `UserAuth._key` 비교 | OK 다름 |
+| 5 | **세션 서명키 미설정 시 위조 불가** | 빈 시크릿 상태에서 토큰 자작 | **FAIL → C-1 위조 성공** |
+| 6 | state 서명 위조/누락 거부 | `v1.aaa.bbb`, state 없음 | OK 거부 |
+| 7 | **state 브라우저 바인딩** | 다른 클라이언트가 발급한 state로 콜백 | **FAIL → C-3 세션 발급됨** |
+| 8 | **state 1회용(리플레이 차단)** | 같은 state 재사용 | **FAIL → C-3 재사용 성공** |
+| 9 | 오픈 리다이렉트 차단 | `//evil.com`, `https://evil.com` | OK 둘 다 `/`로 강제 |
+| 10 | 쿠키 속성 | Set-Cookie 헤더 실측 | OK `HttpOnly; Secure; SameSite=lax; Path=/; Max-Age=2592000` |
+| 11 | email_verified=false 거부 | 가짜 userinfo | OK 로그인 실패 |
+| 12 | 팝업 postMessage targetOrigin 고정 | 응답 HTML | OK `FRONTEND_BASE_URL`로 고정, 프론트도 origin 재검사 |
+| 13 | **팝업 HTML 스크립트 컨텍스트 안전** | 구글 이름에 스크립트 종료 태그 삽입 | **FAIL → C-2 탈출 성공** |
+| 14 | display-name 사칭 차단 재사용 | `숨은길운영팀` / `admin` / 키릴 유사글자 | OK 전부 400 |
+| 15 | display-name HTML 정제 재사용 | `<b>길동</b>` → `길동` | OK 200, 태그 제거 |
+| 16 | display-name 길이 상한 | 21자 이상 | OK 422 (NICKNAME_MAX=20, 프론트 maxLength와 일치) |
+| 17 | display-name 비로그인 | 쿠키 없음 | OK 401 |
+| 18 | 계정 행 소실 시 처리 | 없는 user_id 토큰 | OK `/me` 비로그인, PATCH 401 |
+| 19 | 재로그인 시 사용자지정 이름 보존 | 이름 변경 후 재콜백 | OK 구글 원본으로 되돌아가지 않음 |
+| 20 | upsert_login 경합 안전성 | 코드 검토 | OK 단일 커넥션 + `RLock` + `BEGIN IMMEDIATE` + `google_sub UNIQUE` 3중 |
+| 21 | logout | POST | OK 204 + Max-Age=0 삭제 쿠키 |
+| 22 | **로그인이 쓰기 경로에 강제되는가** | 쿠키 없이 `POST /api/v1/reviews` | **FAIL → M-1 201 생성됨** |
+| 23 | 시크릿 하드코딩 | 신규/변경 10파일 정규식 스캔 + 커밋 4건 grep | OK 0건, `.env`류 커밋 0건 |
+| 24 | 회귀 — 부록 R(리뷰·공유) | `verify_community.py` | OK 67/67 PASS |
+| 25 | 회귀 — 리텐션 | `verify_community_retention.py` | OK 35/35 PASS |
+| 26 | 회귀 — 관리자 콘솔 | `verify_admin.py` | OK phase B 77/77, phase A 32/33 (m-7 환경 요인) |
+| 27 | 회귀 — 인젝션 하드닝 | `verify_injection_hardening.py` | OK PASS |
+| 28 | 프론트 타입 | `npx tsc --noEmit` | OK 0 에러 |
+| 29 | 프론트 실기동 | `next dev` → `/privacy`, `/` | OK 둘 다 200 |
+| 30 | **처리방침 ↔ 코드 일치** | 렌더된 `/privacy` 본문 대조 | **FAIL → C-4 불일치** |
+
+## G.발견된 이슈
+
+### Critical (배포 차단)
+
+**C-1. 세션 서명키가 빈 문자열에서 파생될 수 있어 임의 계정 탈취 가능** — 담당: backend-engineer
+
+`config.py:325` 의 폴백은 `USER_SESSION_SECRET` → `JWT_SECRET_KEY` → **빈 문자열**이다. admin은 3단계 폴백의 마지막이 **비밀번호 해시**(비밀값)라 안전하지만 user는 그 마지막 단계가 없다. `UserAuth.enabled` 는 `GOOGLE_*` 3개만 보므로 이 상태에서도 라우터가 등록되고 로그인이 정상 동작한다(기동 시 WARNING 한 줄이 전부다).
+
+서명키가 `HMAC(b"sumeungil.user.session.v1", b"")` 이 되는데, 이 값은 소스만 보면 누구나 계산할 수 있다.
+
+재현(실측):
+
+```
+key     = hmac.new(b"sumeungil.user.session.v1", b"", hashlib.sha256).digest()
+payload = "<미래 epoch>:1:<b64url(victim@example.com)>"
+body    = "v1." + b64url(payload)
+forged  = body + "." + b64url(hmac.new(key, body, sha256))
+쿠키 sumeungil_user=<forged> 로 요청
+```
+
+- `GET /me` → `{"authenticated":true,"name":"홍길동","email":"qa@example.com"}` (user_id=1 계정으로 로그인됨)
+- 이어서 `PATCH /display-name` → **200, 피해자 표시 이름이 임의로 변경됨**
+
+**위험도를 올리는 결정적 사실**: `deploy/DEPLOY.md` 에 `GOOGLE` 문자열이 **0건**이고, `backend/.env.production.example` 에 `USER_SESSION_SECRET` 도 `JWT_SECRET_KEY` 도 **한 줄도 없다**. 문서대로 배포하면 정확히 이 상태가 된다.
+
+조치 권고: `UserAuth.enabled` 에 세션 시크릿 존재 조건을 추가해 미설정이면 admin과 동일하게 기능 자체를 끄거나 부팅을 막고, `.env.production.example` / `DEPLOY.md` 를 갱신할 것.
+
+---
+
+**C-2. 콜백 팝업 HTML의 script 블록에 구글 이름이 원문 삽입 — XSS** — 담당: backend-engineer
+
+`api/auth.py:73` 에서 만든 `json.dumps({... "name": name})` 를 `:84` 에서 script 블록 안에 그대로 문자열 보간한다. `json.dumps` 는 `<` 와 `/` 를 이스케이프하지 않으므로 스크립트 종료 태그로 컨텍스트를 벗어날 수 있다.
+
+`name` 의 출처가 문제다. 신규 계정은 `upsert_login(default_display_name=google_name)` 으로 **구글 이름이 정제 없이 그대로** DB에 저장되고(`clean_user_text` 를 타지 않는다), 그 값이 다시 팝업 HTML로 나온다.
+
+재현(실측): userinfo `name` 에 스크립트 종료 태그 + `img onerror` 를 넣고 콜백 → 응답 본문에서 script 블록이 닫히고 `img` 태그가 살아나는 것을 확인했다.
+
+**단순 self-XSS로 볼 수 없는 이유 2가지**:
+
+1. 운영 `GOOGLE_REDIRECT_URI` 가 `https://sumeungil.co.kr/api/v1/auth/google/callback` 이고 nginx `location /api/` 가 백엔드로 프록시한다 — 즉 이 페이지는 **프론트와 동일 오리진**이다(별도 API 서브도메인이 아니다).
+2. C-3(state 미바인딩)과 결합하면 공격자가 자기 `code` + 유효 `state` 가 담긴 콜백 URL을 피해자에게 열게 해서 **피해자 브라우저의 sumeungil.co.kr 오리진에서** 페이로드를 실행시킬 수 있다.
+
+조치 권고: script 보간 대신 `<script type="application/json">` + `textContent` 파싱으로 바꾸거나, 최소한 `<` 와 `/` 를 유니코드 이스케이프할 것. 더불어 `default_display_name` 에도 `clean_user_text` 를 적용할 것.
+
+---
+
+**C-3. OAuth state가 브라우저에 바인딩되지 않고 1회용도 아님 — 로그인 CSRF / 리플레이** — 담당: backend-engineer
+
+`user_auth.issue_state` 가 담는 값은 `exp` 와 `next_path` 뿐이다. 브라우저별 nonce를 쿠키에 심고 대조하지 않으므로 **누가 발급받은 state든 누구의 브라우저에서든 통과**한다. `verify_state` 도 소비 처리를 하지 않아 TTL 10분 안에서 무제한 재사용된다(`api/auth.py:97` 주석이 "재사용 구분 안 함"으로 이미 인정하고 있다).
+
+재현(실측): 클라이언트 A가 `/google/login` 으로 state를 발급받은 뒤, 쿠키를 전혀 공유하지 않는 클라이언트 B가 그 state로 `/google/callback` 을 호출 → **B에게 세션 쿠키가 발급됐다.** 같은 state로 콜백을 2회 반복해도 두 번 다 "로그인 완료"였다.
+
+영향: (a) 피해자가 자기도 모르게 **공격자 계정으로 로그인**된 상태가 되어 이후 작성하는 리뷰가 공격자 계정에 귀속된다, (b) C-2 페이로드를 피해자 브라우저에서 실행시키는 전달 수단이 된다, (c) 유효 state 하나로 콜백을 반복 호출해 구글 토큰 엔드포인트로 나가는 아웃바운드 요청을 증폭시킬 수 있다.
+
+조치 권고: state 발급 시 랜덤 nonce를 만들어 서명 페이로드와 단명 HttpOnly 쿠키 양쪽에 넣고, 콜백에서 대조한 뒤 즉시 삭제(1회용)할 것.
+
+---
+
+**C-4. 게시된 개인정보처리방침이 실제 코드 동작과 반대로 적혀 있음** — 담당: backend-engineer(코드) / content-marketer·legal-counsel(문안 재검토)
+
+`/privacy` 4항 원문(`next dev` 실기동으로 렌더 확인):
+
+> 로그인 정보는 세션 쿠키에만 담기며 … **서버 데이터베이스에 이메일·이름을 별도로 저장하지 않습니다.**
+
+그러나 그 뒤 커밋 `6075e5a` 가 `users(google_sub, email, display_name, created_at, last_login_at)` 테이블을 신설해 **이메일과 이름을 영구 저장**한다. 처리방침(`114727d`)이 DB 연동(`6075e5a`)보다 **먼저** 작성됐고 갱신되지 않았다. legal-counsel의 스크리닝도 DB 연동 이전 시점이라 이 항목을 볼 수 없었다 — 법률 검토를 통과한 뒤 발생한 회귀다.
+
+파생 문제: 7항 "파기 절차"와 8항 "이용자 권리"가 계정 데이터를 다루지 않는데, 실제로 **계정 삭제(탈퇴) 수단이 코드에 없다**(`user_repo` 에 delete 계열 함수 없음, 라우터에도 없음). 보유기간 "30일"은 세션 쿠키 이야기일 뿐 `users` 행에는 보유기간도 파기 시점도 정의돼 있지 않다.
+
+개인정보를 저장하면서 "저장하지 않는다"고 게시한 상태로 배포하면 처리방침 허위 기재가 된다. **문안 수정만으로는 부족하다** — 수집항목·보유기간·파기 절차가 함께 바뀌어야 하고, 계정 삭제 수단이나 최소한 삭제 요청 처리 경로가 함께 있어야 한다.
+
+### Major
+
+**M-1. 로그인이 어떤 쓰기 엔드포인트에도 강제되지 않는다** — 담당: backend-engineer / planning-lead(스코프 판단)
+
+세션 쿠키 없이(로그인 이력 전무) 리뷰 작성을 실측한 결과 **201 생성 성공**이었다.
+
+```
+POST /api/v1/reviews   헤더: X-Device-Id: qa-device-0001   쿠키: 없음
+{"target_type":"spot","target_id":"1","nickname":"비로그인유저","rating":5,"comment":"테스트"}
+→ 201 {"review":{"id":1,"nickname":"비로그인유저", ...}}
+```
+
+`api/reviews.py` 는 여전히 `require_device_id` 만 쓰고 `nickname` 은 클라이언트가 보내는 값이다. 프론트도 `getNickname()`(localStorage)을 그대로 실어 보낸다(`ReviewSection.tsx:372`). 즉 구글 로그인은 **화면 게이트일 뿐 서버가 검증하는 신원이 아니다.**
+
+결과적으로 `PATCH /display-name` 의 정제·사칭차단은 우회 가능하다. 리뷰 API 자체의 `clean_user_text` / `is_impersonating_staff` 는 여전히 걸리므로 사칭 자체가 뚫리지는 않지만, "이용자가 직접 확인·수정한 이름만 표시 이름으로 씁니다"라는 처리방침 3항 설명과 실제 동작이 다르다.
+
+**M-2. 프론트가 `/api/v1/auth/me` 를 한 번도 호출하지 않는다** — 담당: backend-engineer(FE)
+
+프론트 전체 검색 결과 `/api/v1/auth/` 호출은 `google/login`(팝업), `display-name`, `logout` 세 곳뿐이다. 로그인 상태 판정은 전부 localStorage(`sumeungil:nickname:v1`, 만료 없음)에 의존한다. 따라서:
+
+- 세션 쿠키가 30일 만료된 뒤에도 UI는 계속 로그인 상태로 보인다.
+- 다른 기기에서 표시 이름을 바꿔도 이 브라우저에는 반영되지 않는다 — "display_name을 토큰에 넣지 않고 매 요청 DB 최신값을 읽는다"는 설계 의도가 프론트에서 소실됐다.
+- `UserSessionResponse.email` 은 소비처가 없다.
+
+**M-3. 닉네임 확인 단계를 취소해도 계정 행(이메일 + 구글 실명)은 이미 저장돼 남는다** — 담당: backend-engineer
+
+`upsert_login` 은 콜백 시점에 즉시 실행되고, `LoginModal.cancelAtNicknameStep()` 은 `logout()`(쿠키 삭제)만 한다. legal-counsel 권고의 취지("구글 이름을 사용자 확인 없이 전용하지 않는다")가 **저장 시점에는 지켜지지 않는다** — 사용자가 취소해도 구글 원본 실명이 `users.display_name` 에 남고, 삭제 수단도 없다(C-4와 연결). LoginModal 주석의 "로그인 자체를 취소로 본다"는 설명이 실제 동작과 다르다.
+
+**M-4. 배포 문서·예시 파일 미갱신** — 담당: backend-engineer
+
+- `deploy/DEPLOY.md`: `GOOGLE` 검색 결과 **0건** — 신규 환경변수 안내가 전무하다.
+- `backend/.env.production.example`: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` / `USER_SESSION_SECRET` / `JWT_SECRET_KEY` / `FRONTEND_BASE_URL` / `USER_COOKIE_SECURE` 가 **전부 없다.** (`backend/.env.example` 에도 GOOGLE 계열 없음.)
+- 이 상태로 배포하면 최선의 경우 기능이 조용히 404가 되고, 최악의 경우 C-1이 성립한다.
+
+**M-5. 인증 전용 검증 스크립트 부재** — 담당: backend-engineer
+
+`backend/scripts/` 에 community·admin·collections·concierge·onboarding 등 기능마다 `verify_*.py` 가 있는데 **인증만 없다.** 이번 검수에서 작성한 시나리오를 `verify_auth.py` 로 남겨야 재발 방지가 된다.
+
+### Minor
+
+- **m-1** `config.py:309-312` 주석이 stale — "계정 테이블을 두지 않는다", "이메일·이름을 쿠키에 담는다"는 `6075e5a` 이후 사실이 아니다. 이 저장소는 주석을 계약처럼 쓰므로 오독 위험이 크다.
+- **m-2** `POST /logout` 이 `HTMLResponse(content="", status_code=204)` 라서 204 응답에 `content-type: text/html` 이 붙는다. 동작엔 문제없으나 `Response(status_code=204)` 가 맞다.
+- **m-3** 서버측 세션 폐기 수단이 없다. 토큰이 탈취되면 **30일** 내내 유효하다(admin은 같은 이유로 TTL을 8h→4h로 줄인 이력이 있는데 user는 30일이다). 로그아웃도 쿠키 삭제일 뿐 토큰 무효화가 아니다.
+- **m-4** `/api/v1/auth/*` 전용 rate limit 버킷이 없다(default 버킷만 적용). `admin_login` 처럼 별도 버킷을 권장한다 — 특히 C-3 미조치 상태에서 콜백 반복 호출은 구글 토큰 엔드포인트로 나가는 아웃바운드 요청이 된다.
+- **m-5** `next` 쿼리는 프론트가 항상 `"/"` 만 넘겨 실질 미사용(데드 파라미터)이다.
+- **m-6** `LoginGateProvider.tsx:21` 주석이 여전히 "LoginModal.tsx(닉네임 전용 데모 로그인)"로 남아 있다.
+- **m-7** 로컬 `backend/.env` 의 `CORS_ALLOW_CREDENTIALS=true`(구글 로그인 로컬 개발용으로 추가됨) 때문에 기존 `verify_admin.py` phase A가 1건 FAIL한다("CORS allow_credentials 기본 false" 단언). **코드 회귀는 아니지만**, 이 값이 배포 `.env` 로 새어 나가면 `CORS_ORIGINS` 에 등록된 오리진이 관리자·사용자 쿠키를 크로스 오리진으로 쓸 수 있게 된다. 배포 전 값 확인이 필요하다.
+- **m-8** `users.email` 은 평문 저장이다(법상 암호화 의무 대상 항목은 아니나, 이 DB가 처음 담는 개인정보라는 점을 기록해 둔다).
+
+## G.문제없음을 실행으로 확인한 항목
+
+- **경합조건 / DB 정합성 (지시서 2번)**: `Database` 가 프로세스당 커넥션 1개 + `threading.RLock` + 쓰기마다 `BEGIN IMMEDIATE` 로 직렬화하고, `users.google_sub` 에 `UNIQUE` 제약이 있다. `upsert_login` 의 SELECT→INSERT 는 멀티워커·멀티프로세스에서도 SQLite 쓰기 락으로 보호된다. **문제 없음.**
+- **입력 검증 (지시서 3번)**: `PATCH /display-name` 이 리뷰 `nickname` 과 **동일한** `clean_user_text` + `is_impersonating_staff` 파이프라인과 동일한 `NICKNAME_MAX=20` 을 재사용하는 것을 실호출로 확인했다(사칭 3종 400, 태그 제거 후 200, 21자 422, 정제 후 공백 400). 프론트 `maxLength={20}` 도 일치한다. **재사용 정상.** 단 M-1 때문에 이 경로가 리뷰 표시 이름의 유일한 관문은 아니다.
+- **회귀 (지시서 4번)**: 부록 R(리뷰·공유) 67/67, 리텐션 35/35, 관리자 콘솔 phase B 77/77, 인젝션 하드닝 PASS, `tsc` 0에러, `next dev` 실기동에서 `/` 와 `/privacy` 200. 기존 기능 회귀 **없음**(m-7은 환경 요인).
+- **시크릿 (지시서 6번)**: 신규·변경 10개 파일 하드코딩 0건, 커밋 4건에 구글 시크릿 패턴 0건, `.env`·`.pem`·`.key` 커밋 0건. 인가 URL에 `client_secret` 미포함, 토큰교환·userinfo 실패 로그에 응답 본문과 토큰이 남지 않는 것을 코드로 확인.
+- 세션 토큰 만료·서명 변조 거부, admin/user 서명키 분리, 오픈 리다이렉트 차단, `email_verified=false` 거부, 쿠키 `HttpOnly/Secure/SameSite=lax/Path=/`, 계정 행 소실 시 안전 처리, 재로그인 시 사용자지정 이름 보존 — 전부 실행으로 확인했다.
+
+## G.최종 판정: **재작업 필요 (배포 불가)**
+
+| 심각도 | 건수 |
+|---|---|
+| **Critical** | **4** (C-1 세션키 위조 / C-2 콜백 XSS / C-3 로그인 CSRF·리플레이 / C-4 처리방침 허위기재) |
+| Major | 5 |
+| Minor | 8 |
+
+CLAUDE.md 3차 게이트 통과 조건은 "Critical 이슈 0건"이다. **C-1~C-4 조치 후 재검수 전까지 sumeungil.co.kr 배포를 승인하지 않는다.** C-1·C-2·C-3은 backend-engineer 단독으로 조치 가능하고, C-4는 코드(계정 삭제 경로)와 문안(legal-counsel 재확인)이 함께 필요하다. 재검수 시 `verify_auth.py`(M-5)를 산출물로 요구한다.
+
+**실크레덴셜 미검증 구간이 남아 있음을 다시 강조한다** — 위 4건을 고쳐도 실제 구글 동의화면 → 토큰교환 → 쿠키 발급 경로는 아직 한 번도 돌지 않았다. 대표가 Google Cloud Console 발급을 마치면 그 경로에 대한 확인이 별도로 필요하다.
+
+## G.content-marketer 핸드오프 (보고서에 쓰면 안 되는 미해결 이슈 3줄)
+
+```
+1. 구글 로그인은 아직 배포 불가 상태다(Critical 4건 재작업 중) — "로그인 기능 완료/오픈"으로 쓰지 말 것. 실제 구글 크레덴셜로 끝까지 실행해본 적이 아직 없다.
+2. 게시된 개인정보처리방침이 실제 저장 동작과 불일치하고(이메일·이름을 DB에 저장 중인데 "저장하지 않는다"고 기재) 계정 삭제 수단이 없다 — 개인정보 처리 관련 문구는 수정 완료 전까지 어떤 형태로도 인용 금지.
+3. 리뷰 작성은 여전히 로그인 없이 가능하다(서버가 세션을 검사하지 않음) — "로그인한 실사용자만 작성하는 검증된 후기" 류의 표현 금지.
+```
+
+---
+
+## G.추가 — 병렬 수정분 재검증 (같은 세션 내, working tree 기준)
+
+**상황**: 위 검수를 진행하는 동안 **같은 워킹트리에서 병렬로 수정이 들어왔다**(security-engineer 풀검수 결과를 backend-engineer가 반영 중인 것으로 보임 — 코드 주석이 "2026-08-17 보안검토 C-1/C-2/M-1"을 인용한다). 위 본문의 이슈 번호는 **커밋 `21a6bc3` 시점 코드** 기준이고, 아래는 **미커밋 working tree**(`backend/app/api/auth.py`·`security/user_auth.py`·`config.py` 3파일 수정) 기준 재검증 결과다. 두 검수의 이슈 번호 체계가 다르므로 혼동에 주의할 것.
+
+### 재검증 결과 — Critical 3건 해소 확인
+
+| 이슈 | 수정 내용 | 재검증(실행) |
+|---|---|---|
+| **C-1** 빈 시크릿 서명키 | `UserAuth.enabled` 에 `_secret_present` 조건 추가 | **해소.** 시크릿 미설정으로 기동 → `/api/v1/auth/*` 전부 **404**(라우터 미등록), 위조 시도 자체가 불가. 시크릿 설정 시 빈키 위조 토큰 거부 확인 |
+| **C-2** 콜백 XSS | `_js_safe_json`(`<`·U+2028/2029 이스케이프) + 구글 이름에 `clean_user_text`/`is_impersonating_staff` 적용 | **해소.** 스크립트 종료 태그 페이로드로 재시도 → 컨텍스트 탈출 실패. 사칭 이름(`숨은길 운영팀`)도 차단되어 대체값으로 치환됨 |
+| **C-3** state 미바인딩·리플레이 | `issue_state` 가 nonce 발급 → HttpOnly 쿠키(`sumeungil_oauth_state`, `Path=/api/v1/auth`, `Max-Age=600`, `Secure`, `SameSite=lax`)로 바인딩, `verify_state` 가 대조, 콜백 응답에서 항상 삭제 | **해소.** 타 브라우저 state 거부 확인, 같은 state 재사용 거부 확인, 정상 로그인은 그대로 200 |
+
+부수 개선도 확인했다: `POST /logout` 이 `Response(204)` 로 교체(m-2 해소), 세션 TTL 30일→**7일**(m-3 완화), `/me`·`/display-name` 응답에서 `email` 제거(최소노출).
+
+회귀 재확인: `verify_community` 67/67, `verify_community_retention` 35/35, `verify_admin` phase B 77/77(phase A는 m-7 환경 요인 1건 그대로), `py_compile` 통과.
+
+### 재검증에서 **새로 발견**한 이슈
+
+**M-6 (Major, 신규). 시크릿 누락 시 기동 로그가 엉뚱한 환경변수를 가리킨다** — 담당: backend-engineer
+
+`main.py:309-326` 은 수정되지 않았다. `enabled` 조건에 세션 시크릿이 추가됐으므로, `USER_SESSION_SECRET`/`JWT_SECRET_KEY` 만 빠진 서버는 다음 로그를 남기고 기능이 꺼진다:
+
+```
+INFO 구글 로그인 비활성(GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI 미설정) — /api/v1/auth/* 라우트 미등록
+```
+
+실제 원인은 세션 시크릿인데 **메시지는 GOOGLE_* 3개를 가리킨다.** 게다가 시크릿 미설정을 경고하던 `WARNING USER_SESSION_SECRET 미설정...` 블록은 `if _user_auth.enabled:` 안에 있어 이제 **절대 실행되지 않는 죽은 코드**가 됐다. M-4(`.env.production.example`·`DEPLOY.md` 에 `USER_SESSION_SECRET` 부재)와 겹치면, 대표가 크레덴셜을 넣었는데 로그인 버튼이 안 먹고 로그는 엉뚱한 변수를 가리키는 상황이 된다. 안전 방향으로 실패하는 것(fail-closed)은 맞지만 진단 가능성이 없다.
+
+조치 권고: `main.py` 의 비활성 분기에서 무엇이 빠졌는지 구분해 로그하고(값은 노출하지 말 것), 죽은 WARNING 블록을 그 분기로 옮길 것.
+
+**m-9 (Minor, 신규). 사칭·정제로 걸러진 구글 이름의 대체값이 이메일 로컬파트다**
+
+`api/auth.py` 의 폴백은 `clean_user_text(email.split("@")[0])` 이다. 실측에서 구글 이름 `숨은길 운영팀` → 표시 이름 `boss`(`boss@x.com` 의 로컬파트)로 치환됐다. 이메일 로컬파트는 실명·핸들인 경우가 많아, "구글 이름을 자동으로 쓰지 않는다"는 처리방침 3항 취지와 어긋날 수 있다. 어차피 직후에 사용자가 표시 이름을 확인·수정하므로, 중립적인 기본값(예: `여행자`)로 통일하는 편이 안전하다.
+
+**m-10 (Minor, 신규). `UserSessionResponse.email` 이 항상 `None` 인 죽은 필드가 됐다**
+
+`schemas/auth.py` 는 수정되지 않아 필드는 남아 있으나 두 라우터 모두 채우지 않는다. 스키마에서 제거하거나 주석으로 의도를 남길 것.
+
+**실브라우저 미검증 항목(신규)**: nonce 쿠키가 `SameSite=lax` + `Secure` 라서, 구글 → 콜백 top-level 네비게이션에서 실제로 전송되는지(팝업 컨텍스트 포함), 로컬 `http://localhost` 개발에서 `Secure` 쿠키가 저장되는지는 **TestClient로 증명할 수 없다.** 실크레덴셜 확보 후 반드시 실브라우저로 확인할 것 — 이 쿠키가 안 오면 `verify_state` 가 무조건 None을 반환해 **로그인이 전면 실패**한다.
+
+### 갱신된 최종 판정: **여전히 재작업 필요 (배포 불가)**
+
+| 심각도 | 최초 | 병렬 수정 후 |
+|---|---|---|
+| Critical | 4 | **1** (C-4 처리방침 허위기재 — 미조치) |
+| Major | 5 | **6** (M-1·M-2·M-4·M-5 미조치 + M-6 신규, M-3은 C-4와 병합 관리) |
+| Minor | 8 | **8** (m-2·m-3 해소, m-9·m-10 신규) |
+
+**C-4가 남아 있어 3차 게이트를 통과시키지 않는다.** 코드 보안 측면(C-1·C-2·C-3)은 실행 검증으로 해소를 확인했으나, `/privacy` 가 "서버 데이터베이스에 이메일·이름을 별도로 저장하지 않습니다"라고 게시된 채 `users` 테이블이 이메일·이름을 영구 저장하는 상태는 그대로다. 계정 삭제 수단도 여전히 없다.
+
+배포 승인 전 필수: ① C-4(처리방침 문안 + 계정 삭제/삭제요청 경로) ② M-6(기동 로그) ③ M-4(`.env.production.example`·`DEPLOY.md`) ④ M-1·M-2에 대한 planning-lead의 스코프 판단(이번에 고칠지, "로그인은 화면 게이트일 뿐"임을 명시하고 넘길지) ⑤ 실크레덴셜 확보 후 실브라우저 로그인 1회 완주.
+
+---
+
+## H. 오케스트레이터 후속 조치 — Critical/Major 전체 반영 (2026-08-17, 같은 세션)
+
+qa-reviewer의 위 재검증(G절) 이후 대표에게 M-1·M-2 스코프를 물어(AskUserQuestion) **"지금
+같이 고침"**으로 확답받고, 지적된 항목을 전부 코드로 반영했다. 새 회귀 스위트
+`backend/scripts/verify_auth.py`(M-5 해소)로 아래 전부를 실행 검증했다 — **31/31 PASS**.
+기존 회귀도 무회귀 확인: `verify_community.py` 67/67, `verify_community_retention.py`
+35/35, `verify_admin.py` phase B 77/77(phase A는 기존과 동일하게 m-7 환경요인 1건만
+FAIL — 로컬 `.env`의 `CORS_ALLOW_CREDENTIALS=true` 때문이고 코드 회귀 아님, 배포용
+`.env.production.example`엔 이 키 자체가 없어 기본값 false로 안전).
+
+| 이슈 | 조치 | 파일 |
+|---|---|---|
+| **C-4** | `/privacy` 문안을 실제 저장 동작(계정 테이블에 이메일·표시이름·구글 식별자 보관)에 맞게 재작성(§1·3·4·7·8) + `DELETE /api/v1/auth/me`(계정 삭제) 신설 + Header에 "계정 삭제" 버튼(2단계 확인) | `frontend/app/privacy/page.tsx`, `backend/app/api/auth.py`, `backend/app/repositories/user_repo.py`, `frontend/components/Header.tsx` |
+| **M-1** | 로그인 세션이 있으면 리뷰·코스공유 API가 클라이언트 nickname을 무시하고 **서버가 확인한 display_name으로 강제 치환**. 비로그인 익명 작성은 기존 그대로 유지(의도된 기능, 제거 대상 아님) | `backend/app/api/community_common.py`(`session_display_name` 신설), `backend/app/api/reviews.py`, `backend/app/api/course_share.py` |
+| **M-2** | 프론트가 앱 부팅 시 `GET /me`를 1회 호출해 서버 세션 진실과 localStorage 캐시를 동기화(세션 만료·타 기기 이름 변경 반영). `LoginGateProvider`의 동기 체크 계약은 그대로 유지(백그라운드 보정만 추가) | `frontend/lib/authStorage.ts`(`syncSessionFromServer`), `frontend/components/Header.tsx` |
+| **M-3** | "닉네임 확인 취소"가 `logout()`(쿠키만 삭제)이 아니라 `deleteAccount()`(DB 행도 함께 삭제)를 쓰도록 변경 — 취소가 실제로 계정 흔적을 안 남기게 됨 | `frontend/lib/authStorage.ts`(`deleteAccount`), `frontend/components/LoginModal.tsx` |
+| **M-4** | `GOOGLE_*`/`USER_SESSION_SECRET`/`FRONTEND_BASE_URL`/`USER_COOKIE_SECURE` 전체를 `.env.example`·`.env.production.example`·`DEPLOY.md`(신규 §i)에 추가 | `backend/.env.example`, `backend/.env.production.example`, `deploy/DEPLOY.md` |
+| **M-5** | `verify_auth.py` 신설(31케이스: C-1~C-4·M-1~M-3 전부 포함) | `backend/scripts/verify_auth.py` |
+| **M-6** | 비활성 사유 로그가 실제 누락 항목(GOOGLE_*뿐 아니라 USER_SESSION_SECRET도)을 구분해서 남기도록 수정, 죽은 WARNING 블록 제거 | `backend/app/main.py` |
+| **m-1** | `config.py` stale 주석("계정 테이블을 두지 않는다") 정정 | `backend/app/config.py` |
+| **m-6** | `LoginGateProvider.tsx` stale 주석("닉네임 전용 데모 로그인") 정정 | `frontend/components/LoginGateProvider.tsx` |
+
+**남겨둔 항목(의도적, Minor)**: m-4(auth 전용 rate limit 버킷 — default 버킷으로 대체 방어됨), m-5(`next` 쿼리 데드 파라미터 — 프론트가 항상 `/`만 보내 실질 무해), m-7(로컬 `.env`의 `CORS_ALLOW_CREDENTIALS` — 문서화됨, 배포엔 영향 없음), m-8(`users.email` 평문 저장 — 법적 암호화 의무 대상 아님, 기록만).
+
+**여전히 남은 것**: 실제 Google Cloud Console 크레덴셜로 동의화면→토큰교환→쿠키발급까지 실브라우저로 완주한 적이 없다(⑤). 이 검증은 실크레덴셜 확보 후 별도로 필요하다.
+
+### 최종 판정: **Critical 0 / Major 0(M-4 스코프 항목 M-1·M-2 해소) — 코드 기준 3차 게이트 통과**
+
+단, 위 "여전히 남은 것"(실크레덴셜 실브라우저 검증)이 완료되기 전까지 최종 배포는 대표 승인
+대상으로 유보한다(CLAUDE.md 결재 규칙 — 최종 결재는 항상 사람).

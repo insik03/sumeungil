@@ -36,6 +36,7 @@ from .community_common import (
     ensure_enabled,
     read_device_id,
     require_device_id,
+    session_display_name,
     to_response,
 )
 
@@ -56,6 +57,11 @@ async def create_shared_course(
         limited = check_write_quota(device_id, "share")
         if limited is not None:
             return limited
+        # QA M-1(2026-08-17) — 로그인 중이면 클라이언트 nickname을 서버 확인값으로 덮어쓴다
+        # (community_common.session_display_name — reviews.py와 동일 원칙).
+        logged_in_name = await session_display_name(request)
+        if logged_in_name is not None:
+            req = req.model_copy(update={"nickname": logged_in_name})
         return await share_service.create_share(
             db,
             req=req,

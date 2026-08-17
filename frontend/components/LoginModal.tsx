@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "../lib/api";
-import { logout, setLoggedInName } from "../lib/authStorage";
+import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 
 interface LoginModalProps {
   open: boolean;
@@ -141,9 +141,12 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   };
 
   // 닉네임 단계에서 취소 — 구글 인증(서버 세션 쿠키)까지 됐지만 표시 이름은 안 정했으니
-  // 로그인 자체를 취소로 본다(애매한 반쯤 로그인 상태를 남기지 않는다).
+  // 로그인 자체를 취소로 본다(애매한 반쯤 로그인 상태를 남기지 않는다). QA M-3(2026-08-17)
+  // 지적대로, 예전엔 logout()(쿠키만 삭제)이라 구글 원본 이름이 담긴 계정 행이 users
+  // 테이블에 그대로 남았다 — deleteAccount()로 그 행 자체를 지워야 "취소"가 말 그대로
+  // 취소가 된다.
   const cancelAtNicknameStep = () => {
-    logout();
+    void deleteAccount();
     onClose();
   };
 

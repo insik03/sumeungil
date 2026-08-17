@@ -39,6 +39,7 @@ from .community_common import (
     ensure_enabled,
     read_device_id,
     require_device_id,
+    session_display_name,
     to_response,
 )
 
@@ -104,6 +105,11 @@ async def create_review(
         limited = check_write_quota(device_id, "review")
         if limited is not None:
             return limited
+        # QA M-1(2026-08-17) — 로그인 중이면 클라이언트가 보낸 nickname을 무시하고 서버가
+        # 확인한 표시 이름으로 덮어쓴다(session_display_name 참고). 비로그인은 기존 그대로.
+        logged_in_name = await session_display_name(request)
+        if logged_in_name is not None:
+            req = req.model_copy(update={"nickname": logged_in_name})
         return await review_service.create_review(db, req=req, device_id=device_id)
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="reviews/create")
@@ -122,6 +128,12 @@ async def update_review(
         limited = check_write_quota(device_id, "review")
         if limited is not None:
             return limited
+        # QA M-1 — 로그인 중이고 이번 요청이 실제로 nickname을 건드릴 때만 서버 확인값으로
+        # 덮어쓴다(model_fields_set 유지 — 건드리지 않은 필드는 여전히 "변경 없음"으로 남는다).
+        if "nickname" in req.model_fields_set:
+            logged_in_name = await session_display_name(request)
+            if logged_in_name is not None:
+                req = req.model_copy(update={"nickname": logged_in_name})
         return await review_service.update_review(
             db, review_id=review_id, req=req, device_id=device_id
         )
