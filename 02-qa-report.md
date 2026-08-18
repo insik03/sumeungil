@@ -767,3 +767,40 @@ FAIL — 로컬 `.env`의 `CORS_ALLOW_CREDENTIALS=true` 때문이고 코드 회�
 
 단, 위 "여전히 남은 것"(실크레덴셜 실브라우저 검증)이 완료되기 전까지 최종 배포는 대표 승인
 대상으로 유보한다(CLAUDE.md 결재 규칙 — 최종 결재는 항상 사람).
+
+---
+
+## 2026-08-18 보안감사 반영 검수 (qa-reviewer, 풀검수)
+
+대상: 외부 보안감사 2차/3차 반영분(`security-reports/2026-08-18-감사반영-작업기록.md`). 슬랙 연동 변경(별도 세션)은 범위 밖.
+
+### 실행 검증
+| 명령 | 결과 |
+|---|---|
+| `python scripts/verify_course_payload.py` | exit 0 — 38/38 OK |
+| `python -c "import app.main"` | OK |
+| `python -m pyflakes app` | exit 0 (기존 경고 1건 `auth.py:41` 무관) |
+| `npx tsc --noEmit` | exit 0 |
+| TestClient 실호출 | `/courses/share`, `/admin/operators`, `/admin/login`, `/onboarding/analyze` + 시드 스팟(26350) write→read 왕복 |
+
+### 이슈
+| ID | 심각도 | 위치 | 내용 | 담당 |
+|---|---|---|---|---|
+| C-1 | **Critical** | `services/course_payload.py:255,261,333,334` | `slot_label`/`blurb`/`ai_title`/`ai_summary`에 비문자열(int/dict/list)이 오면 `clean_user_text` TypeError → 쓰기 **500**, 읽기(`filter_stored_course`)도 과거 payload에 그런 값이 있으면 영구 500. 재현: `{"spots":[{"id":2875837,"slot_label":123}]}` → 500 INTERNAL. error_alert가 5xx마다 슬랙 알림을 쏘므로 익명 사용자가 알림 폭주 유발 가능 | backend-engineer |
+| M-1 | Major | `clients/kto_client.py:133-134`, `clients/stddata_festival_client.py:110` | A-2 마스킹 누락 — `serviceKey` 사용 클라이언트가 `resp.text[:200]` 원문 로그 (보안 M-1과 동일) | backend-engineer |
+| M-2 | Major | git | 감사 반영 파일 전부가 다른 세션의 슬랙 커밋 `6a7ed86`에 QA 전 함께 커밋됨. 슬랙 롤백 시 보안 수정도 함께 되돌아감 | orchestrator |
+| m-1 | Minor | `main.py:228` | `_visit_retention_loop`가 `community_enabled`일 때만 도는데 `VisitLogMiddleware`는 무조건 등록 → 킬스위치 시 90일 정리 미실행 | backend-engineer |
+| m-2 | Minor | `course_payload.filter_stored_course` | 스팟이 빠지면 legs 인덱스 밀림(1→3 구간이 이전 leg 값), total_distance_m 부분합 | backend-engineer |
+| m-3 | Minor | `SharedCourseDetailContent.tsx` | 과거 공유의 `spot_count`(저장 당시 값)와 읽기 필터 후 카드 수 불일치 | — |
+| m-4 | Minor | `main.py:298-303` | 낡은 주석("JWT 시크릿 폴백"), 미사용 `secret=` 인자 | backend-engineer |
+| m-5 | Minor | `share_service.py:276` | 서버 보강 후 32KB 재검사 — 경계 케이스에서 413 가능(실측 크기에선 여유) | — |
+| m-6 | Minor | 관리자 로그인 | 이름 오타도 401+시도 1건 소모 → 반복 시 1분 잠김. 회귀 아님. DEPLOY.md에 정확한 이름 문자열 기록 권고 | — |
+
+### 통과 확인
+- A-3 해시 연속성: `ADMIN_SESSION_SECRET`/`JWT_SECRET_KEY` 있을 때 구 알고리즘과 해시 완전 일치, 키 전무 시 빈 해시+경고 정확히 1회. 종전에 `ADMIN_PASSWORD_HASH`만 있던 배포는 해시가 바뀌어 전환 당일 일시 중복 계산(의도된 변화).
+- A-1 `scope_path`: scope 우선, 없으면 폴백, 버킷 분류 유지.
+- A-6: 시드 스팟 왕복에서 서버값 덮어쓰기·congestion/notice/가짜 태그 폐기·total_distance_m 재계산·CDN 이미지 유지·region/legs 없는 코스 정상·`CourseResponse` 검증 통과, 프론트 무수정 호환 확인.
+- A-7: `ADMIN_OPERATORS` 유/무 각각 정상, 이름/비번 오류 동일 401.
+- 시크릿 하드코딩 없음.
+
+### 판정: **재작업 필요** (C-1 + M-1). 수정 후 `verify_course_payload.py`에 비문자열 케이스 추가하고 재검수.

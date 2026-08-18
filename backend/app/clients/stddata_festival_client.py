@@ -39,6 +39,7 @@ import logging
 import httpx
 
 from ..config import settings
+from ..util.redact import redact_secrets
 
 logger = logging.getLogger("sumeungil.stddata.festival")
 
@@ -107,7 +108,8 @@ async def _get_page(client: httpx.AsyncClient, page: int, page_rows: int) -> dic
     try:
         return resp.json()
     except ValueError as exc:
-        logger.warning("표준축제데이터 JSON 파싱 실패: %s", resp.text[:200])
+        # 원천 오류 본문은 요청 쿼리(=serviceKey)를 되비춘다(2026-08-18 보안 M-1).
+        logger.warning("표준축제데이터 JSON 파싱 실패: %s", redact_secrets(resp.text)[:200])
         raise StdDataFestivalError("upstream returned non-JSON body") from exc
 
 

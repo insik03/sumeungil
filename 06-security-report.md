@@ -567,3 +567,59 @@ security-engineer·qa-reviewer 병렬 풀검수(§본문, `design-docs/04-qa-rep
 **검증**: `verify_auth.py` 53/53(신규 K-C1/K-M1/M-2/K-m1 재현 테스트 4건 포함, §11~13), `verify_community.py` 67/67, `verify_community_retention.py` 35/35, `verify_admin.py` phase B 77/77(phase A 1건은 로컬 `.env`의 `CORS_ALLOW_CREDENTIALS=true` 리크로 인한 기존 무관 결함, 재확인), 프론트 `tsc --noEmit` 0에러, 백엔드 임포트 정상, 로컬 dev Postgres에 schema_version 8 마이그레이션 실적용 확인.
 
 **판정**: K-C1/K-M1/K-M2/K-M3 전부 조치 완료로 두 부서의 "조건부 승인 조건"을 충족했다고 판단한다. M-6만 미해결 상태로 남기고, 문서 보강 성격이라 배포를 막지 않는다고 판단했다 — 최종 배포 승인은 대표 몫이다.
+
+---
+
+## 2026-08-18 외부 보안감사(2차 개발자용 · 3차 비전공자용) 반영 검수
+
+- 검수자: security-engineer / 대상: 워킹트리 미커밋 변경분 (슬랙 연동 변경은 범위 밖 — 별도 세션)
+- 근거 문서: `security-reports/2026-08-18-감사반영-작업기록.md`
+- **판정: 조건부 승인** — Critical 0 / High 0 / Medium 2 / Low 5. M-1·M-2는 커밋 전 조치 권고(배포 차단 사유 아님).
+
+### 1. 점검 항목 체크리스트
+
+| 항목 | 결과 |
+|---|---|
+| 인증/인가 | ○ 관리자 세션 서명·401 무구분 유지, `/mine` 소유권 확인 유지, 인증 없는 운영자 명단 노출 제거 |
+| 입력 검증 | ○ 코스 payload allowlist 재구성(적대적 입력 직접 검증), 온보딩 text 2000자 상한. SQL은 전량 파라미터 바인딩, `prune`의 f-string은 고정 튜플 |
+| XSS | ○ 프론트 `dangerouslySetInnerHTML` 0건, 서버 `clean_user_text` 정제 |
+| 시크릿 관리 | △ 하드코딩 0건·`.env` 커밋 0건이나 **로그 마스킹 2곳 누락(M-1)** |
+| 의존성 | ○ `starlette==1.0.1`(BadHost 패치 반영본) 핀, 신규 의존성 0. 이미지 태그 고정 |
+| AI 특화 | ○ 사용자 텍스트는 LLM 프롬프트 미투입 불변식 유지, LLM 출력의 코드/SQL 실행 경로 없음 |
+| 인프라 | △ CORS·rate limit·보안 헤더 유지. **HSTS 여전히 미적용(이월)** |
+| 개인정보 | ○ 방문 IP 가명화 fail-closed + 90일 파기 실배선(이번이 최초) |
+
+### 2. 발견된 취약점
+
+| ID | 심각도 | 위치 | 내용 | 수정 권고 | 담당 |
+|---|---|---|---|---|---|
+| M-1 | Medium | `backend/app/clients/kto_client.py:133-134`, `backend/app/clients/stddata_festival_client.py:110` | A-2 미완. 두 클라이언트 모두 `serviceKey=public_data_api_key`를 보내는데 파싱 실패 시 `resp.text[:200]`을 마스킹 없이 로그에 남긴다. 원천이 쿼리스트링을 되비추면 API 키가 운영 로그에 평문 잔류 | `redact_secrets(resp.text)[:200]` 로 감싼다 | backend-engineer |
+| M-2 | Medium | `backend/app/config.py:277-278`, `backend/app/middleware/visit_log.py:107-119`, `deploy/DEPLOY.md`(③ 검증), `backend/.env.production.example:151-157` | 폴백 체인(`ADMIN_SESSION_SECRET`→`JWT_SECRET_KEY`→`ADMIN_PASSWORD_HASH` 파생) 때문에 운영 구성에서는 키를 비워도 집계가 꺼지지 않고 경고도 안 나온다. DEPLOY.md의 `grep ADMIN_SESSION_SECRET` 검증이 **항상 통과 = no-op**이며, 문서의 "fail-closed" 서술이 사실과 다르다 | 기동 시 `os.getenv("ADMIN_SESSION_SECRET")`가 비었고 `admin_password_hash`가 있으면 "파생 키 사용 중" 경고 1회 출력, 그 문구를 검증 대상으로 문서 정정 | backend-engineer |
+| L-1 | Low | `backend/app/services/course_payload.py:406` | `filter_stored_course`가 payload 내부의 `"v": 2`를 신뢰 근거로 쓴다. 클라이언트 형태 payload에 `v:2`를 넣으면 `blurb`가 살아남는다. 현재 쓰기 경로 2곳이 모두 `v`를 서버 값으로 덮으므로 **API로는 도달 불가** | 신뢰 판정을 DB 컬럼(`payload_version`)이나 서명으로 이전 | backend-engineer |
+| L-2 | Low | `backend/app/middleware/visit_log.py:113-117` ↔ `backend/app/security/admin_auth.py:184-193` | 폴백 ③에서 방문 해시 키가 관리자 세션 서명키와 동일한 파생값(라벨 상이). 절단 HMAC이라 키 역산은 비현실적 | `ADMIN_SESSION_SECRET` 실제 설정(M-2와 함께 해소) | 배포 담당 |
+| L-3 | Low | `backend/app/util/redact.py:44-48` | 소문자 퍼센트인코딩(`%2b`/`%2f`) 형태는 치환되지 않음. httpx는 대문자 hex를 쓰므로 실환경 가능성 낮음 | 대소문자 무시 매칭 추가 | backend-engineer |
+| L-4 | Low | `backend/app/middleware/rate_limit.py:88-99`, `backend/app/api/course_share.py:173` | `POST /api/v1/courses/mine`은 영구 기록 쓰기인데 `ugc`가 아니라 `course` 버킷이고 `_encode_payload` 크기·깊이 사전 검사도 없음. 로그인 필수 + nginx 1m 바디 제한이 완충 | `UGC_METHODS`에 `/api/v1/courses/mine` 추가, `_encode_payload` 사전 검사 통일 | backend-engineer |
+| L-5 | Low(이월) | `deploy/nginx.conf` | HSTS 헤더 미적용(2026-08-09 "첫 실갱신 성공 후"로 유예) | 갱신 이력 확인 후 적용 | 배포 담당 |
+| I-1 | Info | `backend/app/middleware/error_alert.py:148` | `request.url.path` 잔존 — 알림 문구용, 영향 없음 | 통일 시 `scope_path()` | — |
+| I-2 | Info | `backend/app/api/admin.py:190` | `required` 불리언은 여전히 콘솔 활성 여부를 알려주나 잔여 정보량 무시 가능 | 조치 불요 | — |
+
+### 3. 검증 방법
+
+- `python scripts/verify_course_payload.py` → 38/38
+- `rebuild_course_for_store`에 위조 필드(가짜 장소명·`congestion.level`·외부 이미지·`verified_badge`·`match_score:99`·`<script>` slot_label·클라이언트 `v:2`) 직접 투입 → 전량 서버 값 대체·폐기·clamp 확인. `filter_stored_course` 읽기 경로도 동일
+- `redact_secrets`에 서비스키 6개 인코딩 형태 투입 → 5개 마스킹, 소문자 hex 미치환(L-3)
+- starlette 1.0.1 `URL.__init__` `_HOST_RE` 가드 확인 · tracked 465파일 시크릿 패턴 grep 0건
+
+### 4. 개인정보 처리 흐름 요약 (legal-counsel 전달용)
+
+| 단계 | 내용 | 이번 변경 |
+|---|---|---|
+| 수집 | 방문 IP → HMAC 앞 16자 가명화(원본 미저장) | 키 부재 시 수집 중단(fail-closed) 신설, 고정 폴백 키 제거 |
+| 전송 | 공공 API 원천 호출 5종 | 전량 https 승격, 응답 로그 마스킹(2곳 누락 = M-1) |
+| 파기 | 90일 | **`prune` 자동 실행이 이번에 최초 배선** — 그 이전 기간은 미이행(처리방침·관리자 화면 문구와 과거 불일치 구간) |
+| UGC | 공유/저장 코스 payload | 서버 재구성으로 사용자 자유입력 잔류가 `slot_label`(24자)·`ai_title`(40자)·`ai_summary`(400자)로 축소 |
+| 공개 | `security.txt` 연락처 | 처리방침 §9 기공개 값과 동일 — 신규 노출 없음 |
+
+### 5. 최종 판정
+
+**조건부 승인.** Critical/High 0건 → 3차 게이트(보안) 통과. 조건: (a) M-1 로그 마스킹 2곳 보완, (b) M-2 기동 경고 추가 + 문서 정정. 미처리 시에도 배포는 막지 않되 `.env`의 `ADMIN_SESSION_SECRET` 실재 여부를 대표가 파일로 직접 확인해야 한다.

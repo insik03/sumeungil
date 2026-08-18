@@ -165,14 +165,19 @@ async def save_my_course(
     """AI 코스짜기 결과를 계정에 저장한다. 자동 저장이 아니라 사용자가 명시적으로
     "저장하기"를 눌렀을 때만 호출된다(CourseContent.tsx).
 
-    2026-08-18 보안감사: `/share` 와 **같은 재구성**을 태운다. 이 보관함은 본인만 읽으므로
-    위조 피해자가 자기 자신뿐이지만, 저장소에 검증되지 않은 임의 JSON 이 쌓이는 것 자체가
-    나중에 "저장한 코스 상세" 화면을 만들 때 그대로 표면이 된다 — 두 경로가 갈리면 안 된다.
+    2026-08-18 보안감사: `/share` 와 **같은 순서·같은 함수**를 태운다 — ① 크기·깊이 상한
+    사전 검사(보안 L-4: 예전에는 `/share` 만 했다) → ② 스팟 id 만 신뢰한 재구성 → ③ 사진·설명
+    서버 보강. 이 보관함은 본인만 읽으므로 위조 피해자가 자기 자신뿐이지만, 저장소에 검증되지
+    않은 임의 JSON 이 쌓이는 것 자체가 나중에 "저장한 코스 상세" 화면을 만들 때 그대로 표면이
+    된다 — 두 경로가 갈리면 안 된다.
     """
     try:
+        share_service.guard_payload_limits(req.course, settings.share_payload_max_bytes)
         course = course_payload.rebuild_course_for_store(req.course, spot_repo=spot_repo)
     except course_payload.InvalidCoursePayload:
         return error_response(400, "INVALID_COURSE", "코스 내용을 확인할 수 없습니다.")
+    except Exception as exc:  # noqa: BLE001 — 상한 위반(413/400)을 기존 봉투로 변환
+        return to_response(exc, context="courses/mine/save")
     await course_payload.enrich_stored_course(course, cache=cache, spot_repo=spot_repo)
 
     row = await db.awrite(

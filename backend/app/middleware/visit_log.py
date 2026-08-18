@@ -147,11 +147,15 @@ def visit_ip_hash(ip: str | None) -> str:
 class VisitLogMiddleware(BaseHTTPMiddleware):
     """요청 1건을 (날짜, ip_hash) 단위 집계에 더한다.
 
-    `db` 는 앱 기동 시 주입한다. `secret` 인자는 하위호환으로 남겨두되, 실제 해싱은
-    모듈 함수 `visit_ip_hash` 를 쓴다 — 비콘과 키가 갈리지 않게 하기 위해서다.
+    `db` 만 앱 기동 시 주입한다. **해싱 키는 주입받지 않는다** — 실제 해싱은 모듈 함수
+    `visit_ip_hash` 가 하고, 페이지 비콘(`api/visit.py`)도 같은 함수를 부른다. 키를 여기로
+    주입하면 두 경로가 다른 키를 쓸 여지가 생기고, 그러면 같은 사람이 두 명으로 세어진다.
+
+    2026-08-18(QA Minor-4): 쓰이지 않던 `secret=` 인자를 제거했다. 남겨 두면 "이 값이 해싱에
+    쓰인다"고 오해를 부른다(실제로 main.py 주석이 그 오해를 그대로 적고 있었다).
     """
 
-    def __init__(self, app, *, db, secret: str = "", trust_proxy: bool = True) -> None:
+    def __init__(self, app, *, db, trust_proxy: bool = True) -> None:
         super().__init__(app)
         self._db = db
         self._trust_proxy = trust_proxy

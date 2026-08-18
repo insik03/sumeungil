@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
@@ -196,8 +197,30 @@ async def _prewarm_all() -> None:
     await _prewarm_home()
 
 
+def _warn_if_session_secret_derived() -> None:
+    """`ADMIN_SESSION_SECRET` 미설정을 기동 시 **1회** 경고한다 (2026-08-18 보안 M-2).
+
+    `settings.admin_session_secret` 을 보면 안 된다 — config 가 이미 `JWT_SECRET_KEY` 로
+    폴백해 채워 넣기 때문에 "설정했는지"를 구분할 수 없다. 그래서 **원본 환경변수**를 본다.
+
+    실제로 무엇이 나빠지는가(과장하지 않고 정확히):
+      - 관리자 세션 서명키가 `JWT_SECRET_KEY` 또는 `ADMIN_PASSWORD_HASH` 파생값이 된다.
+        즉 키 하나가 두 역할을 겸해, 그 값이 새면 세션 위조까지 한 번에 성립한다.
+      - 방문 통계 IP 가명화 키도 같은 파생값을 쓴다. **집계가 꺼지는 것은 세 값(SESSION/
+        JWT/PASSWORD_HASH)이 모두 없을 때뿐**이다(그때는 visit_log 가 별도 경고를 낸다).
+    DEPLOY.md (h-1) ②-b 의 검증 단계가 이 경고 문자열을 grep 한다 — 문구를 바꾸면 그쪽도 고칠 것.
+    """
+    if os.getenv("ADMIN_SESSION_SECRET", "").strip():
+        return
+    logger.warning(
+        "ADMIN_SESSION_SECRET 미설정 — 세션 서명키/방문 해시키가 파생값으로 동작 중. "
+        "운영에서는 반드시 설정할 것 (deploy/DEPLOY.md (h-1) ②-b)"
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _warn_if_session_secret_derived()
     # 부록 R + Phase C: 저장소(PostgreSQL, 2026-08-17 SQLite에서 전환) 스키마를 기동 시
     # 1회 준비한다. 실패해도 부팅을 막지 않는다 — 나머지 조회 기능은 DB 없이 그대로 동작한다.
     # (실패 시 해당 라우트만 503 STORAGE_UNAVAILABLE 로 응답한다.)
@@ -224,10 +247,13 @@ async def lifespan(app: FastAPI):
     retention_task = (
         asyncio.create_task(_share_retention_loop()) if settings.community_enabled else None
     )
-    # 방문 집계 정리도 같은 조건(저장소가 준비된 경우)에서만 돈다.
-    visit_retention_task = (
-        asyncio.create_task(_visit_retention_loop()) if settings.community_enabled else None
-    )
+    # 방문 집계 정리는 **무조건** 돈다 (2026-08-18 QA Minor-1).
+    # 처음엔 community_enabled 조건을 붙였는데, `VisitLogMiddleware` 는 그 스위치와 무관하게
+    # 항상 등록된다 — 즉 킬스위치를 내린 상태에서도 방문 기록은 계속 쌓이는데 90일 정리만
+    # 영영 안 도는 조합이 생긴다(= 관리자 화면의 "90일 후 자동 삭제" 안내가 거짓말이 된다).
+    # 저장소가 준비되지 않았으면 prune 이 실패하지만, 루프가 예외를 삼키고 다음 날 재시도하므로
+    # 서비스에는 무해하다(로그 warning 하루 1줄).
+    visit_retention_task = asyncio.create_task(_visit_retention_loop())
     # 슬랙 아침 요약 — 웹훅이 있고 시각이 0~23 범위일 때만 돈다(-1 이면 요약만 끈다).
     # 위 루프들과 달리 community 와 무관하다: DB 가 죽어도 서버 상태는 알려야 하고,
     # slack_report 가 집계 조회 실패를 자체적으로 감당한다.
@@ -241,7 +267,7 @@ async def lifespan(app: FastAPI):
         prewarm_task.cancel()
     if retention_task is not None and not retention_task.done():
         retention_task.cancel()
-    if visit_retention_task is not None and not visit_retention_task.done():
+    if not visit_retention_task.done():
         visit_retention_task.cancel()
     if summary_task is not None and not summary_task.done():
         summary_task.cancel()
@@ -295,12 +321,15 @@ app = FastAPI(
 # 이렇게 두면 VisitLog 가 더 **안쪽**이 되어 429 로 끊긴 요청은 집계에 들어오지 않는다.
 # 차단된 요청은 방문이 아니다 — 봇이 두드린 횟수로 '방문자 수'가 부풀지 않게 한다.
 #
-# 원본 IP 는 저장하지 않는다(대표 결정, 2026-08-10). 해싱 키는 관리자 세션 시크릿을
-# 재사용하고, 없으면 JWT 시크릿으로 폴백한다 — 둘 다 서버 .env 안에만 있는 값이다.
+# 원본 IP 는 저장하지 않는다(대표 결정, 2026-08-10). 해싱 키는 **미들웨어가 아니라
+# `visit_log._secret_key()` 가** 결정한다(2026-08-18 QA Minor-4 — 여기 있던 "없으면 JWT
+# 시크릿으로 폴백" 설명은 그쪽으로 옮겨졌다). 우선순위는 ADMIN_SESSION_SECRET →
+# JWT_SECRET_KEY → ADMIN_PASSWORD_HASH 파생 → **셋 다 없으면 집계 중단(fail-closed)**.
+# 키를 여기서 주입하지 않는 이유: 페이지 비콘(`api/visit.py`)과 키가 갈리면 같은 사람이
+# 두 명으로 세어진다. 그래서 양쪽이 같은 모듈 함수 하나를 부른다.
 app.add_middleware(
     VisitLogMiddleware,
     db=get_database(),
-    secret=(settings.admin_session_secret or settings.jwt_secret_key),
     trust_proxy=settings.rate_limit_trust_proxy,
 )
 

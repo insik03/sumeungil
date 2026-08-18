@@ -32,6 +32,7 @@ import logging
 import httpx
 
 from ..config import settings
+from ..util.redact import redact_secrets
 
 logger = logging.getLogger("sumeungil.kto")
 
@@ -129,8 +130,9 @@ async def _fetch_page(
     try:
         data = resp.json()
     except ValueError as exc:
-        # 공공데이터는 키 오류 시 XML 을 반환하기도 한다
-        snippet = resp.text[:200]
+        # 공공데이터는 키 오류 시 XML 을 반환하기도 한다 — 그 XML 에는 우리가 보낸
+        # serviceKey 가 그대로 들어 있다(2026-08-18 보안 M-1). 반드시 마스킹 후 로그.
+        snippet = redact_secrets(resp.text)[:200]
         logger.warning("KTO 응답 JSON 파싱 실패: %s", snippet)
         raise KtoUpstreamError("upstream returned non-JSON body") from exc
 

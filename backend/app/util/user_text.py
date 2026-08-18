@@ -40,9 +40,17 @@ _DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _TARGET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 
 
-def clean_user_text(raw: str | None, *, max_chars: int) -> str:
-    """사용자 텍스트 → 저장 가능한 한 줄 평문. 결과가 빈 문자열일 수 있다(호출부가 판단)."""
-    if not raw:
+def clean_user_text(raw, *, max_chars: int) -> str:
+    """사용자 텍스트 → 저장 가능한 한 줄 평문. 결과가 빈 문자열일 수 있다(호출부가 판단).
+
+    **타입을 강제하지 않고 "문자열이 아니면 빈 값"으로 수렴시킨다** (2026-08-18 QA Critical-1).
+    호출부 대부분은 pydantic 이 `str` 을 보장하지만, `course_payload` 는 **검증 전의 임의
+    JSON**(`{"slot_label": 123}` · `{"blurb": {...}}`)을 다룬다. 그때 여기서 TypeError 가
+    나면 쓰기는 500 이 되고, 저장된 값이라면 **읽을 때마다 영구 500** 이 된다 — 정제 함수가
+    정제 대상에게 당하는 구조라 방어를 이 한 곳에 둔다(호출부마다 isinstance 를 흩뿌리면
+    언젠가 한 곳이 빠진다).
+    """
+    if not isinstance(raw, str) or not raw:
         return ""
     cleaned = strip_html_to_plain(sanitize_free_text(raw))
     if len(cleaned) > max_chars:

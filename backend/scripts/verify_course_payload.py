@@ -235,6 +235,90 @@ check("손상 payload 는 예외 없이 빈 코스", course_payload.filter_store
 check("None payload 도 빈 코스", course_payload.filter_stored_course(
     None, spot_repo=REPO)["spots"] == [], "")
 
+# Minor-2(2026-08-18 QA) — 읽기 경로에서 가운데 스팟이 빠지면 leg 를 앞에서 당겨 쓰면 안 된다.
+# 1→3 구간에 1→2 구간의 이동시간이 붙으면 없는 사실을 만들어내는 것이다.
+gap = course_payload.filter_stored_course(
+    {
+        "spots": [{"id": 126508}, {"id": 424242}, {"id": 126509}],  # 가운데가 스토어에 없음
+        "legs": [
+            {"walk": {"minutes": 3, "meters": 200}, "car": None, "path": None},
+            {"walk": {"minutes": 7, "meters": 600}, "car": None, "path": None},
+        ],
+    },
+    spot_repo=REPO,
+)
+check("빠진 스팟 인접 leg 는 null", gap["legs"] == [{"walk": None, "car": None, "path": None}],
+      str(gap["legs"]))
+check("null leg 가 있으면 총거리는 null", gap["total_distance_m"] is None,
+      str(gap["total_distance_m"]))
+
+adjacent = course_payload.filter_stored_course(
+    {
+        "v": course_payload.PAYLOAD_VERSION,
+        "spots": [{"id": 126508}, {"id": 126509}],
+        "legs": [{"walk": {"minutes": 3, "meters": 200}, "car": None, "path": None}],
+    },
+    spot_repo=REPO,
+)
+check("빠진 스팟이 없으면 leg 는 그대로", adjacent["legs"][0]["walk"] == {"minutes": 3, "meters": 200},
+      str(adjacent["legs"][0]))
+
+# --- 5. 비문자열 입력 (2026-08-18 QA Critical-1) ---------------------------------------
+#
+# 배경: `clean_user_text` 가 비문자열을 만나면 TypeError 를 던져 쓰기는 500,
+# **저장된 값이면 읽을 때마다 영구 500** 이 됐다. 정제 함수가 정제 대상에게 당하는 구조라
+# 방어를 `clean_user_text` 진입부 한 곳에 넣었다. 쓰기·읽기 양쪽에서 확인한다.
+
+print("\n=== 5. 비문자열 필드(500 방지) ===")
+NON_STRING = {
+    "spots": [
+        {"id": 126508, "slot_label": 123, "blurb": {"nested": "dict"}, "photo_credit": ["list"],
+         "image_url": 42},
+        {"id": 126509, "slot_label": None, "blurb": 3.14},
+    ],
+    "legs": [{"walk": {"minutes": "3", "meters": True}, "car": [], "path": {"not": "list"}}],
+    "ai_title": 123,
+    "ai_summary": ["a", "b"],
+    "region": {"region_code": 47130},
+}
+try:
+    ns = course_payload.rebuild_course_for_store(NON_STRING, spot_repo=REPO)
+    check("비문자열 slot_label 이 500 을 내지 않는다", ns["spots"][0]["slot_label"] == "1번째",
+          ns["spots"][0]["slot_label"])
+    check("비문자열 slot_label(None) 은 순번 폴백", ns["spots"][1]["slot_label"] == "2번째",
+          ns["spots"][1]["slot_label"])
+    check("dict blurb 는 빈 값", ns["spots"][0]["blurb"] is None, str(ns["spots"][0]["blurb"]))
+    check("list photo_credit 는 빈 값", ns["spots"][0]["photo_credit"] is None,
+          str(ns["spots"][0]["photo_credit"]))
+    check("int image_url 은 빈 값", ns["spots"][0]["image_url"] is None,
+          str(ns["spots"][0]["image_url"]))
+    check("int ai_title 은 빈 값", ns["ai_title"] is None, str(ns["ai_title"]))
+    check("list ai_summary 는 빈 값", ns["ai_summary"] is None, str(ns["ai_summary"]))
+    check("비문자열 region_code 는 스팟에서 보정", ns["region"]["region_code"] == "47130",
+          str(ns["region"]))
+    check("문자열 minutes / bool meters 는 leg 를 깨뜨리지 않는다",
+          ns["legs"][0]["car"] is None and ns["legs"][0]["path"] is None, str(ns["legs"][0]))
+except Exception as exc:  # noqa: BLE001
+    check("비문자열 payload 쓰기가 예외를 내지 않는다", False, f"{type(exc).__name__}: {exc}")
+
+try:
+    ns_read = course_payload.filter_stored_course(NON_STRING, spot_repo=REPO)
+    check("비문자열 payload 읽기가 예외를 내지 않는다", ns_read["spots"][0]["name"] == "불국사",
+          str(ns_read["spots"][0]["name"]))
+except Exception as exc:  # noqa: BLE001
+    check("비문자열 payload 읽기가 예외를 내지 않는다", False, f"{type(exc).__name__}: {exc}")
+
+# 새 표식이 붙은(=사진/설명을 신뢰하는) 경로에서도 비문자열이 터지지 않아야 한다.
+try:
+    trusted = dict(NON_STRING)
+    trusted["v"] = course_payload.PAYLOAD_VERSION
+    ns_trusted = course_payload.filter_stored_course(trusted, spot_repo=REPO)
+    check("표식 있는 비문자열 payload 읽기도 안전",
+          ns_trusted["spots"][0]["blurb"] is None and ns_trusted["ai_title"] is None,
+          str(ns_trusted["spots"][0]["blurb"]))
+except Exception as exc:  # noqa: BLE001
+    check("표식 있는 비문자열 payload 읽기도 안전", False, f"{type(exc).__name__}: {exc}")
+
 # 새 표식이 있으면 서버가 채운 사진·설명은 그대로 살아 있어야 한다(무회귀).
 v2 = dict(legacy)
 v2["v"] = course_payload.PAYLOAD_VERSION

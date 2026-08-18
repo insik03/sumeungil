@@ -176,7 +176,7 @@ nano deploy/.env
 | `APP_ENV` | `production` |
 | `RATE_LIMIT_ENABLED` | **`true`** (공개 배포에서는 필수. 로컬 기본값은 false) |
 | `ADMIN_PASSWORD_HASH` | 선택. 관리자 콘솔을 쓸 때만. **평문이 아니라 scrypt 해시** — 아래 (h) 참고. 비우면 `/api/v1/admin/*` 자체가 없다(404) |
-| `ADMIN_SESSION_SECRET` | **필수, 새로 생성**: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`. 비우면 ① 관리자 세션 서명키가 `ADMIN_PASSWORD_HASH` 에서 파생되고(해시 유출 = 세션 위조) ② 방문 통계 IP 가명화 키가 없어 **방문 집계가 꺼진다**(fail-closed). 아래 (h-1) ②-b 참고 |
+| `ADMIN_SESSION_SECRET` | **필수, 새로 생성**: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`. 비워도 **에러 없이 폴백**한다(`JWT_SECRET_KEY` → 비밀번호 해시 파생) — 그래서 빠뜨리기 쉽다. 비우면 세션 서명키·방문 해시키가 같은 파생값을 공유해 그 값 유출이 곧 세션 위조가 된다. 기동 로그 경고로만 확인 가능 — 아래 (h-1) ②-b 참고 |
 | `ADMIN_COOKIE_SECURE` | **설정하지 않는다**(기본 true). HTTPS 운영이므로 false 금지 — (h-2) 이력 참고 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인. **로컬 개발용과 별도의 OAuth 클라이언트**로 발급받는다 — 아래 (h-3) 참고. 셋 중 하나라도 비면 `/api/v1/auth/google/*` 만 없다(404, 카카오와 독립) |
 | `GOOGLE_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/google/callback` — 구글 클라이언트의 "승인된 리디렉션 URI"와 문자 그대로 일치해야 한다 |
@@ -312,14 +312,19 @@ ADMIN_PASSWORD_HASH=scrypt$16384$8$1$....$....
 
 **②-b `ADMIN_SESSION_SECRET` 생성 — 빠뜨리기 쉬운 필수 키 (2026-08-18 보안감사)**
 
-해시만 넣어도 로그인은 **된다.** 그래서 이 단계를 건너뛰기 쉬운데, 비워두면 두 가지가
-조용히 나빠진다:
+해시만 넣어도 로그인은 **된다.** 심지어 이 키를 비워도 **에러가 나지 않고 조용히 폴백한다**
+(`JWT_SECRET_KEY` → `ADMIN_PASSWORD_HASH` 파생). 그래서 "동작하니까 괜찮다"고 넘기기
+가장 쉬운 키다. 비워두면 이렇게 나빠진다:
 
-1. 관리자 세션 서명키가 `ADMIN_PASSWORD_HASH` 에서 파생된다 → 해시 한 줄이 새면
-   비밀번호를 몰라도 **세션 토큰을 위조**할 수 있다(키 하나가 두 역할을 겸함).
-2. 방문 통계의 IP 가명화 키가 없는 것으로 판정돼 **방문 집계가 통째로 꺼진다**
-   (fail-closed). 예전에는 저장소에 적힌 고정 문자열을 폴백 키로 썼는데, 그러면
-   가명화가 성립하지 않아(누구나 같은 키로 대입 가능) 그 폴백을 제거했다.
+1. 관리자 세션 서명키가 `JWT_SECRET_KEY` 또는 `ADMIN_PASSWORD_HASH` 파생값이 된다 →
+   그 값 한 줄이 새면 비밀번호를 몰라도 **세션 토큰을 위조**할 수 있다(키 하나가 두 역할을 겸함).
+2. 방문 통계의 IP 가명화 키도 같은 파생값을 쓴다.
+
+> **정확히 짚어둔다**: 방문 집계가 *꺼지는* 것은 `ADMIN_SESSION_SECRET`·`JWT_SECRET_KEY`·
+> `ADMIN_PASSWORD_HASH` 가 **모두** 비었을 때뿐이다(그때만 fail-closed). 셋 중 하나라도
+> 있으면 집계는 계속 돈다 — 즉 "안 넣으면 통계가 0 이 되니까 금방 안다"고 믿으면 안 되고,
+> 아래 ③ 의 기동 경고로 확인해야 한다. 예전에 쓰던 저장소 하드코딩 폴백 키는 제거됐다
+> (공개 상수를 키로 쓰면 후보 IP 대입으로 되맞출 수 있어 가명화가 성립하지 않는다).
 
 ```bash
 # 대표 PC 또는 VM 어디서든 1회 생성 (값은 채팅·문서에 남기지 않는다)
@@ -341,10 +346,14 @@ docker compose up -d backend
 docker compose logs --tail=20 backend | grep -i 관리자
 #  "관리자 콘솔 활성화 — /api/v1/admin/* (세션 4시간, 쿠키 secure=True)" 가 보이면 성공
 
-# ADMIN_SESSION_SECRET 미설정 경고가 0회여야 한다(출력이 비어 있으면 정상).
+# ②-b 검증 — 이 경고가 **0회여야 정상**이다(출력이 비어 있으면 성공).
 docker compose logs backend | grep ADMIN_SESSION_SECRET
-#  "방문 집계 비활성화 — IP 가명화 키가 없습니다. ADMIN_SESSION_SECRET(권장) ..." 이
-#  한 줄이라도 보이면 ②-b 를 빠뜨린 것이다. .env 를 고치고 `docker compose up -d backend`.
+#  "ADMIN_SESSION_SECRET 미설정 — 세션 서명키/방문 해시키가 파생값으로 동작 중.
+#   운영에서는 반드시 설정할 것 (deploy/DEPLOY.md (h-1) ②-b)"
+#  이 줄이 보이면 ②-b 를 빠뜨린 것이다. .env 를 고치고 `docker compose up -d backend`.
+#
+#  이 경고는 **기동 시 1회**만 뜬다(app/main.py `_warn_if_session_secret_derived`).
+#  경고가 떠도 서비스는 정상 동작하므로 화면만 봐서는 알 수 없다 — 반드시 이 명령으로 확인할 것.
 ```
 
 브라우저에서 `https://sumeungil.co.kr/ops-37878f1b71` 접속 → 비밀번호 입력.

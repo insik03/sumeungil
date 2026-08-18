@@ -48,6 +48,11 @@ from ..util.user_text import clean_user_text
 
 logger = logging.getLogger("sumeungil.services.course_payload")
 
+# 이 모듈이 다루는 입력은 **pydantic 을 통과하지 않은 임의 JSON** 이다(`course: dict[str, Any]`).
+# 따라서 어떤 필드에도 int/dict/list/None 이 올 수 있다고 가정한다. 문자열 정제는
+# `clean_user_text` 가 진입부에서 비문자열을 빈 값으로 수렴시켜 준다(2026-08-18 QA Critical-1)
+# — 여기서 다시 isinstance 를 흩뿌리지 않는 이유는 방어를 한 곳에 모으기 위해서다.
+
 # 새 포맷 표식. 이 값이 없으면 "과거(무검증) payload" 로 취급한다.
 PAYLOAD_VERSION = 2
 
@@ -211,12 +216,28 @@ def _clean_path(raw: Any) -> list[list[float]] | None:
     return out
 
 
-def _clean_legs(raw: Any, *, want: int) -> list[dict[str, Any]]:
-    """leg 목록. 길이는 항상 `want`(= 스팟 수 - 1)로 맞춘다 — 프론트가 `legs[i]` 로 인덱싱한다."""
+_NULL_LEG: dict[str, Any] = {"walk": None, "car": None, "path": None}
+
+
+def _clean_legs(raw: Any, *, kept: list[int]) -> list[dict[str, Any]]:
+    """leg 목록. 길이는 항상 `len(kept) - 1` — 프론트가 `legs[i]` 로 인덱싱한다.
+
+    `kept` 는 **살아남은 스팟의 원본 인덱스**다. 읽기 경로에서 스토어에 없는 스팟이 빠지면
+    스팟과 leg 의 대응이 어긋나는데, 그때 leg 를 앞에서부터 그냥 당겨 쓰면 **1→3 구간에
+    1→2 구간의 이동시간이 표시된다**(2026-08-18 QA Minor-2 — 없는 사실을 만들어낸다).
+
+    그래서 원본에서 **바로 옆이었던 두 스팟** 사이에서만 저장된 leg 를 쓰고, 사이에 무언가
+    빠졌으면 전 필드 null(= "이동 정보 없음")로 둔다. 프론트는 이 상태를 이미 처리한다
+    (`SharedCourseDetailContent.tsx` 의 `CourseLegInfo` → "이동 정보 없음").
+    """
     items = raw if isinstance(raw, list) else []
     out: list[dict[str, Any]] = []
-    for i in range(want):
-        item = items[i] if i < len(items) and isinstance(items[i], dict) else {}
+    for j in range(max(0, len(kept) - 1)):
+        a, b = kept[j], kept[j + 1]
+        if b != a + 1:
+            out.append(dict(_NULL_LEG))  # 사이에 빠진 스팟이 있다 — 지어내지 않는다
+            continue
+        item = items[a] if a < len(items) and isinstance(items[a], dict) else {}
         out.append(
             {
                 "walk": _clean_leg_mode(item.get("walk")),
@@ -304,7 +325,9 @@ def _rebuild(
         raise InvalidCoursePayload(f"스팟 수 초과({len(raw_spots)}>{MAX_SPOTS})")
 
     spots: list[dict[str, Any]] = []
-    for raw in raw_spots:
+    # 살아남은 스팟의 **원본 인덱스**. leg 를 원래 이웃 관계에 맞춰 붙이는 데 쓴다(_clean_legs).
+    kept: list[int] = []
+    for origin_index, raw in enumerate(raw_spots):
         sid = spot_id_of(raw)
         record = spot_repo.by_id(sid) if sid is not None else None
         if record is None:
@@ -317,11 +340,12 @@ def _rebuild(
             _rebuild_spot(raw if isinstance(raw, dict) else {}, record,
                           index=len(spots), trusted_media=trusted_media)
         )
+        kept.append(origin_index)
 
     if not spots:
         raise InvalidCoursePayload("유효한 스팟이 없습니다")
 
-    legs = _clean_legs(course.get("legs"), want=max(0, len(spots) - 1))
+    legs = _clean_legs(course.get("legs"), kept=kept)
 
     return {
         "v": PAYLOAD_VERSION,

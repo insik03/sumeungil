@@ -53,6 +53,10 @@ COURSE_PREFIX = "/api/v1/courses"
 UGC_PREFIX = "/api/v1/reviews"
 UGC_SHARE_PATH = "/api/v1/courses/share"
 UGC_SHARED_PREFIX = "/api/v1/courses/shared"  # DELETE /shared/{code}
+# 2026-08-18(보안 L-4) — 계정 보관함 쓰기도 디스크에 영구 기록을 남기는 UGC 다.
+# 분류가 빠져 있어 POST /mine 이 course 버킷(비싼 조립용 한도)으로 새고 있었다.
+# 로그인 필수라 device_id 우회는 없지만, 한 계정이 코스를 도배하는 것은 IP 버킷이 막는다.
+UGC_MINE_PATH = "/api/v1/courses/mine"  # POST /mine · DELETE /mine/{id}
 # 2026-08-18(qa-reviewer M-5) — 고객문의도 디스크에 영구 기록을 남기는 사용자 쓰기라
 # UGC와 같은 성격인데 분류가 빠져 있어 기본(120/분)으로 새고 있었다. 로그인 필수라
 # device_id 우회는 없지만, 같은 계정이 문의를 도배하는 것까지 막으려면 review/share와
@@ -97,6 +101,8 @@ def resolve_bucket(method: str, path: str) -> str | None:
         or normalized.startswith(UGC_PREFIX + "/")
         or normalized == UGC_SHARE_PATH
         or normalized.startswith(UGC_SHARED_PREFIX + "/")
+        or normalized == UGC_MINE_PATH
+        or normalized.startswith(UGC_MINE_PATH + "/")
         or normalized == UGC_INQUIRY_PATH
     ):
         return BUCKET_UGC

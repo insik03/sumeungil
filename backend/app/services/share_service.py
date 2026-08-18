@@ -128,6 +128,16 @@ def _encode_payload(course: dict[str, Any], max_bytes: int) -> str:
     return encoded
 
 
+def guard_payload_limits(course: Any, max_bytes: int) -> None:
+    """크기(32KB)·중첩 깊이(16) **사전 검사만** 한다(재구성 전에 파서를 보호하는 단계).
+
+    2026-08-18(보안 L-4): `/courses/share` 만 이 검사를 하고 `/courses/mine` 은 하지 않아,
+    같은 성격의 쓰기인데 한쪽만 무제한 JSON 을 파싱하고 있었다. 두 경로가 같은 함수를 부르게
+    해 규칙이 갈리지 않도록 한다. 위반 시 `CommunityError`(413/400) — 라우터가 봉투로 변환한다.
+    """
+    _encode_payload(course, max_bytes)
+
+
 def _decode_payload(raw: str) -> dict[str, Any]:
     """저장 시 검증을 통과한 JSON 이므로 실패는 곧 데이터 손상이다 → 빈 dict 로 graceful."""
     try:
@@ -265,7 +275,7 @@ async def create_share(
 
     # ① 먼저 크기·깊이 상한으로 파서를 보호하고(재구성은 입력을 순회하므로 그 전에 잘라야 한다),
     # ② 그 다음 스팟 id 만 신뢰해 서버 값으로 재구성한다(2026-08-18 보안감사).
-    _encode_payload(req.course, max_bytes)
+    guard_payload_limits(req.course, max_bytes)
     try:
         course = course_payload.rebuild_course_for_store(req.course, spot_repo=spot_repo)
     except course_payload.InvalidCoursePayload as exc:
@@ -396,6 +406,7 @@ __all__ = (
     "delete_share",
     "generate_share_code",
     "get_share",
+    "guard_payload_limits",
     "list_shares",
     "normalize_share_code",
     "run_cleanup",
