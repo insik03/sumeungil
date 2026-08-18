@@ -121,8 +121,8 @@ jobs:
 
             workflow_dispatch)
               who=$(jq -r '.sender.login // "누군가"' "$EV")
-              text=$(printf '🔔 *알림 연결 테스트* — %s
-이 메시지가 보이면 웹훅과 시크릿이 정상입니다. (실행: %s)'                 "$REPO" "$who")
+              text=$(printf '🔔 *알림 연결 테스트* — %s\n이 메시지가 보이면 웹훅과 시크릿이 정상입니다. (실행: %s)' \
+                "$REPO" "$who")
               ;;
 
             *) exit 0 ;;
