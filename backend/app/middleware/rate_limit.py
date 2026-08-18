@@ -53,6 +53,11 @@ COURSE_PREFIX = "/api/v1/courses"
 UGC_PREFIX = "/api/v1/reviews"
 UGC_SHARE_PATH = "/api/v1/courses/share"
 UGC_SHARED_PREFIX = "/api/v1/courses/shared"  # DELETE /shared/{code}
+# 2026-08-18(qa-reviewer M-5) — 고객문의도 디스크에 영구 기록을 남기는 사용자 쓰기라
+# UGC와 같은 성격인데 분류가 빠져 있어 기본(120/분)으로 새고 있었다. 로그인 필수라
+# device_id 우회는 없지만, 같은 계정이 문의를 도배하는 것까지 막으려면 review/share와
+# 동일하게 IP 기준 UGC 버킷으로 묶는 게 맞다.
+UGC_INQUIRY_PATH = "/api/v1/inquiries"
 UGC_METHODS: frozenset[str] = frozenset({"POST", "PATCH", "DELETE"})
 # 부록 T(2026-08-01): 관리자 로그인 — 비밀번호 추측 시도를 묶는다. **로그인 경로만** 이 버킷이다.
 # 관리자 목록 조회까지 5/분으로 묶으면 정상 운영이 불가능하므로 나머지는 default 로 둔다.
@@ -92,6 +97,7 @@ def resolve_bucket(method: str, path: str) -> str | None:
         or normalized.startswith(UGC_PREFIX + "/")
         or normalized == UGC_SHARE_PATH
         or normalized.startswith(UGC_SHARED_PREFIX + "/")
+        or normalized == UGC_INQUIRY_PATH
     ):
         return BUCKET_UGC
     if upper == "POST":

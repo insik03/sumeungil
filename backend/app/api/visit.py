@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from ..config import settings
-from ..db.sqlite import Database
+from ..db.postgres import Database
 from ..deps import get_database
 from ..middleware.rate_limit import extract_client_ip
 from ..middleware.visit_log import fold_path, visit_ip_hash
@@ -57,7 +57,10 @@ async def record_visit(
     if ".." in raw or not _PATH_RE.match(raw):
         # 형식이 틀리면 조용히 무시한다. 400 을 주면 "무엇이 통과하는지" 를 알려주는 셈이다.
         return None
-    if raw.startswith("/api/") or raw.startswith("/admin"):
+    # 관리자 화면 경로는 /admin이 아니라 무작위 문자열이다(2026-08-18, frontend/app/
+    # ops-37878f1b71/page.tsx 상단 주석 참고) — 프론트가 이미 이 경로를 아예 안 보내지만
+    # (VisitBeacon.tsx), 서버 쪽에서도 한 번 더 막아둔다(방어 심층화, 프론트만 믿지 않는다).
+    if raw.startswith("/api/") or raw.startswith("/ops-37878f1b71"):
         # API 는 미들웨어가 이미 세고, 관리자 화면은 통계에서 제외하기로 했다.
         return None
 

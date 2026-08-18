@@ -31,7 +31,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..config import settings
-from ..db.sqlite import Database
+from ..db.postgres import Database
 from ..deps import get_admin_auth, get_admin_login_limiter, get_database
 from ..middleware.rate_limit import extract_client_ip, rate_limited_response
 from ..repositories import admin_repo
@@ -39,6 +39,9 @@ from ..schemas.admin import (
     AdminOperatorsResponse,
     AdminTrafficResponse,
     AdminCourseListResponse,
+    AdminInquiryItem,
+    AdminInquiryListResponse,
+    AdminInquiryReplyRequest,
     AdminLoginRequest,
     AdminModerationResponse,
     AdminOkResponse,
@@ -46,6 +49,7 @@ from ..schemas.admin import (
     AdminSessionResponse,
     AdminStatsResponse,
     CourseStatusFilter,
+    InquiryStatusFilter,
     ReviewSortOption,
     ReviewStatusFilter,
 )
@@ -336,6 +340,55 @@ async def admin_delete_course(
         )
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="admin/courses/delete")
+
+
+# --- 고객문의 운영 --------------------------------------------------------------
+
+
+@router.get("/inquiries", response_model=AdminInquiryListResponse)
+async def admin_list_inquiries(
+    request: Request,
+    status: InquiryStatusFilter = Query(default="new"),
+    limit: int = Query(default=admin_repo.DEFAULT_LIMIT, ge=1, le=admin_repo.MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    db: Database = Depends(get_database),
+):
+    try:
+        _require_session(request)
+        return await admin_service.list_inquiries(db, status=status, limit=limit, offset=offset)
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="admin/inquiries/list")
+
+
+@router.post("/inquiries/{inquiry_id}/reply", response_model=AdminInquiryItem)
+async def admin_reply_inquiry(
+    request: Request,
+    inquiry_id: int,
+    req: AdminInquiryReplyRequest = AdminInquiryReplyRequest(),
+    db: Database = Depends(get_database),
+):
+    """답변 등록. 문의 1건당 답변은 1개뿐이라(스레드형 대화 아님) 재호출 시 기존 답변을
+    덮어쓴다 — 오탈자 정정 등 재작성 시나리오를 위해 의도적으로 막지 않는다.
+
+    `req`에 기본값을 준 이유: body 파라미터가 required면 **본문 자체가 아예 없는 요청**은
+    FastAPI가 "Field required"(loc=body) 422를 내부 필드 검사보다도 먼저 던진다 — 인증
+    여부와 무관하게 이 라우트만 401 대신 422가 나가 위의 "모든 실패가 동일한 401" 원칙이
+    깨진다. 기본값을 주면 본문이 아예 없어도 빈 모델로 통과해 `_require_session`까지
+    도달하고, 그 뒤에야 401 또는(인증 통과 후) 빈 reply 422로 갈린다."""
+    try:
+        _require_session(request)
+        trimmed = req.reply.strip()
+        if not trimmed:
+            raise CommunityError(422, "VALIDATION_ERROR", "답변 내용을 입력해주세요.")
+        return await admin_service.reply_inquiry(
+            db,
+            inquiry_id=inquiry_id,
+            reply=trimmed,
+            ip_hash=_ip_hash(request),
+            operator=_operator(request),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="admin/inquiries/reply")
 
 
 # --- 대시보드 ------------------------------------------------------------------

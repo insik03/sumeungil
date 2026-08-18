@@ -14,10 +14,10 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
+import psycopg
 from typing import Any
 
-from ..db.sqlite import Database
+from ..db.postgres import Database
 from ..repositories import review_repo
 from ..schemas.community import (
     COMMENT_MAX,
@@ -115,7 +115,7 @@ async def list_reviews(
     limit = _clamp(limit, 1, review_repo.MAX_LIMIT)
     offset = max(0, offset)
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         rows = review_repo.list_reviews(
             conn,
             target_type=target_type,
@@ -158,7 +158,7 @@ async def summary_map(
     if not ids:
         return ReviewSummaryMapResponse(summaries={})
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         return review_repo.bulk_rating_histogram(conn, target_type=target_type, target_ids=ids)
 
     hists = await db.aread(_tx)
@@ -178,7 +178,7 @@ async def create_review(
     comment = _clean_comment(req.comment)
     now_iso = to_iso_kst(now_kst())
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         # 사전 조회 + 유니크 인덱스 **이중 방어**. 사전 조회는 친절한 409 를 위해서,
         # 유니크 인덱스는 동시 요청 두 건이 동시에 통과하는 경우를 막기 위해서다.
         existing = review_repo.find_by_device_target(
@@ -206,19 +206,19 @@ async def create_review(
 
     try:
         row, hist = await db.awrite(_tx)
-    except sqlite3.IntegrityError:
+    except psycopg.errors.UniqueViolation:
         # 유니크 인덱스 위반(동시 요청 경합) — 사전 조회와 동일한 사용자 메시지로 수렴시킨다.
         # detail.hidden 을 맞추기 위해 이 드문 경로에서만 한 번 더 읽는다(읽기 실패해도
         # 409 자체는 그대로 나가야 하므로 실패 시 false 로 둔다).
         try:
-            def _read(conn: sqlite3.Connection):
+            def _read(conn: psycopg.Connection):
                 return review_repo.find_by_device_target(
                     conn, device_id=device_id, target_type=req.target_type, target_id=target_id
                 )
 
             existing = await db.aread(_read)
             hidden_flag = bool(existing) and int(existing.get("hidden") or 0) == 1
-        except sqlite3.Error:
+        except psycopg.Error:
             hidden_flag = False
         raise errors.review_exists(hidden=hidden_flag) from None
 
@@ -245,7 +245,7 @@ async def update_review(
     comment = _clean_comment(req.comment) if req.comment is not None else None
     now_iso = to_iso_kst(now_kst())
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         row = review_repo.get_review(conn, review_id)
         if row is None:
             raise errors.not_found("후기를 찾을 수 없습니다.")
@@ -268,7 +268,7 @@ async def update_review(
 
 
 async def delete_review(db: Database, *, review_id: int, device_id: str) -> None:
-    def _tx(conn: sqlite3.Connection) -> None:
+    def _tx(conn: psycopg.Connection) -> None:
         row = review_repo.get_review(conn, review_id)
         if row is None:
             raise errors.not_found("후기를 찾을 수 없습니다.")
@@ -294,7 +294,7 @@ async def report_review(
     now_iso = to_iso_kst(now_kst())
     threshold = max(1, hide_threshold)
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         row = review_repo.get_review(conn, review_id)
         if row is None or int(row["hidden"]) == 1:
             # 이미 숨겨진 리뷰는 목록에 없다 → 존재를 알려줄 이유가 없다(404 로 수렴).

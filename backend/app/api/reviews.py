@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..config import settings
-from ..db.sqlite import Database
+from ..db.postgres import Database
 from ..deps import get_database
 from ..repositories import review_repo
 from ..schemas.community import (

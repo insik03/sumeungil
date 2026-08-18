@@ -6,13 +6,19 @@ import AdminConsole from "../../components/admin/AdminConsole";
 import { fetchAdminSession } from "../../lib/adminApi";
 
 /**
- * `/admin` — 관리자 콘솔 단일 페이지 (03-admin-console-design.md).
+ * 관리자 콘솔 단일 페이지 (03-admin-console-design.md).
+ *
+ * 폴더명(경로) 자체가 `/admin`이 아니라 무작위 문자열이다(2026-08-18, 대표 지시 — "너무
+ * 찾기 쉬운거 같아서"). 페이지에는 로그인 폼만 있고 비밀 데이터는 없어 실질 방어는 여전히
+ * `/api/v1/admin/*`(비밀번호+세션쿠키, deploy/nginx.conf 참고)이지만, 흔한 경로명을 스캔하는
+ * 봇·사람에게 아예 안 걸리는 게 한 겹 더 낫다는 판단. 경로를 바꾸려면 이 폴더명을 바꾸고
+ * Header.tsx의 pathname 체크, deploy/nginx.conf의 `location /admin` 블록도 같이 고쳐야 한다.
  *
  * 서브라우트를 두지 않는다: 로그인 게이트와 콘솔이 같은 페이지에서 전환된다.
- * 라우트를 나누면 "로그인 안 된 상태로 /admin/reviews 직링크" 같은 경로가 생기는데,
+ * 라우트를 나누면 "로그인 안 된 상태로 하위 경로 직링크" 같은 경로가 생기는데,
  * 어차피 세션이 없으면 401 이라 화면만 늘고 얻는 게 없다.
  *
- * 사이트 GNB/Footer 는 `components/Header.tsx` 가 `/admin` 에서 스스로 렌더를 건너뛴다
+ * 사이트 GNB/Footer 는 `components/Header.tsx` 가 이 경로에서 스스로 렌더를 건너뛴다
  * (중첩 레이아웃으로는 부모 레이아웃을 제거할 수 없기 때문 — 그쪽 주석 참고).
  */
 export default function AdminPage() {

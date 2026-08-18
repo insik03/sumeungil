@@ -166,6 +166,8 @@ nano deploy/.env
 | 키 | 비고 |
 |---|---|
 | `PUBLIC_DATA_API_KEY` | 필수. 없으면 backend 가 부팅 즉시 종료(fail-fast) |
+| `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD` | 필수(2026-08-17 SQLite에서 전환). postgres 컨테이너 초기화값 |
+| `DATABASE_URL` | 필수. `postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>` — 위 세 값과 **비밀번호가 일치**해야 한다(자동 치환 안 됨). 비면 리뷰·공유·로그인·온보딩·AI코스저장 전부 비활성(조회 기능은 정상) |
 | `TMAP_APP_KEY` | 선택. 비우면 코스 legs 만 null 로 graceful |
 | `NEXT_PUBLIC_API_BASE` | **`http://<VM_PUBLIC_IP>`** (끝에 `/api` 붙이지 않는다 — 프론트가 `/api/v1/...` 를 붙인다) |
 | `NEXT_PUBLIC_TMAP_APP_KEY` | 지도 SDK 브라우저 공개키. Tmap 콘솔에서 도메인/IP 제한 필수 |
@@ -175,9 +177,11 @@ nano deploy/.env
 | `RATE_LIMIT_ENABLED` | **`true`** (공개 배포에서는 필수. 로컬 기본값은 false) |
 | `ADMIN_PASSWORD_HASH` | 선택. 관리자 콘솔을 쓸 때만. **평문이 아니라 scrypt 해시** — 아래 (h) 참고. 비우면 `/api/v1/admin/*` 자체가 없다(404) |
 | `ADMIN_COOKIE_SECURE` | **설정하지 않는다**(기본 true). HTTPS 운영이므로 false 금지 — (h-2) 이력 참고 |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인. **로컬 개발용과 별도의 OAuth 클라이언트**로 발급받는다 — 아래 (h-3) 참고. 셋 중 하나라도 비면 `/api/v1/auth/*` 자체가 없다(404) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인. **로컬 개발용과 별도의 OAuth 클라이언트**로 발급받는다 — 아래 (h-3) 참고. 셋 중 하나라도 비면 `/api/v1/auth/google/*` 만 없다(404, 카카오와 독립) |
 | `GOOGLE_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/google/callback` — 구글 클라이언트의 "승인된 리디렉션 URI"와 문자 그대로 일치해야 한다 |
-| `FRONTEND_BASE_URL` | `https://sumeungil.co.kr`. 로그인 팝업의 postMessage 대상 오리진 — 와일드카드 금지 |
+| `KAKAO_CLIENT_ID` / `KAKAO_CLIENT_SECRET` | 카카오 로그인(2026-08-17, 대표 지시). 아래 (i-4) 참고. 셋 중 하나라도 비면 `/api/v1/auth/kakao/*` 만 없다(404, 구글은 정상 동작) |
+| `KAKAO_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/kakao/callback` — 카카오 콘솔의 "Redirect URI"와 문자 그대로 일치해야 한다 |
+| `FRONTEND_BASE_URL` | `https://sumeungil.co.kr`. 로그인 팝업의 postMessage 대상 오리진(구글·카카오 공용) — 와일드카드 금지 |
 | `USER_SESSION_SECRET` | **필수, 로컬 값을 재사용하지 말고 새로 생성**: `py -c "import secrets; print(secrets.token_hex(32))"`. 비우면 `JWT_SECRET_KEY` 로 대체되지만, 그마저 없으면 세션 위조가 가능해진다(2026-08-17 보안검토 C-1) |
 | `USER_COOKIE_SECURE` | **설정하지 않는다**(기본 true). HTTPS 운영이므로 false 금지 — `ADMIN_COOKIE_SECURE`와 동일 이유 |
 
@@ -195,7 +199,7 @@ cd /home/ubuntu/sumeungil/deploy
 docker compose build
 
 docker compose up -d
-docker compose ps        # 4개 다 Up 인지
+docker compose ps        # 5개 다 Up 인지(postgres는 Up (healthy))
 ```
 
 **모델 pull 은 최초 1회만 수동으로** (compose 에 넣지 않았다 — 기동마다 돌면 느리고,
@@ -313,7 +317,9 @@ docker compose logs --tail=20 backend | grep -i 관리자
 #  "관리자 콘솔 활성화 — /api/v1/admin/* (세션 4시간, 쿠키 secure=True)" 가 보이면 성공
 ```
 
-브라우저에서 `https://sumeungil.co.kr/admin` 접속 → 비밀번호 입력.
+브라우저에서 `https://sumeungil.co.kr/ops-37878f1b71` 접속 → 비밀번호 입력.
+(경로가 `/admin`이 아니라 무작위 문자열인 이유는 2026-08-18 대표 지시 — "너무 찾기 쉬운거
+같아서". `frontend/app/ops-37878f1b71/page.tsx` 상단 주석 참고.)
 
 ### h-2. 쿠키 Secure 속성 이력 (참고)
 
@@ -326,7 +332,7 @@ docker compose logs --tail=20 backend | grep -i 관리자
 
 ### h-3. IP 허용목록 켜기 (선택, 고정 IP 가 있을 때만)
 
-`deploy/nginx.conf` 의 `location /api/v1/admin/` 과 `location /admin` 블록에 주석 처리된
+`deploy/nginx.conf` 의 `location /api/v1/admin/` 과 `location /ops-37878f1b71` 블록에 주석 처리된
 `allow`/`deny` 3줄이 있다. 내 공인 IP 를 넣고 `#` 를 지운 뒤:
 
 ```bash
@@ -364,9 +370,8 @@ cd /home/ubuntu/sumeungil/deploy && docker compose restart backend
 숨김·복구·삭제는 전부 `admin_actions` 테이블에 남는다(원본 IP 는 저장하지 않고 해시만).
 
 ```bash
-docker compose exec backend python -c "
-import sqlite3;c=sqlite3.connect('/app/data/sumeungil.db');c.row_factory=sqlite3.Row
-for r in c.execute('SELECT * FROM admin_actions ORDER BY id DESC LIMIT 20'): print(dict(r))"
+docker compose exec postgres psql -U sumeungil -d sumeungil -c \
+  "SELECT * FROM admin_actions ORDER BY id DESC LIMIT 20;"
 ```
 
 ### h-6. 검증 curl (VM 안에서)
@@ -391,11 +396,11 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/v1/admin/stats
 
 ---
 
-## (i) 구글 로그인 설정 (2026-08-17, 데모 닉네임 로그인 완전 대체)
+## (i) 구글·카카오 로그인 설정 (2026-08-17, 데모 닉네임 로그인 완전 대체 — 카카오는 같은 날 추가)
 
-> 사용자 쪽 로그인 전체를 구글 계정으로 대체한 기능이다. (h)의 관리자 콘솔과는
-> 완전히 별개 — 구글로 로그인해도 관리자가 되지 않는다(둘은 다른 세션 쿠키·다른
-> 서명 키를 쓴다, `security/user_auth.py` 참고).
+> 사용자 쪽 로그인 전체를 구글·카카오 계정으로 대체한 기능이다. (h)의 관리자 콘솔과는
+> 완전히 별개 — 구글·카카오로 로그인해도 관리자가 되지 않는다(둘은 다른 세션 쿠키·다른
+> 서명 키를 쓴다, `security/user_auth.py` 참고). 아래 i-0~i-3은 구글, **카카오는 i-4**.
 
 ### i-0. 설정하지 않으면 아예 없는 기능이다
 
@@ -467,15 +472,78 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost/api/v1/auth/google/lo
 
 ### i-3. 계정 데이터 위치·보존
 
-구글 로그인 계정은 `users` 테이블(SQLite, (e) 표의 `SQLITE_PATH` 와 같은 파일 —
-후기·공유 코스와 동일한 named volume 에 있다)에 저장된다. 저장 항목은 이메일과
+구글 로그인 계정은 `users` 테이블(2026-08-17부터 PostgreSQL, `postgres-data` named
+volume — 후기·공유 코스와 같은 데이터베이스 안에 있다)에 저장된다. 저장 항목은 이메일과
 사용자가 직접 정한 표시 이름뿐 — 구글 액세스 토큰은 저장하지 않는다(로그인 시
 1회 조회 후 즉시 버림, `security/user_auth.py` 모듈 docstring 참고).
 
-> **아직 없음**: 계정 삭제·탈퇴 절차(사용자가 직접 하거나 대표가 대신 지워주는 방법)가
-> 아직 구현돼 있지 않다 — 2026-08-17 보안검토에서 지적된 항목으로, legal-counsel 재검토
-> 후 별도로 추가할 예정이다. 그 전까지 탈퇴 요청이 오면 대표가 위 h-5 방식으로 직접
-> `users` 테이블에서 해당 행을 수동 삭제해야 한다.
+**계정 삭제(탈퇴)**: 로그인한 상태에서 화면 상단 "계정 삭제" 버튼(2단계 확인)을 누르면
+`DELETE /api/v1/auth/me`가 호출돼 이메일·표시 이름·구글 계정 고유 식별자가 즉시
+삭제되고 세션 쿠키도 함께 지워진다(2026-08-17 QA C-4 대응, `api/auth.py`). 사용자가
+버튼을 못 찾거나 대신 요청하는 경우, 대표가 위 h-5 방식으로 직접 `users` 테이블에서
+해당 행을 수동 삭제할 수도 있다.
+
+### i-4. 카카오 로그인 설정 (2026-08-17, 대표 지시 — 구글 옆 간편로그인)
+
+> 구글과 완전히 독립된 두 번째 로그인 수단이다. 같은 사람이 구글·카카오를 둘 다 쓰면
+> **카카오 쪽 이메일이 검증된 상태일 때만** 자동으로 같은 계정에 통합된다 — 검증 안 된
+> (또는 아예 없는) 이메일은 안전한 기본값인 별개 계정으로 떨어진다(계정 탈취 방지,
+> `repositories/user_repo.py` 모듈 docstring 참고). 카카오 3개 값 중 하나라도 비어도
+> **구글 로그인은 영향받지 않는다** — `/api/v1/auth/kakao/*` 만 개별적으로 404.
+
+**① 카카오 애플리케이션 생성 + 동의항목 켜기**
+
+developers.kakao.com → 내 애플리케이션 → 애플리케이션 추가하기:
+- 앱 설정 > 요약 정보에서 **REST API 키**(=`KAKAO_CLIENT_ID`) 확인
+- 앱 설정 > 플랫폼 > Web 플랫폼 등록: 사이트 도메인 `https://sumeungil.co.kr`
+- 제품 설정 > 카카오 로그인 > 활성화 ON, Redirect URI에
+  `https://sumeungil.co.kr/api/v1/auth/kakao/callback` 등록
+  (문자 그대로 일치해야 한다)
+- 제품 설정 > 카카오 로그인 > 보안 > Client Secret 발급 → 코드 상태 **"사용함"**으로 전환
+  (선택 기능이지만 켜지 않으면 서버가 Client Secret 없이도 요청을 받아버려 방어가 약해진다
+  — 반드시 켤 것)
+- **제품 설정 > 카카오 로그인 > 동의항목** — "닉네임"은 **선택 동의**, "카카오계정
+  (이메일)"은 **필수 동의**로 켠다(2026-08-17 대표 확인 — 이메일을 선택으로 두면
+  대부분 사용자가 체크 해제하고 로그인해버려서 계정 통합 로직이 사실상 작동을 안
+  하게 된다. 닉네임은 실명을 쓰는 사용자도 많아 선택으로 남긴다 — 코드가 닉네임
+  없을 때 이메일 앞부분/"여행자"로 폴백하므로 선택이어도 기능상 문제없다). **여기서
+  켜지 않으면 scope로 요청해도 사용자 정보 응답에 그 필드가 아예 안 온다** — 가장
+  놓치기 쉬운 단계다.
+
+개인 개발자는 이 단계까지만으로 실서비스(production) 전환이 가능하다 — 네이버처럼
+별도 사업자등록·검수 절차가 없다(그래서 대표가 카카오를 선택했다).
+
+**② 서버 `.env` 에 붙여넣기**
+
+```bash
+cd /home/ubuntu/sumeungil/deploy
+nano .env
+```
+```dotenv
+KAKAO_CLIENT_ID=<REST API 키>
+KAKAO_CLIENT_SECRET=<Client Secret>
+KAKAO_REDIRECT_URI=https://sumeungil.co.kr/api/v1/auth/kakao/callback
+# FRONTEND_BASE_URL / USER_SESSION_SECRET 는 구글과 공유 — 이미 i-1 ②에서 채웠다면 그대로 둔다.
+```
+
+**③ 반영**
+
+```bash
+docker compose up -d backend
+docker compose logs --tail=20 backend | grep -i 로그인
+#  "로그인 활성화(구글+카카오) — /api/v1/auth/* (세션 7일, 쿠키 secure=True)" 가 보이면 성공
+```
+
+**검증 curl**
+
+```bash
+# 로그인 시작 → 카카오로 302 리다이렉트 되는지
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost/api/v1/auth/kakao/login?next=/"
+```
+
+실제 로그인 성공 여부(팝업 → 카카오 인증 → 콜백 → 닉네임 확인)는 curl 로 확인할 수 없다 —
+브라우저에서 "카카오로 로그인"을 눌러 직접 확인한다. 계정 데이터 위치·삭제 절차는
+i-3과 동일(같은 `users` 테이블, 같은 탈퇴 버튼).
 
 ---
 
@@ -522,59 +590,62 @@ docker stats                            # CPU/메모리 실시간
 
 ---
 
-## 백업 (2026-08-01 갱신 — 백업 대상이 생겼다)
+## 백업 (2026-08-17 갱신 — PostgreSQL 전환)
 
 부록 R(후기·코스 공유) 도입 전까지 이 서비스는 **무상태**였다(모든 응답이 공공데이터 +
-인메모리 캐시). 지금은 다르다:
+인메모리 캐시). 지금은 다르다 — 2026-08-17부터 저장소가 SQLite에서 PostgreSQL로
+바뀌었다(로그인 계정·온보딩 취향 프로필·AI 코스 저장이 추가되면서).
 
 | 볼륨 | 내용 | 유실 시 |
 |---|---|---|
 | `ollama-models` | qwen2.5:7b 가중치 | 다시 `ollama pull` 하면 복구됨 (백업 불필요) |
-| **`sumeungil-data`** | **사용자가 쓴 후기·공유 코스 (`/app/data/sumeungil.db`)** | **복구 불가** |
+| **`postgres-data`** | **후기·공유코스·로그인 계정·온보딩 프로필·AI 코스 전부** | **복구 불가** |
+| `sumeungil-data` | 과거 SQLite 파일(이관 완료 후 사실상 미사용) | 이관이 끝났다면 무해, 백업 우선순위 낮음 |
 
 ```bash
-# 백업 (VM 에서)
-docker compose exec backend sh -c 'ls -l /app/data'        # 파일 존재 확인
-docker run --rm -v deploy_sumeungil-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/sumeungil-data-$(date +%Y%m%d).tar.gz -C /data .
+# 백업 (VM 에서) — pg_dump로 논리 백업(SQL 텍스트) 1개 파일을 만든다.
+docker compose exec -T postgres pg_dump -U sumeungil -d sumeungil \
+  > sumeungil-postgres-$(date +%Y%m%d).sql
 
 # 복구
 docker compose stop backend
-docker run --rm -v deploy_sumeungil-data:/data -v "$PWD":/backup alpine \
-  sh -c 'rm -rf /data/* && tar xzf /backup/sumeungil-data-YYYYMMDD.tar.gz -C /data'
+cat sumeungil-postgres-YYYYMMDD.sql | docker compose exec -T postgres \
+  psql -U sumeungil -d sumeungil
 docker compose start backend
 ```
 
-- 볼륨 이름 앞의 `deploy_` 는 compose 프로젝트명(=디렉터리명) 접두사다. `docker volume ls` 로 실제 이름을 확인할 것.
-- WAL 모드라 `sumeungil.db` 옆에 `-wal`/`-shm` 파일이 함께 있다. **디렉터리 전체**를 백업한다(위 명령은 그렇게 한다).
-- `docker compose down -v` 는 이 볼륨까지 삭제한다. 배포 스크립트에 `-v` 를 넣지 말 것.
+- `docker compose down -v` 는 `postgres-data` 볼륨까지 삭제한다. 배포 스크립트에 `-v` 를 넣지 말 것.
 - 후기 기능을 급히 닫아야 하면 `.env` 에 `COMMUNITY_ENABLED=false` 후 `docker compose restart backend`
   (데이터는 남고 API 만 503 을 반환한다).
 - 관리자 콘솔로 개별 글만 숨기고 싶다면 (h) 절 참고 — 기능 전체를 닫는 것보다 이쪽이 먼저다.
-  `admin_actions`(감사 로그)도 같은 `sumeungil-data` 볼륨 안에 있으므로 위 백업에 함께 포함된다.
+  `admin_actions`(감사 로그)도 같은 Postgres 안에 있으므로 위 백업에 함께 포함된다.
+- 정기 자동 백업(cron)은 아직 없다 — 수동 절차다. 배포 규모가 커지면 `pg_dump`를 cron에
+  등록하고 오프사이트(예: 오브젝트 스토리지)로 보내는 것을 검토할 것.
 
 ---
 
-## 디스크 사용량 점검 (2026-08-01 추가 — QA M-2)
+## 디스크 사용량 점검 (2026-08-17 갱신 — PostgreSQL 전환)
 
 사용자가 쓴 데이터가 남는 순간부터 **디스크가 서비스 가용성의 일부**가 된다.
-SQLite 는 디스크가 차면 쓰기가 실패하고, 그러면 후기·공유 API 가 통째로
-`503 STORAGE_UNAVAILABLE` 이 된다(조회 API 는 영향 없음).
+Postgres 도 디스크가 차면 쓰기가 실패하고, 그러면 후기·공유·로그인 관련 API 가
+`503`/`500` 을 반환한다(조회 API 는 영향 없음).
 
 서버는 스스로 상한을 지킨다(부록 R.13 보존정책: 기기당 20건 · 전체 5,000건 · 180일).
-기본값 기준 이론상 최대치는 **약 160MB**(5,000 × 32KB)다. 아래 점검은 "그 상한이 실제로
-지켜지고 있는지"를 눈으로 확인하는 절차다 — **한 달에 한 번이면 충분하다.**
+아래 점검은 "그 상한이 실제로 지켜지고 있는지"를 눈으로 확인하는 절차다 —
+**한 달에 한 번이면 충분하다.**
 
 ```bash
 # 1) VM 전체 여유 공간 (여기가 90% 를 넘으면 다른 것부터 정리할 것)
 df -h /
 
-# 2) 컨테이너 안 데이터 디렉터리 크기 (DB + WAL 파일 합계)
-docker compose exec backend du -sh /app/data
-docker compose exec backend ls -lh /app/data
+# 2) Postgres 데이터 디렉터리 크기
+docker compose exec postgres du -sh /var/lib/postgresql/data
 
-# 3) 실제 행 수 — 상한(SHARE_MAX_TOTAL) 이하인지 확인
-docker compose exec backend python -c "import sqlite3;c=sqlite3.connect('/app/data/sumeungil.db');print('shared_courses', c.execute('select count(*) from shared_courses').fetchone()[0]);print('reviews', c.execute('select count(*) from reviews').fetchone()[0])"
+# 3) 테이블별 행 수·용량 — 상한(SHARE_MAX_TOTAL) 이하인지 확인
+docker compose exec postgres psql -U sumeungil -d sumeungil -c "
+  SELECT relname, n_live_tup,
+         pg_size_pretty(pg_total_relation_size(relid)) AS size
+    FROM pg_stat_user_tables ORDER BY n_live_tup DESC;"
 
 # 4) 정리 로그 확인 (기동 직후 + 하루 1회 실행된다)
 docker compose logs backend | grep "share retention"
@@ -584,28 +655,13 @@ docker compose logs backend | grep "share retention"
 
 | 상황 | 조치 |
 |---|---|
-| `/app/data` < 200MB | 정상 — 아무것도 하지 않는다 |
-| 200MB~500MB | `.env` 의 `SHARE_MAX_TOTAL` / `SHARE_RETENTION_DAYS` 를 낮추고 `docker compose restart backend` |
-| 500MB 초과 또는 `df` 90% 초과 | 위 조정 + 아래 VACUUM. 그래도 늘면 `COMMUNITY_ENABLED=false` 로 쓰기 차단 |
+| Postgres 데이터 디렉터리 < 500MB | 정상 — 아무것도 하지 않는다 |
+| 500MB~1GB | `.env` 의 `SHARE_MAX_TOTAL` / `SHARE_RETENTION_DAYS` 를 낮추고 `docker compose restart backend` |
+| 1GB 초과 또는 `df` 90% 초과 | 위 조정 + 아래 정리. 그래도 늘면 `COMMUNITY_ENABLED=false` 로 쓰기 차단 |
 
-### VACUUM (파일 크기 회수)
-
-삭제된 행의 공간은 SQLite 파일 안에 **빈 페이지로 남는다**(파일 크기가 줄지 않는다).
-행 수는 상한 이하인데 파일만 큰 경우 VACUUM 으로 회수한다.
-
-```bash
-docker compose stop backend          # 쓰기가 없는 상태에서 하는 것이 안전하다
-docker run --rm -v deploy_sumeungil-data:/data alpine/sqlite \
-  sqlite3 /data/sumeungil.db "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;"
-docker compose start backend
-```
-
-- **주기**: 정기적으로 돌릴 필요는 없다. **6개월에 1회** 또는 위 표의 "500MB 초과" 상황에서만.
-  VACUUM 은 파일을 통째로 다시 쓰므로 그동안 DB 가 잠긴다(수 초~수십 초).
-- VACUUM 직전에 **백업을 먼저** 뜬다(위 백업 절차).
-- `alpine/sqlite` 이미지 pull 이 부담이면 `docker compose exec backend python -c
-  "import sqlite3;sqlite3.connect('/app/data/sumeungil.db').execute('VACUUM')"` 로도 된다
-  (backend 를 세우지 않은 채 하려면 위 방식이 더 안전하다).
+> **SQLite 시절의 수동 `VACUUM` 절차는 더 이상 필요 없다.** PostgreSQL은 `autovacuum`이
+> 기본 활성화돼 있어 삭제된 행의 공간을 백그라운드에서 자동 회수한다(공식 문서 기준
+> 기본 설정으로 대부분의 워크로드에 충분 — 이 배포 규모에서 수동 튜닝은 불필요).
 
 ---
 
@@ -677,7 +733,7 @@ docker compose run --rm --entrypoint certbot certbot renew --dry-run   # 갱신 
 
 | 항목 | 값 |
 |---|---|
-| 경로 | `https://sumeungil.co.kr/admin` (서브도메인 아님 — CT 로그 노출 회피) |
+| 경로 | `https://sumeungil.co.kr/ops-37878f1b71` (서브도메인 아님 — CT 로그 노출 회피. 2026-08-18부터 `/admin`이 아닌 무작위 경로 — 대표 지시) |
 | 인증 | `.env` 의 `ADMIN_PASSWORD_HASH` 하나 (scrypt). 관리자 3명이 공유 |
 | 표시 이름 | `.env` 의 `ADMIN_OPERATORS=지훈,인식,태준` (부록 V) |
 | 세션 | 8시간, HttpOnly + Secure + SameSite=Lax |

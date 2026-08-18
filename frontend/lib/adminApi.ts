@@ -22,6 +22,7 @@ import { API_BASE, ApiError } from "./api";
 export type ReviewStatusFilter = "reported" | "hidden" | "all";
 export type ReviewSortOption = "reported" | "recent";
 export type CourseStatusFilter = "all" | "hidden";
+export type InquiryStatusFilter = "new" | "resolved" | "all";
 
 export interface AdminSession {
   authenticated: boolean;
@@ -76,12 +77,33 @@ export interface AdminStats {
   reports_total: number;
   courses_total: number;
   courses_hidden: number;
+  inquiries_total: number;
+  inquiries_new: number;
   /**
    * 신고 몇 건이면 자동 숨김되는지. 서버 설정값(`REVIEW_HIDE_REPORT_THRESHOLD`, 기본 3)이다.
    * **화면에 3을 박지 말고 반드시 이 값을 쓸 것** — env 로 바뀌면 박아둔 숫자는 조용히 틀려진다.
    */
   review_hide_report_threshold: number;
   generated_at: string;
+}
+
+export interface AdminInquiryItem {
+  id: number;
+  nickname: string;
+  contact_email: string | null;
+  message: string;
+  status: "new" | "resolved";
+  created_at: string;
+  reply: string | null;
+  replied_at: string | null;
+  replied_by: string | null;
+}
+
+export interface AdminInquiryList {
+  items: AdminInquiryItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 /**
@@ -264,6 +286,35 @@ export async function fetchAdminCourses(params?: {
   );
 }
 
+
+export async function fetchAdminInquiries(params?: {
+  status?: InquiryStatusFilter;
+  limit?: number;
+  offset?: number;
+}): Promise<AdminInquiryList> {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  const q = qs.toString();
+  return adminFetch<AdminInquiryList>(
+    `/inquiries${q ? `?${q}` : ""}`,
+    { method: "GET" },
+    "문의 목록을 불러오지 못했습니다.",
+  );
+}
+
+export async function replyInquiry(inquiryId: number, reply: string): Promise<AdminInquiryItem> {
+  return adminFetch<AdminInquiryItem>(
+    `/inquiries/${inquiryId}/reply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reply }),
+    },
+    "답변을 등록하지 못했습니다.",
+  );
+}
 
 export async function fetchAdminTraffic(days = 14): Promise<AdminTraffic> {
   return adminFetch<AdminTraffic>(

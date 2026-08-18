@@ -16,10 +16,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from ..security.admin_auth import PASSWORD_MAX_LEN
+from .inquiry import MESSAGE_MAX as INQUIRY_MESSAGE_MAX
 
 ReviewStatusFilter = Literal["reported", "hidden", "all"]
 ReviewSortOption = Literal["reported", "recent"]
 CourseStatusFilter = Literal["all", "hidden"]
+InquiryStatusFilter = Literal["new", "resolved", "all"]
 
 
 class AdminLoginRequest(BaseModel):
@@ -96,6 +98,41 @@ class AdminCourseListResponse(BaseModel):
     offset: int = 0
 
 
+class AdminInquiryItem(BaseModel):
+    """고객문의 1건(관리자 콘솔용, 2026-08-18 추가).
+
+    device_id 지문(author_hash)이 아니라 실제 계정 닉네임을 그대로 보여준다 — 문의는
+    애초에 로그인 필수라 익명이 아니고, 답장하려면 "누가 물어봤는지"를 알아야 한다.
+    """
+
+    id: int
+    nickname: str
+    contact_email: str | None = None
+    message: str
+    status: Literal["new", "resolved"]
+    created_at: str
+    reply: str | None = None
+    replied_at: str | None = None
+    replied_by: str | None = None
+
+
+class AdminInquiryListResponse(BaseModel):
+    items: list[AdminInquiryItem] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 0
+    offset: int = 0
+
+
+class AdminInquiryReplyRequest(BaseModel):
+    """`min_length`를 두지 않은 이유는 AdminLoginRequest.password와 같다 — `reply` 필드가
+    Pydantic 필수(min_length>=1)면 **본문이 비었다는 이유만으로 인증 검사보다 먼저 422가
+    떨어진다**(FastAPI가 바디 검증을 핸들러 실행보다 먼저 하기 때문에, 쿠키 없이 두드려도
+    "인증 없음"이 아니라 "필드가 비었다"는 스키마 정보가 새어나간다). 빈 문자열을 일단
+    통과시키고, 인증을 통과한 뒤 핸들러 안에서 trim 후 빈 값을 걸러낸다(422, 다른 메시지)."""
+
+    reply: str = Field(default="", max_length=INQUIRY_MESSAGE_MAX)
+
+
 class AdminStatsResponse(BaseModel):
     reviews_total: int = 0
     reviews_hidden: int = 0
@@ -104,6 +141,9 @@ class AdminStatsResponse(BaseModel):
     reports_total: int = 0
     courses_total: int = 0
     courses_hidden: int = 0
+    inquiries_total: int = 0
+    # 아직 답변하지 않은 문의 수 — 신고 대기(reports_pending)와 같은 자리에서 "처리할 일"로 쓴다.
+    inquiries_new: int = 0
     # 신고가 몇 건 쌓이면 자동 숨김되는지(REVIEW_HIDE_REPORT_THRESHOLD, 기본 3).
     # 관리자 화면이 "자동 숨김"과 "운영자가 숨김"을 구분하는 데 쓴다:
     #   hidden && report_count >= 이 값  →  자동 숨김 (임계 도달로만 hidden 이 되고,
@@ -173,6 +213,9 @@ class AdminModerationResponse(BaseModel):
 __all__ = (
     "AdminCourseItem",
     "AdminCourseListResponse",
+    "AdminInquiryItem",
+    "AdminInquiryListResponse",
+    "AdminInquiryReplyRequest",
     "AdminLoginRequest",
     "AdminModerationResponse",
     "AdminOkResponse",
@@ -181,6 +224,7 @@ __all__ = (
     "AdminSessionResponse",
     "AdminStatsResponse",
     "CourseStatusFilter",
+    "InquiryStatusFilter",
     "ReviewSortOption",
     "ReviewStatusFilter",
 )

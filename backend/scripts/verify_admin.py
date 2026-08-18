@@ -23,12 +23,12 @@ import os
 import secrets
 import subprocess
 import sys
-import tempfile
 import uuid
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Windows 기본 콘솔 코덱(cp949)은 em dash 등을 인코딩하지 못해 검증이 UnicodeEncodeError 로
 # 죽는다. 검증 스크립트가 검증 대상이 아닌 이유로 실패하지 않게 출력 인코딩을 고정한다.
@@ -40,9 +40,20 @@ for _stream in (sys.stdout, sys.stderr):
 
 PHASE = os.environ.get("_VERIFY_ADMIN_PHASE", "A")
 
-# !!! import 전에 !!! 임시 DB 경로 주입(개발용 backend/data/*.db 를 건드리지 않게).
-_TMP_DB = Path(tempfile.gettempdir()) / f"sumeungil_admin_{uuid.uuid4().hex[:8]}.db"
-os.environ.setdefault("SQLITE_PATH", str(_TMP_DB))
+# !!! import 전에 !!! 임시 Postgres 스키마 주입(개발용 실데이터를 건드리지 않게 —
+# 2026-08-17 PostgreSQL 전환으로 tempfile SQLite 파일 방식에서 바뀌었다). phase B는
+# 자식 프로세스라 env로 이미 격리된 DATABASE_URL을 물려받는다(아래 phase A 분기 참고) —
+# 여기서는 phase A(부모, 최초 실행)일 때만 새로 만든다.
+from _pg_test_helpers import drop_schema, isolated_database_url  # noqa: E402
+
+_BASE_DSN = ""
+_SCHEMA = ""
+if PHASE == "A":
+    # 부모(phase A) — 새 스키마를 만들고, phase B(자식)에게는 아래에서 별도 스키마를 만들어 넘긴다.
+    _ISOLATED_DSN, _BASE_DSN, _SCHEMA = isolated_database_url()
+    os.environ["DATABASE_URL"] = _ISOLATED_DSN
+# phase B(자식)는 부모가 env["DATABASE_URL"]에 이미 격리된 값을 넣어 넘겨준다(아래 참고) —
+# 여기서 새로 만들지 않는다(같은 스키마를 두 프로세스가 공유하면 서로의 상태가 섞인다).
 
 PASS: list[str] = []
 FAIL: list[str] = []
@@ -76,6 +87,7 @@ def phase_a() -> int:
     from fastapi.testclient import TestClient
 
     from app.config import settings
+    from app.deps import get_database
     from app.main import app
 
     client = TestClient(app)
@@ -165,11 +177,14 @@ def phase_a() -> int:
     env["ADMIN_PASSWORD_HASH"] = make_password_hash(temp_password)
     env["_VERIFY_ADMIN_PW"] = temp_password
     env["ADMIN_COOKIE_SECURE"] = "false"  # 테스트 클라이언트는 http:// 라 Secure 쿠키를 보관하지 않는다
-    env["SQLITE_PATH"] = str(
-        Path(tempfile.gettempdir()) / f"sumeungil_admin_b_{uuid.uuid4().hex[:8]}.db"
-    )
+    # phase B 전용 별도 스키마 — phase A와 같은 걸 공유하면 두 프로세스의 상태가 섞인다.
+    _b_isolated_dsn, _b_base_dsn, _b_schema = isolated_database_url()
+    env["DATABASE_URL"] = _b_isolated_dsn
     sys.stdout.flush()  # 자식 출력과 섞이지 않게(파이프 버퍼링)
     proc = subprocess.run([sys.executable, str(Path(__file__).resolve())], env=env)
+    drop_schema(_b_base_dsn, _b_schema)
+    get_database().close()
+    drop_schema(_BASE_DSN, _SCHEMA)
     print(f"\n총계: phase A {'PASS' if rc == 0 else 'FAIL'} · phase B "
           f"{'PASS' if proc.returncode == 0 else 'FAIL'}")
     return rc or proc.returncode
@@ -222,7 +237,8 @@ def phase_b() -> int:
     admin_paths = sorted(p for p in spec.get("paths", {}) if "/admin" in p)
     # login/logout/me + reviews(목록)·reviews/{id}(삭제)·hide·unhide + courses 4종 + stats = 12
     # 14 = 12(부록 T) + /admin/operators(부록 V) + /admin/traffic(부록 X 트래픽 집계).
-    check("OpenAPI 에 admin 경로 14개 노출", len(admin_paths) == 14, str(admin_paths))
+    # 16 = 14 + /admin/inquiries(목록)·/admin/inquiries/{id}/reply(답변, 2026-08-18 추가).
+    check("OpenAPI 에 admin 경로 16개 노출", len(admin_paths) == 16, str(admin_paths))
 
     r1 = client.post("/api/v1/admin/login", json={"password": "wrong-password"})
     check("틀린 비밀번호 → 401", r1.status_code == 401, str(r1.status_code))
@@ -311,6 +327,8 @@ def phase_b() -> int:
         ("POST", "/api/v1/admin/courses/ABCDEFGH/hide"),
         ("POST", "/api/v1/admin/courses/ABCDEFGH/unhide"),
         ("DELETE", "/api/v1/admin/courses/ABCDEFGH"),
+        ("GET", "/api/v1/admin/inquiries"),
+        ("POST", "/api/v1/admin/inquiries/1/reply"),
     ]
     anon = TestClient(app)
     ok = True
@@ -424,6 +442,83 @@ def phase_b() -> int:
     r = client.post("/api/v1/admin/courses/@@@/hide")
     check("형식 위반 코드 → 404(존재 여부 미노출)", r.status_code == 404, str(r.status_code))
 
+    section("B5.5. 고객문의 운영 (2026-08-18 — 대표 지시 '답변 작성 칸')")
+
+    from app.repositories import user_repo as _user_repo
+    from app.deps import get_user_auth as _get_user_auth
+
+    user_auth = _get_user_auth()
+    inquiry_user = get_database().write(
+        lambda conn: _user_repo.upsert_login(
+            conn,
+            provider="google",
+            provider_sub=f"verify-admin-{uuid.uuid4().hex[:12]}",
+            email="inquiry-tester@example.com",
+            email_verified=True,
+            default_display_name="문의테스터",
+            now_iso="2026-08-18T00:00:00+09:00",
+        )
+    )
+    user_token, _ = user_auth.issue_token(user_id=inquiry_user["id"], email=inquiry_user["email"])
+    user_client = TestClient(app)
+    user_client.cookies.set(user_auth.cookie_name, user_token)
+
+    r = user_client.post("/api/v1/inquiries", json={"message": "카카오 로그인이 안 돼요"})
+    check("사용자 문의 접수 201", r.status_code == 201, str(r.status_code))
+    inquiry_id = r.json()["id"]
+    check("접수 직후 reply는 null", r.json()["reply"] is None, str(r.json()))
+
+    r = client.get("/api/v1/admin/inquiries", params={"status": "new"})
+    check("GET /admin/inquiries(status=new) 200 + 1건 이상",
+          r.status_code == 200 and r.json()["total"] >= 1, str(r.status_code))
+    found = next((i for i in r.json()["items"] if i["id"] == inquiry_id), None)
+    check("목록에 방금 접수한 문의 포함 + 닉네임 표시", found is not None and found["nickname"] == "문의테스터",
+          str(found))
+    check("문의 응답에 message 전문 포함", found is not None and found["message"] == "카카오 로그인이 안 돼요")
+
+    r = client.post(f"/api/v1/admin/inquiries/{inquiry_id}/reply", json={"reply": "   "})
+    check("공백만 있는 답변 → 422", r.status_code == 422, str(r.status_code))
+
+    r = client.post(f"/api/v1/admin/inquiries/{inquiry_id}/reply",
+                    json={"reply": "설정 > 카카오 재연동을 시도해주세요."})
+    check("POST /admin/inquiries/{id}/reply 200", r.status_code == 200, str(r.status_code))
+    replied = r.json()
+    check("응답 status=resolved", replied["status"] == "resolved", str(replied))
+    check("응답에 replied_by(로그인 시 이름 미설정이면 빈 문자열)", "replied_by" in replied, str(replied))
+
+    r = client.get("/api/v1/admin/inquiries", params={"status": "new"})
+    check("답변 후 status=new 목록에서 제외", inquiry_id not in [i["id"] for i in r.json()["items"]])
+    r = client.get("/api/v1/admin/inquiries", params={"status": "resolved"})
+    check("답변 후 status=resolved 목록에 포함", inquiry_id in [i["id"] for i in r.json()["items"]])
+
+    r = client.post("/api/v1/admin/inquiries/999999/reply", json={"reply": "안녕하세요"})
+    check("없는 문의 답변 → 404", r.status_code == 404, str(r.status_code))
+
+    r = user_client.get("/api/v1/inquiries/mine")
+    check("사용자 본인 목록에서도 답변 확인 가능",
+          any(i["id"] == inquiry_id and i["reply"] == "설정 > 카카오 재연동을 시도해주세요." for i in r.json()["items"]),
+          str(r.json()))
+
+    other_dev_user = get_database().write(
+        lambda conn: _user_repo.upsert_login(
+            conn,
+            provider="google",
+            provider_sub=f"verify-admin-other-{uuid.uuid4().hex[:12]}",
+            email="other-tester@example.com",
+            email_verified=True,
+            default_display_name="다른사람",
+            now_iso="2026-08-18T00:00:00+09:00",
+        )
+    )
+    other_token, _ = user_auth.issue_token(user_id=other_dev_user["id"], email=other_dev_user["email"])
+    other_client = TestClient(app)
+    other_client.cookies.set(user_auth.cookie_name, other_token)
+    r = other_client.get("/api/v1/inquiries/mine")
+    check("남의 문의는 본인 목록에 안 보임", inquiry_id not in [i["id"] for i in r.json()["items"]])
+
+    r = anon.post(f"/api/v1/admin/inquiries/{inquiry_id}/reply", json={"reply": "무인증"})
+    check("무인증 답변 시도 → 401", r.status_code == 401, str(r.status_code))
+
     section("B6. 감사 로그 · 통계")
 
     from app.repositories import admin_repo
@@ -432,8 +527,8 @@ def phase_b() -> int:
     actions = db.read(lambda conn: admin_repo.list_actions(conn, limit=50))
     kinds = [a["action"] for a in actions]
     expected = {"review_hide", "review_unhide", "review_delete",
-                "course_hide", "course_unhide", "course_delete"}
-    check("감사 로그에 6종 동작 전부 기록", expected.issubset(set(kinds)), str(sorted(set(kinds))))
+                "course_hide", "course_unhide", "course_delete", "inquiry_reply"}
+    check("감사 로그에 7종 동작 전부 기록", expected.issubset(set(kinds)), str(sorted(set(kinds))))
     check("감사 로그 ip_hash 기록(원본 IP 아님)",
           all(a["ip_hash"] and len(a["ip_hash"]) == 16 for a in actions))
     check("감사 로그에 원본 IP(testclient) 미포함",
@@ -447,6 +542,8 @@ def phase_b() -> int:
     check("stats: reviews_total=1, courses_total=0",
           st["reviews_total"] == 1 and st["courses_total"] == 0, str(st))
     check("stats: reviews_today 카운트 동작", st["reviews_today"] == 1, str(st))
+    check("stats: inquiries_total=1, inquiries_new=0(답변 완료)",
+          st["inquiries_total"] == 1 and st["inquiries_new"] == 0, str(st))
     check("stats: generated_at KST", st["generated_at"].endswith("+09:00"), st["generated_at"])
 
     section("B7. 로그아웃 · 로그 위생")

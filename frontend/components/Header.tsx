@@ -4,13 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LoginModal from "./LoginModal";
-import {
-  AUTH_CHANGED_EVENT,
-  deleteAccount,
-  getNickname,
-  logout,
-  syncSessionFromServer,
-} from "../lib/authStorage";
+import { logout, syncSessionFromServer } from "../lib/authStorage";
+import { useLoggedInName } from "../lib/useLoggedInName";
 
 /**
  * 헤더 네비게이션 — GNB 개편(§39, 대표 지시: "키워드가 겹치는 건 하위 목록, 안 겹치면 새 메뉴").
@@ -95,54 +90,32 @@ export default function Header() {
   const pathname = usePathname() ?? "/";
   const [navOpen, setNavOpen] = useState(false);
   const [openLabel, setOpenLabel] = useState<string | null>(null);
-  const [nickname, setNickname] = useState<string | null>(null);
+  const nickname = useLoggedInName();
   const [loginOpen, setLoginOpen] = useState(false);
-  // 계정 삭제 2단계 확인(QA C-4, 2026-08-17) — 새 모달 없이 버튼 텍스트만 바꿔 "정말?"을
-  // 한 번 더 묻는다. 5초 안에 다시 누르지 않으면 원상태로 되돌려 실수 클릭을 막는다.
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const deleteConfirmTimerRef = useRef<number | null>(null);
   const triggerRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   // Esc 로 닫은 직후 포커스를 트리거로 되돌리면 onFocus 가 즉시 다시 열어버린다(실측 확인).
   // "이 항목은 방금 Esc 로 닫았다"를 기억해 두고, 포커스가 그룹 밖으로 나가거나 마우스가
   // 다시 들어올 때 해제한다 — 그래야 Esc 가 실제로 닫힌 상태로 남는다.
   const escDismissedRef = useRef<string | null>(null);
 
-  // 데모 로그인 상태는 localStorage(authStorage)에서 읽는다. 다른 탭/컴포넌트 변화도 즉시 반영.
+  // 로그인 상태 자체는 useLoggedInName()이 읽는다(authStorage 실시간 반영). 여기서는
+  // 부팅 시 서버 세션 동기화만 1회 튼다. "계정 삭제" 버튼(과 그 2단계 확인 상태)은
+  // 2026-08-17 대표 지시로 /mypage(MyPageContent.tsx)로 옮겨서 여기엔 더 없다.
   useEffect(() => {
-    setNickname(getNickname());
-    const sync = () => {
-      setNickname(getNickname());
-      setDeleteConfirm(false);
-    };
-    window.addEventListener(AUTH_CHANGED_EVENT, sync);
-    window.addEventListener("storage", sync);
     void syncSessionFromServer(); // QA M-2 — 부팅 시 1회, 서버 세션 진실과 로컬 캐시를 맞춘다.
-    return () => {
-      window.removeEventListener(AUTH_CHANGED_EVENT, sync);
-      window.removeEventListener("storage", sync);
-      if (deleteConfirmTimerRef.current) window.clearTimeout(deleteConfirmTimerRef.current);
-    };
   }, []);
 
-  const handleDeleteAccount = () => {
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      deleteConfirmTimerRef.current = window.setTimeout(() => setDeleteConfirm(false), 5000);
-      return;
-    }
-    if (deleteConfirmTimerRef.current) window.clearTimeout(deleteConfirmTimerRef.current);
-    setDeleteConfirm(false);
-    void deleteAccount();
-  };
-
-  // 관리자 콘솔(/admin)은 일반 서비스 셸을 공유하지 않는다(03-admin-console-design.md §4).
+  // 관리자 콘솔은 일반 서비스 셸을 공유하지 않는다(03-admin-console-design.md §4).
   //   - 운영 화면인 줄 모르고 조작하는 사고를 막으려면 시각적으로 확실히 갈라져야 한다.
   //   - GNB 의 로그인 모달·닉네임 상태는 **일반 사용자용**이라 관리자 세션과 개념이 다르다.
   //     한 화면에 둘 다 있으면 "어느 쪽으로 로그인한 건지" 혼동이 생긴다.
-  // app/admin/layout.tsx 로는 이걸 못 한다 — 중첩 레이아웃은 부모를 감쌀 뿐 제거하지 못한다.
+  // app/<경로>/layout.tsx 로는 이걸 못 한다 — 중첩 레이아웃은 부모를 감쌀 뿐 제거하지 못한다.
   // 기존 페이지를 전부 route group 으로 옮기는 대공사 대신, 여기서 스스로 빠지게 했다.
   // 훅은 전부 위에서 호출된 뒤이므로 훅 순서 규칙을 어기지 않는다.
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return null;
+  // 경로 자체가 무작위 문자열이다(2026-08-18, app/ops-37878f1b71/page.tsx 주석 참고) —
+  // 바뀌면 이 상수도 같이 바꿔야 한다.
+  const ADMIN_PATH = "/ops-37878f1b71";
+  if (pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`)) return null;
 
   return (
     <>
@@ -234,20 +207,15 @@ export default function Header() {
           <div className="gnb__actions">
             {nickname ? (
               <>
-                <span className="gnb__greeting">{nickname}님</span>
+                <Link className="gnb__greeting" href="/mypage">
+                  {nickname}님
+                </Link>
                 <button
                   className="btn btn--ghost-text"
                   type="button"
                   onClick={() => logout()}
                 >
                   로그아웃
-                </button>
-                <button
-                  className="btn btn--ghost-text gnb__delete-account"
-                  type="button"
-                  onClick={handleDeleteAccount}
-                >
-                  {deleteConfirm ? "정말 삭제할까요? 다시 누르면 삭제돼요" : "계정 삭제"}
                 </button>
               </>
             ) : (
@@ -259,9 +227,13 @@ export default function Header() {
                 로그인
               </button>
             )}
-            <Link className="btn btn--mint" href="/onboarding">
-              시작하기
-            </Link>
+            {/* 2026-08-18(대표 지시) — 로그인한 사용자에게는 이 CTA가 불필요하다(이미
+                시작한 사용자라 "시작하기"라는 문구 자체가 안 맞는다). 비로그인일 때만. */}
+            {!nickname && (
+              <Link className="btn btn--mint" href="/onboarding">
+                시작하기
+              </Link>
+            )}
             <button
               className="gnb__burger"
               aria-label="메뉴 열기"
@@ -342,22 +314,22 @@ export default function Header() {
         <div className="mobile-nav__cta">
           {nickname ? (
             <>
-              <button
+              <Link
                 className="btn btn--white btn--block btn--lg"
+                href="/mypage"
+                onClick={() => setNavOpen(false)}
+              >
+                {nickname}님 · 마이페이지
+              </Link>
+              <button
+                className="btn btn--ghost-text btn--block"
                 type="button"
                 onClick={() => {
                   logout();
                   setNavOpen(false);
                 }}
               >
-                {nickname}님 · 로그아웃
-              </button>
-              <button
-                className="btn btn--ghost-text btn--block"
-                type="button"
-                onClick={handleDeleteAccount}
-              >
-                {deleteConfirm ? "정말 삭제할까요? 다시 누르면 삭제돼요" : "계정 삭제"}
+                로그아웃
               </button>
             </>
           ) : (
@@ -372,17 +344,21 @@ export default function Header() {
               로그인
             </button>
           )}
-          <Link
-            className="btn btn--coral btn--block btn--lg"
-            href="/onboarding"
-            onClick={() => setNavOpen(false)}
-          >
-            시작하기
-          </Link>
+          {!nickname && (
+            <Link
+              className="btn btn--coral btn--block btn--lg"
+              href="/onboarding"
+              onClick={() => setNavOpen(false)}
+            >
+              시작하기
+            </Link>
+          )}
         </div>
       </div>
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLoggedIn={setNickname} />
+      {/* onLoggedIn: nickname은 이제 useLoggedInName()이 AUTH_CHANGED_EVENT로 자동 반영한다
+          (LoginModal이 로그인 성공 시 setLoggedInName()을 이미 호출) — 여기선 할 일 없음. */}
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLoggedIn={() => {}} />
     </>
   );
 }

@@ -799,3 +799,335 @@ AI가 `02 §2.2` 말미에 (a)~(d) 규칙을 정의하고 "실제 강제 위치�
 3. 목업은 오프라인 실행·6화면·브랜드 토큰·시크릿 0건을 실검증 통과했다 —
    시연 자료로 그대로 써도 되나, 개인정보 동의·공공데이터 출처·지도 SDK 저작권 표기 자리가 없다(J8).
 ```
+
+---
+
+# 2026-08-18 카카오 로그인 + 마이페이지 + 고객문의 풀검수 (qa-reviewer)
+
+## 0. 판정 (최상단)
+
+**재작업 필요 — 배포 승인 불가.**
+
+| 구분 | 건수 | 내역 |
+|---|---|---|
+| Critical | 1 | C-1 계정 선점(account pre-hijacking)으로 타인 계정 탈취 성립 (실행 재현 완료) |
+| Major | 6 | M-1 이메일 무조건 덮어쓰기 · M-2 삭제된 계정 세션에서 500 · M-3 미확인 실명이 영구 표시이름으로 고착 · M-4 개인정보처리방침 미반영 · M-5 문의 API 레이트리밋 분류 누락 · M-6 운영 DB 이관 절차 부재 |
+| Minor | 8 | m-1~m-8 (아래 4절) |
+
+Critical 1건이 존재하므로 CLAUDE.md 3차 게이트 통과 조건("Critical 0건")을 충족하지 못한다.
+C-1은 이론적 지적이 아니라 **실제 코드를 실행해 피해자 계정이 공격자 계정으로 병합되는 것을 관찰**했다(2절 (5) 참고).
+
+## 1. 검수 범위
+
+이번 검수는 커밋 `e5cea91`(구글 로그인 QA+보안 풀검수 전량 조치) **이후에 생긴 워킹트리 변경분**만 대상으로 했다.
+구글 로그인 단독 풀검수 결과는 이 파일이 아니라 저장소 루트 `02-qa-report.md` §G·H 와 `06-security-report.md`에 있다
+(이번 지시가 이 파일에 append하도록 지정해 여기 남기지만, 추적성 문제는 m-8로 기록).
+
+읽고 대조한 산출물: `design-docs/00-PRD.md`, `07-legal-review-google-login.md`, `APPROVALS.md`(로그인 관련 행 전량),
+`deploy/DEPLOY.md`, `backend/.env.example`, `backend/.env.production.example`.
+
+## 2. 실행한 검증 명령과 결과 (그대로 기록)
+
+모든 명령은 로컬 Postgres 컨테이너 `sumeungil-postgres-dev`(포트 5433)에 임시 스키마를 만들어 격리 실행했다.
+Git Bash 기본 출력 인코딩이 cp949라 `PYTHONIOENCODING=utf-8`을 붙이지 않으면 첫 체크에서
+`UnicodeEncodeError: 'cp949' codec can't encode character '\u2014'`로 스크립트가 죽는다(m-7 참고).
+
+    (1) cd backend && PYTHONIOENCODING=utf-8 py scripts/verify_auth.py
+        결과: PASS 45 / FAIL 0   (10개 절 전부 통과, 임시 스키마 삭제 완료)
+
+    (2) cd backend && PYTHONIOENCODING=utf-8 py scripts/verify_community.py
+        결과: PASS 67 / FAIL 0
+
+    (3) cd backend && PYTHONIOENCODING=utf-8 py scripts/verify_community_retention.py
+        결과: PASS 35 / FAIL 0
+
+    (4) cd backend && PYTHONIOENCODING=utf-8 py scripts/verify_admin.py
+        결과: phase A 32/33 PASS (1건 FAIL) · phase B 77/77 PASS
+        FAIL 항목: "설정 기본값: CORS allow_credentials 기본 false"
+        판정: 코드 회귀 아님 — 로컬 backend/.env 47행 CORS_ALLOW_CREDENTIALS=true 가 테스트
+              프로세스로 새어 들어온 테스트 격리 결함(2026-08-17 기록과 동일 현상). m-7 참고.
+
+    (5) qa-reviewer 자체 적대적 검증 스크립트(임시, 24개 체크)
+        결과: OK 18 / 24 — 기대와 다른 6건이 곧 C-1 / M-1 / M-2 / m-1 / m-2 의 근거다.
+        상세 출력은 3절·4절에 항목별로 인용.
+
+    (6) cd frontend && npx tsc --noEmit
+        결과: 출력 없음(0 에러)
+
+    (7) cd backend && PYTHONIOENCODING=utf-8 py scripts/verify_injection_hardening.py
+        결과: 전 케이스 PASS (온보딩 LLM 프롬프트 인젝션 방어 무회귀)
+
+    (8) 시크릿 하드코딩 스캔
+        grep -rnE "(client_secret|api_key|password|secret)\s*=\s*[\"'][A-Za-z0-9_-]{12,}[\"']"
+             backend/app frontend/lib frontend/components
+        결과: 0건. git check-ignore -v backend/.env → backend/.gitignore:2 로 무시됨(확인).
+
+    (9) 렌더 경로 확인
+        grep -rn "inquir" backend/app/api/admin.py backend/app/services/ frontend/app/admin
+        결과: 0건 — 문의 message를 화면에 그리는 경로가 현재 코드베이스에 존재하지 않음.
+
+**미실행/불가**: 실제 구글·카카오 동의화면 → 토큰교환 → 쿠키발급까지의 실브라우저 완주.
+`verify_auth.py`가 명시하듯 `exchange_code`/`fetch_userinfo`는 monkeypatch 가짜 응답이라
+이 경로는 이번에도 검증되지 않았다(6절 참고).
+
+## 3. 요구사항 대조 체크리스트
+
+오케스트레이터가 지정한 5개 검수 관점 + 변경 파일별 확인 결과.
+
+| # | 확인 항목 | 방법 | 결과 |
+|---|---|---|---|
+| 1-a | 검증된 이메일만 계정 통합되는가 (구글 먼저 → 미검증 카카오) | 실행 (verify_auth §9) | 통과 — 별개 계정 생성 |
+| 1-b | 이메일 없는 카카오 로그인이 통합에서 제외되는가 | 실행 (verify_auth §9) | 통과 |
+| 1-c | **미검증 카카오 먼저 → 검증 구글 나중** (순서 뒤집기) | 실행 (자체 스크립트 A) | **실패 → C-1** |
+| 1-d | 재로그인 시 email 컬럼이 미검증 값으로 덮이지 않는가 | 실행 (자체 스크립트 B) | **실패 → M-1** |
+| 1-e | users.email 에 중복 방지 제약이 있는가 | 코드 (db/postgres.py 178행) | 실패 — `ix_users_email`은 UNIQUE 아님 (C-1 부수) |
+| 2-a | 비로그인 POST /api/v1/inquiries → 401 | 실행 | 통과 (401) |
+| 2-b | 비로그인 GET /api/v1/inquiries/mine → 401 | 실행 | 통과 (401) |
+| 2-c | 위조 세션 쿠키로 문의 접수 → 401 | 실행 | 통과 (401) |
+| 2-d | 남의 문의 목록이 보이는가 (user_id 필터링) | 실행 (A/B 두 계정) | 통과 — B가 A의 문의를 못 봄, 목록에 message 본문 미포함 |
+| 2-e | message 악성 텍스트의 렌더 경로 존재 여부 | grep (2절 (9)) | 통과(현시점) — 렌더 경로 0건. 단 원문 그대로 저장됨 → m-4 |
+| 2-f | 삭제된 계정의 유효 세션으로 문의 접수 | 실행 | **실패 → M-2** (FK 위반 500) |
+| 2-g | 2001자 message 거부 | 실행 | 통과 (422) |
+| 2-h | 공백만 있는 message 거부 | 실행 | **실패 → m-1** (201 + 빈 문자열 저장) |
+| 3-a | 닉네임 변경이 본인 계정만 바꾸는가 | 실행 (C/D 두 계정) | 통과 |
+| 3-b | 세션 없이 PATCH /display-name → 401 | 실행 (verify_auth §5) | 통과 |
+| 3-c | 세션 없이 DELETE /me → 401 | 실행 (verify_auth §6) | 통과 |
+| 3-d | 계정 삭제 시 문의도 함께 삭제되는가 (CASCADE) | 실행 | 통과 (before=3 → after=0) |
+| 3-e | 계정 삭제 2단계 확인 UI | 코드 (MyPageContent.tsx 90-99행) | 통과 — 5초 내 재클릭 패턴, Header에서 그대로 이전 |
+| 4-a | 통합 로그인 시 is_new=False 인가 | 실행 | 통과 (created_at != last_login_at) |
+| 4-b | 재로그인 시 provider 원본 이름으로 안 돌아가는가 | 실행 (verify_auth §9) | 통과 |
+| 4-c | **확인 안 된 이름이 새는 경로가 있는가** | 코드 (LoginModal.tsx 62-64행) | **실패 → M-3** |
+| 4-d | 같은 초 재로그인 시 is_new 오판정 | 실행 | 실패(경미) → m-6 |
+| 5-a | 구글 로그인 흐름 무회귀 | 실행 (verify_auth 45/45) | 통과 |
+| 5-b | 커뮤니티 리뷰/코스공유 무회귀 | 실행 (67/67 + 35/35) | 통과 |
+| 5-c | 관리자 콘솔 무회귀 | 실행 (phase B 77/77) | 통과 |
+| 5-d | 온보딩 LLM 인젝션 방어 무회귀 | 실행 | 통과 |
+| 5-e | 프론트 타입 무회귀 | 실행 (tsc) | 통과 (0 에러) |
+| 5-f | `.page` flex 전환이 푸터 구조를 깨는가 | 코드 (app/**/page.tsx 20개 전수) | 통과 — 전부 `div.page` 직계 자식이 `main`, `.page > main` 규칙 성립 |
+| 6-a | 시크릿 하드코딩 | grep | 통과 (0건) |
+| 6-b | 카카오 키의 배포 문서화 | 코드 (.env.production.example 186-189, DEPLOY.md 182-183/495/521-523) | 통과 |
+| 6-c | 개인정보처리방침이 카카오·고객문의를 반영하는가 | grep (app/privacy/page.tsx) | **실패 → M-4** ("카카오" 0건) |
+| 6-d | 문의 API의 레이트리밋 버킷 | 코드 (middleware/rate_limit.py 90-102행) | **실패 → M-5** (default 120/분) |
+| 6-e | 운영 SQLite → Postgres 데이터 이관 절차 | 코드 (DEPLOY.md 전문 grep) | **실패 → M-6** |
+
+## 4. 발견된 이슈
+
+### C-1 (Critical · backend-engineer) 미검증 이메일 저장으로 계정 선점(pre-hijacking) 성립
+
+**무엇이 잘못됐나.** `user_repo.py` 모듈 docstring은 "검증 안 된(또는 없는) 이메일로 통합을 허용하면
+남이 내 구글 이메일만 알면 카카오로 내 계정을 가로챈다는 실제 계정 탈취 경로가 생긴다"고 쓰고,
+`upsert_login`의 2단계에서 `if email and email_verified:` 로 그것을 막았다고 주장한다.
+그러나 **3단계 INSERT는 검증 여부와 무관하게 이메일을 그대로 저장한다.**
+
+    backend/app/repositories/user_repo.py 89-96행 (COLUMN 은 _PROVIDER_COLUMNS[provider] f-string)
+
+    cur = conn.execute(
+        "INSERT INTO users (COLUMN, email, display_name, created_at, last_login_at)
+         VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (provider_sub, email, default_display_name, now_iso, now_iso),
+    )
+
+`api/auth.py` 336-342행에서 카카오 콜백은 `is_email_verified`가 true가 아니어도 `email` 자체는
+`_complete_oauth_login`으로 넘긴다. 결과적으로 users 테이블에 **아무도 검증하지 않은 이메일 주소가
+정상 계정의 email 컬럼으로 들어앉는다.** 그리고 2단계의 `get_by_email`은 그 행이 검증된 이메일에서
+왔는지 되묻지 않는다 — 방어선이 "들어올 때"만 있고 "매칭될 때"는 없다.
+
+**재현 절차(실행 확인 완료).**
+
+1. 공격자가 카카오 계정의 이메일을 피해자의 주소(victim@gmail.com)로 등록하되 인증하지 않는다
+   (카카오가 `is_email_verified` 필드를 제공하는 이유 자체가 이 상태가 존재하기 때문이다).
+2. 공격자가 카카오로 숨은길에 로그인한다. 즉 `upsert_login(provider="kakao", email="victim@gmail.com",
+   email_verified=False)`. 실측 결과 신규 행 생성:
+   `id=1, google_sub=None, email='victim@gmail.com', display_name='attacker', kakao_sub='atk-kakao-sub'`
+3. 이후 피해자가 구글(검증된 victim@gmail.com)로 처음 로그인한다. 즉
+   `upsert_login(provider="google", email="victim@gmail.com", email_verified=True)`.
+   1단계(google_sub 매칭) 실패 → 2단계에서 `get_by_email`이 **공격자 행을 반환** → 그 행에 google_sub만 채움.
+   실측 결과: `attacker_id=1  victim_id=1` (동일 행),
+   `id=1, google_sub='victim-google-sub', email='victim@gmail.com', display_name='attacker', kakao_sub='atk-kakao-sub'`
+4. 공격자가 자기 카카오로 다시 로그인. 실측 `again=1  victim=1` — 두 사람이 **같은 user_id를 영구 공유**한다.
+
+**영향.** 공격자는 피해자의 세션과 동일한 계정으로 온보딩 취향 프로필(`onboarding_profiles`),
+저장한 AI 코스(`ai_courses`), 고객문의 내역(`inquiries`)에 접근하고 `PATCH /display-name`으로
+피해자가 리뷰에 노출하는 이름을 바꿀 수 있다. 반대로 피해자는 자기가 정한 적 없는 이름
+(위 실측에서 `attacker`)으로 리뷰가 게시된다. 서비스가 신규라 아직 가입하지 않은 이용자가 많을수록
+성립 확률이 높은, 전형적인 account pre-hijacking 이다.
+
+**부수 결함.** `db/postgres.py` 178행 `ix_users_email`은 UNIQUE가 아니라 일반 인덱스다. 같은 이메일 행이
+여러 개 존재할 수 있고 `get_by_email`은 ORDER BY 없이 `fetchone()`이라 **어느 행이 매칭될지 비결정적**이다.
+
+**권고 수정 방향(택1 이상).**
+
+- (a) 미검증 이메일을 아예 저장하지 않는다 — `email_verified`가 false면 INSERT/UPDATE에 `None`을 넣는다. 가장 작고 확실한 수정.
+- (b) `users.email_verified BOOLEAN` 컬럼을 추가하고, 통합 매칭 조건을 `WHERE email = %s AND email_verified = TRUE`로 좁힌다.
+- (c) `ix_users_email`을 UNIQUE로 승격해 중복 이메일 자체를 막는다.
+- (d) `verify_auth.py` §9에 **순서를 뒤집은 케이스**(미검증 선점 후 검증 로그인)를 회귀 테스트로 추가한다.
+  현재 §9 (c)는 "구글 먼저, 미검증 카카오 나중"만 검사하므로 이 취약점을 그대로 통과시킨다.
+
+### M-1 (Major · backend-engineer) 재로그인 시 email 컬럼 무조건 덮어쓰기
+
+    backend/app/repositories/user_repo.py 73-78행
+
+    if existing is not None:
+        conn.execute(
+            "UPDATE users SET email = %s, last_login_at = %s WHERE id = %s",
+            (email, now_iso, existing["id"]),
+        )
+
+검증 여부도, 값이 None인지도 보지 않는다. 실측:
+
+- 이메일 없이 만든 카카오 계정에 나중에 미검증 이메일을 실어 재로그인 →
+  `email=None` 이던 행이 `email='someone-else@gmail.com'` 으로 갱신됨.
+- 역방향도 성립한다. 구글·카카오가 통합된 계정에서 카카오 이메일 동의를 철회한 뒤 카카오로 로그인하면
+  그 행의 email이 `None`으로 지워진다.
+
+C-1의 공격면을 넓힌다(선점 시점에 이메일을 몰라도 나중에 바꿔 넣을 수 있다). C-1과 같은 수정으로 함께 닫힌다.
+
+### M-2 (Major · backend-engineer) 삭제된 계정의 유효 세션으로 쓰기 요청 시 500
+
+`api/auth_deps.py` 22-28행 `require_login`은 토큰 서명과 만료만 보고 **그 user_id가 실제로 존재하는지 DB에 묻지 않는다.**
+`api/auth.py`의 `/me`는 계정 행이 사라진 경우를 명시적으로 처리하는데(383-384행), 쓰기 경로에는 같은 처리가 없다.
+
+**재현.** 기기 A에서 마이페이지로 계정을 삭제하면 서버가 A의 쿠키만 지운다. 기기 B에는 유효한 세션 쿠키가
+최대 7일 남는다. 기기 B에서 문의를 접수하면:
+
+    ForeignKeyViolation: insert or update on table "inquiries" violates foreign key constraint
+    "inquiries_user_id_fkey"  DETAIL: Key (user_id)=(999999) is not present in table "users".
+
+전역 예외 핸들러가 없어(main.py grep 0건) Starlette 기본 500 응답으로 나간다. 스택트레이스가 새지는 않지만
+사용자에게는 원인 불명 오류이고 서버 로그는 계속 오염된다.
+`onboarding_profiles`·`ai_courses`도 동일하게 `REFERENCES users (id)` 이므로 같은 증상을 낸다.
+
+**권고.** `require_login`에서 `user_repo.get_by_id`로 존재를 확인하고, 없으면 401 + 세션 쿠키 삭제 응답.
+
+### M-3 (Major · frontend + legal-counsel) 확인하지 않은 provider 원본 이름이 영구 표시 이름으로 고착
+
+`is_new` 도입으로 "닉네임 확인 단계"는 최초 가입 1회만 뜬다. 그런데 그 1회를 **취소가 아닌 방법으로 빠져나가는 길**이 열려 있다.
+`frontend/components/LoginModal.tsx` 62-64행의 Escape 핸들러는 닉네임 단계에서도
+`cancelAtNicknameStep`(= `deleteAccount()`)이 아니라 `onClose()`를 호출한다.
+백드롭 클릭(178행)만 `cancelAtNicknameStep`으로 분기돼 있어 두 경로의 의미가 다르다.
+탭을 닫거나 새로고침해도 결과는 같다.
+
+**결과 연쇄.** Esc로 빠져나가면 (1) 서버 세션 쿠키는 이미 발급된 상태로 살아있고, (2) users 행에는
+`_sanitize_display_name`이 정제한 **provider 원본 이름(구글은 실명인 경우가 많다)** 이 남으며,
+(3) 다음 부팅 때 `authStorage.syncSessionFromServer()`가 `GET /me`로 그 이름을 읽어 로컬 캐시에 심고,
+(4) 다음 로그인부터는 `is_new=false`라 **다시는 확인 창이 뜨지 않는다.**
+그 이름이 그대로 리뷰·공유 코스 작성자명으로 공개된다.
+
+`is_new` 도입 전에는 재로그인마다 확인 창이 떠서 이 상태가 스스로 교정됐다 — 이번 변경이 **회복 경로를 없앴다**.
+
+`/privacy` 3항은 지금 이렇게 쓰여 있다: "리뷰 등 게시물 작성 시 표시 이름 설정 — 구글 이름을 자동으로 쓰지 않고,
+로그인 직후 이용자가 직접 확인·수정한 이름만 표시 이름으로 씁니다." 위 경로에서 이 문장은 사실과 다르다.
+`07-legal-review-google-login.md` §3이 지적하고 2026-08-17 조치로 닫았던 항목이 부분적으로 되살아난 것이다.
+
+**권고.** (a) Esc·언마운트·탭 이탈을 전부 `cancelAtNicknameStep` 의미로 통일하거나,
+(b) `users.display_name_confirmed` 플래그를 두고 미확인 계정은 다음 로그인에 다시 묻는다(권장 — 서버가 진실을 갖는 쪽).
+
+### M-4 (Major · backend-engineer + legal-counsel) 개인정보처리방침이 카카오·고객문의를 전혀 반영하지 않음
+
+`frontend/app/privacy/page.tsx`에 "카카오"는 0건이다. 현재 문안은 1항 수집항목·2항 수집방법·3항 처리목적·
+4항 보유기간이 전부 구글 전용으로 서술돼 있다. 이번 변경으로 실제로는 다음이 추가로 처리된다.
+
+- 카카오 계정 고유 ID(`kakao_sub`), 카카오 프로필 닉네임, 카카오계정 이메일(동의 시)
+- 고객문의의 `message`(최대 2000자, 이용자가 직접 입력) 와 선택 입력 `contact_email`
+- `inquiries` 행은 계정 삭제 시 CASCADE로 함께 삭제된다는 사실(현행 문안에 없음)
+
+수집 출처가 늘고 이용자 **직접 입력** 항목이 처음 생겼으므로 1·2·3·4항 모두 갱신이 필요하다.
+법률 판단 자체는 legal-counsel 소관이므로 4차 게이트에서 재확인할 것.
+
+### M-5 (Major · backend-engineer) 문의 접수가 UGC 레이트리밋 버킷에 없음
+
+`backend/app/middleware/rate_limit.py` 90-96행의 UGC 판정은 리뷰 경로·코스 공유 경로만 포함한다.
+`/api/v1/inquiries`는 어느 조건에도 걸리지 않아 `BUCKET_DEFAULT`로 떨어진다(102행 폴백).
+운영값 기준 UGC는 분당 20건인데 default는 분당 120건이다(`.env.production.example` 66·69행).
+로그인만 하면(구글·카카오 계정은 무료로 무한 생성 가능) 한 IP에서 분당 120건 × 2000자를 영구 저장할 수 있고,
+중복 제출 차단·관리자 조회·삭제 수단이 아직 없어 정리할 방법도 없다.
+
+**권고.** `resolve_bucket`에 inquiries 경로를 UGC로 추가하고, 계정당 1일 접수 상한(예: 10건)을 리포지토리 레벨에서 건다.
+
+### M-6 (Major · backend-engineer / 배포) 운영 SQLite → PostgreSQL 데이터 이관 절차가 문서에 없음
+
+이번 워킹트리에는 지시서에 없던 저장소 전환(SQLite → PostgreSQL, `deps.get_database`가 `db.postgres.Database`를 반환)이
+함께 들어 있다. `backend/scripts/migrate_sqlite_to_postgres.py`가 신설돼 있으나 `deploy/DEPLOY.md` 어디에서도 참조되지 않는다.
+DEPLOY.md 601행은 `sumeungil-data` 볼륨을 "과거 SQLite 파일(이관 완료 후 사실상 미사용)",
+"이관이 끝났다면 무해"라고만 적어 **이관을 누가 언제 어떻게 실행하는지가 비어 있다.**
+
+이 상태로 운영에 올리면 backend가 빈 Postgres를 바라보게 되고, 기존 운영 리뷰·공유 코스·방문 집계가 화면에서 사라진다
+(데이터가 지워지는 것은 아니지만 서비스상으로는 유실과 같다).
+
+**권고.** DEPLOY.md에 (1) postgres 컨테이너 기동, (2) 기존 `sumeungil-data` 볼륨의 .db 파일로
+`migrate_sqlite_to_postgres.py` 실행, (3) 행 수 대조, (4) backend 전환 순서를 절차로 명시하고,
+롤백 방법(backend 이미지만 이전 태그로 되돌리기)까지 적을 것. 배포 직전 리허설 1회 필수.
+
+### Minor
+
+| ID | 담당 | 내용 · 재현 |
+|---|---|---|
+| m-1 | backend-engineer | **공백만 있는 문의가 201로 접수되고 빈 문자열이 저장된다.** `schemas/inquiry.py` 15행 `min_length=1`은 strip 이전 값 기준이고, `api/inquiries.py` 45행이 `req.message.strip()`으로 저장한다. 재현: `POST /api/v1/inquiries` body message="   " → 201, DB 실측 `message: ''`. 권고: Pydantic `field_validator`로 strip 후 길이를 검사 |
+| m-2 | backend-engineer | **message에 NUL(U+0000)이 들어오면 500.** 재현: message="a\u0000b" → `DataError('PostgreSQL text fields cannot contain NUL (0x00) bytes')`. 권고: 제어문자 제거(길이 절단 없는 경량 sanitize) |
+| m-3 | backend-engineer | **contact_email 형식 검증이 전혀 없다.** 재현: contact_email에 HTML 태그를 섞은 문자열을 넣으면 그대로 저장됨(실측). `schemas/inquiry.py` 11행 주석이 "엄격한 형식 검증은 하지 않는다"고 의도를 밝히고 있으나, 이 값으로 답변 메일을 보내는 순간 개행 문자에 의한 헤더 인젝션 경로가 된다. 최소한 개행·제어문자 제거와 `EmailStr` 도입 권고 |
+| m-4 | backend-engineer(향후) | **message는 정제 없이 원문 그대로 저장된다.** script 태그·이벤트 핸들러 속성이 포함된 페이로드가 DB에 그대로 들어가는 것을 실측 확인. `clean_user_text`를 쓰지 않은 판단 자체는 타당하다(300자 하드컷이 2000자 요구와 충돌하고, 이 값은 어떤 LLM에도 들어가지 않는다 — LLM 불변식 유지 확인). **현재 렌더 경로는 0건**이므로 지금 당장의 취약점은 아니다. 다만 후속 admin 콘솔 화면을 만들 때 (1) React 기본 이스케이프에 의존하고 `dangerouslySetInnerHTML` 금지, (2) CSV 내보내기 시 수식 인젝션(`=`, `+`, `-`, `@` 로 시작하는 셀) 방어를 반드시 함께 넣을 것. 이 문단을 인수인계 근거로 남긴다 |
+| m-5 | frontend | **`fetchMyInquiries`가 어디서도 호출되지 않는 데드코드다**(`lib/api.ts` 2281행, grep 결과 사용처 0건). 서버에는 `GET /api/v1/inquiries/mine`이 있지만 마이페이지에 "내 문의 내역"이 없어 **이용자가 자신이 접수한 문의를 확인할 방법이 없다.** 답변 채널도 없는 상태라 접수 후 상태를 알 수 없다는 점은 UX 결함에 가깝다 |
+| m-6 | backend-engineer | **is_new 판정이 시각 문자열 비교라 같은 초 재로그인 시 오판정된다.** `api/auth.py` 232행 `user["created_at"] == user["last_login_at"]`. 실측: 동일 `now_iso`로 두 번 upsert하면 두 번째도 `created_at == last_login_at`이 되어 is_new=True. 실사용 재현 확률은 낮고 영향은 "닉네임 확인 창이 한 번 더 뜸"뿐이라 Minor. 정공법은 `upsert_login`이 신규/기존 여부를 명시적으로 반환하는 것 |
+| m-7 | backend-engineer | **`verify_admin.py` phase A 1건 FAIL은 테스트 격리 결함이다.** 로컬 `backend/.env` 47행 `CORS_ALLOW_CREDENTIALS=true`가 테스트 프로세스로 새어 들어와 "기본값 false" 단정이 깨진다. 코드 회귀가 아니며 2026-08-17 기록과 동일한 현상이다. 다만 (a) 스크립트가 이 키를 명시적으로 세팅하도록 고치고, (b) **운영 .env에 이 키가 절대 true로 들어가지 않았는지 배포 전 확인**할 것(쿠키 세션과 결합하면 실제 위험). `.env.production.example`에는 키 자체가 없어 기본 false로 동작한다(확인) |
+| m-8 | planning-lead | **검수 이력이 파일 3곳에 흩어져 있다.** 구글 로그인 풀검수는 저장소 루트 `02-qa-report.md` §G·H, 보안은 `06-security-report.md`, 이번 검수는 지시에 따라 `design-docs/04-qa-report.md`. 다음 검수 담당이 직전 이력을 찾지 못할 위험이 있으니 한 곳으로 통합하거나 상호 링크를 남길 것 |
+
+## 5. 통과로 기록하는 항목 (실행으로 확인된 것만)
+
+추측이 아니라 실제로 돌려 확인한 것만 적는다.
+
+1. **고객문의 권한 격리** — 비로그인 401(POST·GET 둘 다), 위조 쿠키 401, 타인 문의 조회 불가,
+   목록 응답에 `message` 본문 미포함(`inquiry_repo.list_by_user`가 id/status/created_at만 SELECT).
+   `user_id` 필터링이 리포지토리 레벨에 있고 라우터가 세션 신원만 넘기므로 파라미터 조작 여지가 없다.
+2. **계정 삭제 CASCADE** — `inquiries.user_id` FK가 `ON DELETE CASCADE`라 계정 삭제 시 문의도 함께 사라진다(실측 3건 → 0건).
+3. **닉네임 변경 격리** — C 계정 변경이 D 계정에 영향 없음(실측). 세션 없이 호출 시 401.
+4. **SQL 인젝션** — 신규 리포지토리(`inquiry_repo.py`, `user_repo.py`)의 모든 값이 `%s` 바인딩이다.
+   `user_repo`의 f-string 삽입은 `_PROVIDER_COLUMNS` 화이트리스트 딕셔너리 값만 들어가고
+   `Provider`가 `Literal["google","kakao"]`로 좁혀져 있어 사용자 입력이 도달하지 않는다(코드 확인).
+5. **팝업 콜백 XSS 방어 무회귀** — `_js_safe_json`의 `</script` 이스케이프와 U+2028/2029 처리가 그대로 통과(verify_auth §4).
+6. **OAuth state 방어 무회귀** — 서명·만료·쿠키 nonce 바인딩·재사용 거부·오픈리다이렉트 화이트리스트 전부 통과(verify_auth §2·§3).
+   카카오 로그인도 같은 `issue_state`/`verify_state`를 공유하므로 별도 구멍이 생기지 않았다.
+7. **provider 게이팅** — 세션 시크릿만 있고 카카오 미설정이면 `kakao_enabled=False`, 구글은 정상(verify_auth §1).
+   `main.py` 308행이 세션 시크릿 + provider 최소 1개를 함께 요구한다.
+8. **기존 기능 무회귀** — 커뮤니티 67/67, 리텐션 35/35, 관리자 phase B 77/77, 온보딩 인젝션 방어 전 케이스 통과, 프론트 tsc 0에러.
+9. **시크릿** — 하드코딩 0건, `backend/.env`는 gitignore 대상(확인).
+10. **레이아웃 구조** — `.page` 를 flow-root에서 flex column으로 바꾸면서 추가된 `.page > main` 규칙이
+    `frontend/app` 하위 20개 페이지 전부에서 성립함을 전수 확인(모두 `div.page` 직계 자식이 `main`).
+
+## 6. 이번 검수로 확인하지 못한 것 (한계 명시)
+
+1. **실제 OAuth 왕복** — 구글·카카오 동의화면에서 토큰 교환·userinfo 조회까지의 실경로는 이번에도 검증되지 않았다.
+   `verify_auth.py`가 `exchange_code`/`fetch_userinfo`를 monkeypatch하기 때문이다. 특히 **카카오는 처음 붙이는 provider**라
+   실제 응답 형태(`kakao_account` 유무, `is_email_verified` 실제 값, 동의항목 미설정 시 필드 누락)를 한 번도 본 적이 없다.
+   배포 전 실브라우저 1회 완주가 반드시 필요하다.
+2. **화면 시각 회귀** — 마이페이지 그리드, 온보딩 완료 후 홈 이동, HeroGreeting 위치 재배치,
+   `.page` flex 전환의 실제 픽셀 결과는 브라우저로 확인하지 않았다(구조 검증까지만). 2026-08-12 홈 리디자인 장애 전례가 있으므로
+   배포 전 로컬 실행 + 스크린샷 확인을 권고한다.
+3. **부하·동시성** — 계정 통합이 동시 로그인 두 건에서 어떻게 되는지(같은 이메일 두 provider 동시 콜백) 확인하지 않았다.
+   C-1 수정 시 UNIQUE 제약을 넣으면 이 경합도 함께 닫힌다.
+
+## 7. 재작업 지시 · 재검수 범위
+
+| 담당 | 항목 |
+|---|---|
+| backend-engineer | C-1(필수), M-1, M-2, M-5, M-6, m-1, m-2, m-3, m-6, m-7 |
+| frontend(designer/backend 공동) | M-3, m-5 |
+| legal-counsel | M-4 (4차 게이트에서 재판정) |
+| planning-lead | m-8 |
+
+**재검수 범위**: C-1·M-1·M-2·M-3의 해소 여부만 확인하는 **약식 재검수 1회**.
+확인 방법은 (a) `verify_auth.py`에 C-1 역순 케이스가 회귀 테스트로 추가됐는지, (b) 그 스크립트 전량 재실행,
+(c) `verify_community` / `verify_community_retention` / `verify_admin` 무회귀 재실행, (d) `tsc --noEmit`.
+M-4는 legal-counsel 판정으로 대체하고 QA는 문안과 코드의 일치만 재대조한다.
+
+**AI 최적화 정확도 회귀 확인**: 해당 없음. 이번 변경분에 모델·프롬프트·추론 파이프라인 변경이 없고,
+ai-optimization-engineer의 신규 벤치마크 산출물도 없다. 온보딩 LLM 경로는 인젝션 방어 스크립트로 무회귀만 확인했다.
+
+## 8. 핸드오프 노트
+
+    [content-marketer 주의 — 클라이언트 보고서에 쓰면 안 되는 미해결 이슈]
+    1. "카카오 로그인 안전하게 연동 완료" 류의 표현 금지 — 계정 선점으로 타인 계정에 합쳐지는
+       Critical 1건이 미해결이고, 실제 카카오 동의화면 왕복은 아직 한 번도 검증되지 않았다.
+    2. "고객문의 접수 시스템 오픈" 금지 — DB 저장까지만이고 관리자 조회 화면·답변 채널·
+       본인 문의 내역 조회가 전부 없다(m-5). "문의 폼 1차 구현"까지만 사실이다.
+    3. 개인정보처리방침이 카카오·문의 수집을 아직 반영하지 않았다(M-4) — 개인정보 처리 관련
+       문구는 legal-counsel 재판정 전까지 대외 문서에 쓰지 않는다.

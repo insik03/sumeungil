@@ -5,18 +5,22 @@ import { ApiError } from "../../lib/api";
 import AdminTrafficTab from "./AdminTraffic";
 import {
   AdminCourseItem,
+  AdminInquiryItem,
   AdminReviewItem,
   AdminStats,
   CourseStatusFilter,
+  InquiryStatusFilter,
   ReviewSortOption,
   ReviewStatusFilter,
   adminLogout,
   deleteCourse,
   deleteReview,
   fetchAdminCourses,
+  fetchAdminInquiries,
   fetchAdminReviews,
   fetchAdminStats,
   isAutoHidden,
+  replyInquiry,
   setCourseHidden,
   setReviewHidden,
 } from "../../lib/adminApi";
@@ -62,7 +66,7 @@ export default function AdminConsole({
   expiresAt: string;
   onSessionLost: () => void;
 }) {
-  const [tab, setTab] = useState<"reviews" | "courses" | "traffic">("reviews");
+  const [tab, setTab] = useState<"reviews" | "courses" | "inquiries" | "traffic">("reviews");
   const [stats, setStats] = useState<AdminStats | null>(null);
 
   const [reviewStatus, setReviewStatus] = useState<ReviewStatusFilter>("reported");
@@ -73,6 +77,10 @@ export default function AdminConsole({
   const [courseStatus, setCourseStatus] = useState<CourseStatusFilter>("all");
   const [courses, setCourses] = useState<AdminCourseItem[] | null>(null);
   const [courseTotal, setCourseTotal] = useState(0);
+
+  const [inquiryStatus, setInquiryStatus] = useState<InquiryStatusFilter>("new");
+  const [inquiries, setInquiries] = useState<AdminInquiryItem[] | null>(null);
+  const [inquiryTotal, setInquiryTotal] = useState(0);
 
   const [listError, setListError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -132,6 +140,18 @@ export default function AdminConsole({
     }
   }, [courseStatus, guard]);
 
+  const loadInquiries = useCallback(async () => {
+    setListError(false);
+    setInquiries(null);
+    try {
+      const res = await fetchAdminInquiries({ status: inquiryStatus, limit: PAGE_SIZE });
+      setInquiries(res.items);
+      setInquiryTotal(res.total);
+    } catch (e) {
+      if (!guard(e)) setListError(true);
+    }
+  }, [inquiryStatus, guard]);
+
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
@@ -141,6 +161,9 @@ export default function AdminConsole({
   useEffect(() => {
     if (tab === "courses") void loadCourses();
   }, [tab, loadCourses]);
+  useEffect(() => {
+    if (tab === "inquiries") void loadInquiries();
+  }, [tab, loadInquiries]);
 
   async function toggleReview(item: AdminReviewItem) {
     setBusyId(`r${item.id}`);
@@ -183,6 +206,24 @@ export default function AdminConsole({
     }
   }
 
+  async function submitReply(item: AdminInquiryItem, reply: string) {
+    setBusyId(`i${item.id}`);
+    try {
+      const updated = await replyInquiry(item.id, reply);
+      setInquiries((list) => (list ?? []).map((i) => (i.id === item.id ? updated : i)));
+      void loadStats();
+      showToast("답변을 등록했어요.");
+    } catch (e) {
+      if (guard(e)) return;
+      if (e instanceof ApiError && e.status === 404) {
+        showToast("이미 삭제됐거나 없는 문의예요. 목록을 새로고침할게요.");
+        void loadInquiries();
+      } else showToast("답변을 등록하지 못했어요.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     const { kind, item } = pendingDelete;
@@ -211,6 +252,13 @@ export default function AdminConsole({
     } finally {
       setBusyId(null);
     }
+  }
+
+  /** 새로고침/재시도 버튼 공용 — 지금 탭에 맞는 목록만 다시 부른다(트래픽 탭은 자체 로드). */
+  function refreshCurrentList() {
+    if (tab === "reviews") void loadReviews();
+    else if (tab === "courses") void loadCourses();
+    else if (tab === "inquiries") void loadInquiries();
   }
 
   async function doLogout() {
@@ -266,6 +314,16 @@ export default function AdminConsole({
             <span className="admin-stat">
               코스 <b>{stats.courses_total}</b> · 숨김 <b>{stats.courses_hidden}</b>
             </span>
+            <button
+              type="button"
+              className={`admin-stat admin-stat--pill ${stats.inquiries_new > 0 ? "is-warn" : ""}`}
+              onClick={() => {
+                setTab("inquiries");
+                setInquiryStatus("new");
+              }}
+            >
+              {stats.inquiries_new > 0 ? `미답변 문의 ${stats.inquiries_new}` : "미답변 문의 없음"}
+            </button>
             <span className="admin-stats__meta">
               누적 신고 {stats.reports_total} · 기준 {fmtTime(stats.generated_at)}
               <button
@@ -273,7 +331,7 @@ export default function AdminConsole({
                 className="admin-btn admin-btn--ghost admin-btn--sm"
                 onClick={() => {
                   void loadStats();
-                  tab === "reviews" ? void loadReviews() : void loadCourses();
+                  refreshCurrentList();
                 }}
               >
                 새로고침
@@ -303,6 +361,13 @@ export default function AdminConsole({
         </button>
         <button
           type="button"
+          className={`admin-tab ${tab === "inquiries" ? "is-active" : ""}`}
+          onClick={() => setTab("inquiries")}
+        >
+          고객문의
+        </button>
+        <button
+          type="button"
           className={`admin-tab ${tab === "traffic" ? "is-active" : ""}`}
           onClick={() => setTab("traffic")}
         >
@@ -310,7 +375,18 @@ export default function AdminConsole({
         </button>
 
         <span className="admin-tabs__filters">
-          {tab === "traffic" ? null : tab === "reviews" ? (
+          {tab === "traffic" ? null : tab === "inquiries" ? (
+            <select
+              className="admin-select"
+              value={inquiryStatus}
+              onChange={(e) => setInquiryStatus(e.target.value as InquiryStatusFilter)}
+              aria-label="문의 상태 필터"
+            >
+              <option value="new">미답변</option>
+              <option value="resolved">답변완료</option>
+              <option value="all">전체</option>
+            </select>
+          ) : tab === "reviews" ? (
             <>
               <select
                 className="admin-select"
@@ -358,7 +434,7 @@ export default function AdminConsole({
             <button
               type="button"
               className="admin-btn admin-btn--primary"
-              onClick={() => (tab === "reviews" ? void loadReviews() : void loadCourses())}
+              onClick={refreshCurrentList}
             >
               다시 시도
             </button>
@@ -400,24 +476,50 @@ export default function AdminConsole({
               <p className="admin-list__count">{reviews.length}건 표시 · 전체 {reviewTotal}건</p>
             </>
           )
-        ) : courses === null ? (
+        ) : tab === "courses" ? (
+          courses === null ? (
+            <AdminSkeleton />
+          ) : courses.length === 0 ? (
+            <div className="admin-empty">
+              <p>{courseStatus === "hidden" ? "숨겨진 코스가 없어요." : "아직 공유된 코스가 없어요."}</p>
+            </div>
+          ) : (
+            <>
+              {courses.map((c) => (
+                <CourseRow
+                  key={c.share_code}
+                  item={c}
+                  busy={busyId === `c${c.share_code}`}
+                  onToggle={() => toggleCourse(c)}
+                  onDelete={() => setPendingDelete({ kind: "course", item: c })}
+                />
+              ))}
+              <p className="admin-list__count">{courses.length}건 표시 · 전체 {courseTotal}건</p>
+            </>
+          )
+        ) : inquiries === null ? (
           <AdminSkeleton />
-        ) : courses.length === 0 ? (
+        ) : inquiries.length === 0 ? (
           <div className="admin-empty">
-            <p>{courseStatus === "hidden" ? "숨겨진 코스가 없어요." : "아직 공유된 코스가 없어요."}</p>
+            <p>
+              {inquiryStatus === "new"
+                ? "아직 답변할 문의가 없어요."
+                : inquiryStatus === "resolved"
+                  ? "답변한 문의가 없어요."
+                  : "아직 들어온 문의가 없어요."}
+            </p>
           </div>
         ) : (
           <>
-            {courses.map((c) => (
-              <CourseRow
-                key={c.share_code}
-                item={c}
-                busy={busyId === `c${c.share_code}`}
-                onToggle={() => toggleCourse(c)}
-                onDelete={() => setPendingDelete({ kind: "course", item: c })}
+            {inquiries.map((i) => (
+              <InquiryRow
+                key={i.id}
+                item={i}
+                busy={busyId === `i${i.id}`}
+                onReply={(reply) => submitReply(i, reply)}
               />
             ))}
-            <p className="admin-list__count">{courses.length}건 표시 · 전체 {courseTotal}건</p>
+            <p className="admin-list__count">{inquiries.length}건 표시 · 전체 {inquiryTotal}건</p>
           </>
         )}
       </section>
@@ -544,6 +646,76 @@ function CourseRow({
         <button type="button" className="admin-btn admin-btn--danger" onClick={onDelete} disabled={busy}>
           삭제
         </button>
+      </div>
+    </article>
+  );
+}
+
+/**
+ * 문의 1건 + 답변 작성/수정 칸.
+ *
+ * 리뷰/코스 행과 달리 낙관적 갱신을 흉내내지 않는다 — textarea 입력값은 답변 등록이
+ * 성공한 뒤 부모가 내려주는 최신 item.reply로만 갱신된다(리뷰/코스와 같은 원칙:
+ * "됐다고 보였는데 실제로는 안 된" 상태를 만들지 않는다). 답변이 이미 있으면 칸에
+ * 미리 채워 넣어 오탈자 정정 같은 재작성을 쉽게 한다.
+ */
+function InquiryRow({
+  item,
+  busy,
+  onReply,
+}: {
+  item: AdminInquiryItem;
+  busy: boolean;
+  onReply: (reply: string) => void;
+}) {
+  const [draft, setDraft] = useState(item.reply ?? "");
+
+  useEffect(() => {
+    setDraft(item.reply ?? "");
+  }, [item.reply]);
+
+  const trimmed = draft.trim();
+  const canSubmit = !busy && trimmed.length > 0 && trimmed !== (item.reply ?? "");
+
+  return (
+    <article className="admin-row">
+      <div className="admin-row__head">
+        <span className="admin-row__id">#{item.id}</span>
+        <span className="admin-row__name">{item.nickname}</span>
+        {item.contact_email && <span className="admin-row__meta">{item.contact_email}</span>}
+        <span className="admin-row__badges">
+          <span className={`admin-badge ${item.status === "new" ? "is-warn" : ""}`}>
+            {item.status === "new" ? "미답변" : "답변완료"}
+          </span>
+        </span>
+      </div>
+      <p className="admin-row__body">{item.message}</p>
+      <p className="admin-row__sub">작성 {fmtDateTime(item.created_at)}</p>
+
+      <div className="admin-reply">
+        <label className="admin-field">
+          <span className="admin-field__label">
+            답변{item.replied_at ? ` · ${item.replied_by || "운영자"}가 ${fmtDateTime(item.replied_at)}에 작성` : ""}
+          </span>
+          <textarea
+            className="admin-field__input admin-field__input--textarea"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="이 문의에 대한 답변을 입력하세요"
+            disabled={busy}
+            rows={3}
+          />
+        </label>
+        <div className="admin-row__actions">
+          <button
+            type="button"
+            className="admin-btn admin-btn--primary"
+            onClick={() => onReply(trimmed)}
+            disabled={!canSubmit}
+          >
+            {busy ? "등록 중…" : item.reply ? "답변 수정" : "답변 등록"}
+          </button>
+        </div>
       </div>
     </article>
   );

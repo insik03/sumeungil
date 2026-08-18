@@ -371,6 +371,7 @@ export async function analyzeOnboarding(
         headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal,
+        credentials: "include", // 2026-08-17: 온보딩 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
       });
     } catch (e) {
       if (signal?.aborted && !timedOut) throw e; // 사용자가 직접 취소 — 호출부가 signal.aborted로 구분
@@ -886,6 +887,7 @@ export async function fetchCourse(
       headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
       body: JSON.stringify(payload),
       signal,
+      credentials: "include", // 2026-08-17: AI 코스짜기 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
     });
   } catch (e) {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
@@ -925,6 +927,7 @@ export async function fetchArrangeCourse(
       headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
       body: JSON.stringify(payload),
       signal,
+      credentials: "include", // 2026-08-17: AI 코스짜기 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
     });
   } catch (e) {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
@@ -1485,6 +1488,7 @@ export async function askConcierge(
         headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal,
+        credentials: "include", // 2026-08-17: AI 문답 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
       });
     } catch (e) {
       if (signal?.aborted && !timedOut) throw e; // 사용자가 직접 취소 — 호출부가 signal.aborted로 구분
@@ -2137,6 +2141,186 @@ export async function deleteSharedCourse(
   }
 
   return (await res.json()) as { deleted: boolean };
+}
+
+/* ---------------- 2026-08-17 신설 — 내가 저장한 AI 코스 (Phase C, 로그인 필수) ----------------
+ * course_share.py의 /share·/shared(device_id 기준, 공개 공유)와는 별개. 여기는 로그인 계정
+ * 전용 개인 보관함이라 전부 credentials:"include"로 세션 쿠키를 실어 보낸다.
+ */
+export interface MyCourseSummary {
+  id: number;
+  region_code: string;
+  mode: "ai" | "custom";
+  created_at: string;
+}
+
+export interface MyCourseDetail extends MyCourseSummary {
+  course: CourseResponse;
+}
+
+export async function saveMyCourse(
+  regionCode: string,
+  mode: "ai" | "custom",
+  course: CourseResponse,
+  signal?: AbortSignal
+): Promise<MyCourseSummary> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/courses/mine`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
+      body: JSON.stringify({ region_code: regionCode, mode, course }),
+      credentials: "include",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "코스를 저장하지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "코스를 저장하지 못했습니다.");
+  }
+  return (await res.json()) as MyCourseSummary;
+}
+
+export async function fetchMyCourses(signal?: AbortSignal): Promise<MyCourseSummary[]> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/courses/mine`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "저장한 코스를 불러오지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "저장한 코스를 불러오지 못했습니다.");
+  }
+  const data = (await res.json()) as { items: MyCourseSummary[] };
+  return data.items;
+}
+
+export async function fetchMyCourseDetail(
+  id: number,
+  signal?: AbortSignal
+): Promise<MyCourseDetail> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/courses/mine/${id}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "저장한 코스를 불러오지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "저장한 코스를 불러오지 못했습니다.");
+  }
+  return (await res.json()) as MyCourseDetail;
+}
+
+export async function deleteMyCourse(
+  id: number,
+  signal?: AbortSignal
+): Promise<{ deleted: boolean }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/courses/mine/${id}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "저장한 코스를 삭제하지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "저장한 코스를 삭제하지 못했습니다.");
+  }
+  return (await res.json()) as { deleted: boolean };
+}
+
+/* ---------------- 2026-08-18 신설 — 고객문의 (마이페이지, 로그인 필수) ----------------
+ * MyCourseSummary 블록과 동일한 관례. "간단한 문의 폼 + DB 저장"까지만 — admin 콘솔 조회
+ * 화면은 아직 없다(backend/app/api/inquiries.py 모듈 docstring 참고).
+ */
+export interface InquirySummary {
+  id: number;
+  status: "new" | "resolved";
+  created_at: string;
+  reply: string | null;
+  replied_at: string | null;
+}
+
+export async function createInquiry(
+  message: string,
+  contactEmail: string | null,
+  signal?: AbortSignal
+): Promise<InquirySummary> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/inquiries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
+      body: JSON.stringify({ message, contact_email: contactEmail }),
+      credentials: "include",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "문의를 접수하지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "문의를 접수하지 못했습니다.");
+  }
+  return (await res.json()) as InquirySummary;
+}
+
+export async function fetchMyInquiries(signal?: AbortSignal): Promise<InquirySummary[]> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/inquiries/mine`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "문의 내역을 불러오지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "문의 내역을 불러오지 못했습니다.");
+  }
+  const data = (await res.json()) as { items: InquirySummary[] };
+  return data.items;
+}
+
+/** GET /api/v1/onboarding/me — 로그인 계정에 저장된 최신 취향 프로필(없으면 null). */
+export async function fetchMyOnboardingProfile(
+  signal?: AbortSignal
+): Promise<OnboardingResult | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/onboarding/me`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "취향 프로필을 불러오지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "취향 프로필을 불러오지 못했습니다.");
+  }
+  const data = (await res.json()) as { profile: OnboardingResult | null };
+  return data.profile;
 }
 
 /* ---------------- 부록 U — 전국 시도 혼잡도 보드 (2026-08-01) ----------------

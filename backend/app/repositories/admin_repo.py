@@ -1,7 +1,7 @@
 """관리자(운영) 화면 전용 SQL — 부록 T.
 
-`review_repo` / `shared_course_repo` 와 같은 규칙: 동기 함수 + 첫 인자 `sqlite3.Connection`,
-모든 **값**은 파라미터 바인딩(`?`). 호출은 서비스 레이어가 `Database.aread/awrite` 로만 한다.
+`review_repo` / `shared_course_repo` 와 같은 규칙: 동기 함수 + 첫 인자 `psycopg.Connection`,
+모든 **값**은 파라미터 바인딩(`%s`). 호출은 서비스 레이어가 `Database.aread/awrite` 로만 한다.
 
 ## 왜 기존 repo 에 얹지 않고 파일을 나눴나
 공개 API 의 repo 는 "숨김(`hidden=1`)은 절대 보이지 않는다"가 불변식이다. 관리자 조회는
@@ -11,12 +11,16 @@
 ## SQL 문자열 조립 규칙
 `WHERE`/`ORDER BY` 는 사용자 입력을 문자열로 붙이지 않는다. **미리 정의된 리터럴 딕셔너리에서
 고른 값**만 f-string 에 들어간다(키가 없으면 기본값으로 수렴). 값은 전부 바인딩된다.
+
+2026-08-17: PostgreSQL 전환(db/postgres.py)으로 `?` → `%s`, SQLite 암시적 `rowid` 정렬
+타이브레이커 → `seq`(shared_courses 신설 컬럼) 정렬로 바뀌었다(로직은 무변경).
 """
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
+
+import psycopg
 
 MAX_LIMIT = 100
 DEFAULT_LIMIT = 30
@@ -39,6 +43,12 @@ _COURSE_WHERE: dict[str, str] = {
     "hidden": "hidden = 1",
 }
 
+_INQUIRY_WHERE: dict[str, str] = {
+    "all": "1 = 1",
+    "new": "i.status = 'new'",
+    "resolved": "i.status = 'resolved'",
+}
+
 # device_id 는 **여기서만** SELECT 한다(서비스가 즉시 actor_hash 로 바꿔 떨어뜨린다).
 # 원본은 어떤 응답에도 나가지 않는다 — 부록 R.0 불변식은 관리자에게도 동일하게 적용된다.
 _REVIEW_COLUMNS = """
@@ -52,7 +62,7 @@ _REVIEW_COLUMNS = """
 
 
 def list_reviews(
-    conn: sqlite3.Connection, *, status: str, sort: str, limit: int, offset: int
+    conn: psycopg.Connection, *, status: str, sort: str, limit: int, offset: int
 ) -> list[dict[str, Any]]:
     where = _REVIEW_WHERE.get(status, _REVIEW_WHERE["all"])
     order = _REVIEW_ORDER.get(sort, _REVIEW_ORDER["recent"])
@@ -62,37 +72,37 @@ def list_reviews(
           FROM reviews r
          WHERE {where}
          ORDER BY {order}
-         LIMIT ? OFFSET ?
+         LIMIT %s OFFSET %s
         """,
         (limit, offset),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def count_reviews(conn: sqlite3.Connection, *, status: str) -> int:
+def count_reviews(conn: psycopg.Connection, *, status: str) -> int:
     where = _REVIEW_WHERE.get(status, _REVIEW_WHERE["all"])
     row = conn.execute(f"SELECT COUNT(*) AS c FROM reviews r WHERE {where}").fetchone()
     return int(row["c"]) if row else 0
 
 
-def get_review(conn: sqlite3.Connection, *, review_id: int) -> dict[str, Any] | None:
+def get_review(conn: psycopg.Connection, *, review_id: int) -> dict[str, Any] | None:
     row = conn.execute(
-        f"SELECT {_REVIEW_COLUMNS} FROM reviews r WHERE r.id = ?", (review_id,)
+        f"SELECT {_REVIEW_COLUMNS} FROM reviews r WHERE r.id = %s", (review_id,)
     ).fetchone()
     return dict(row) if row else None
 
 
-def set_review_hidden(conn: sqlite3.Connection, *, review_id: int, hidden: bool) -> int:
+def set_review_hidden(conn: psycopg.Connection, *, review_id: int, hidden: bool) -> int:
     """변경된 행 수. 0 이면 그런 리뷰가 없다(라우터가 404 로 만든다)."""
     cur = conn.execute(
-        "UPDATE reviews SET hidden = ? WHERE id = ?", (1 if hidden else 0, review_id)
+        "UPDATE reviews SET hidden = %s WHERE id = %s", (1 if hidden else 0, review_id)
     )
     return int(cur.rowcount)
 
 
-def delete_review(conn: sqlite3.Connection, *, review_id: int) -> int:
-    """신고 기록은 FK ON DELETE CASCADE 로 함께 사라진다(PRAGMA foreign_keys=ON 전제)."""
-    cur = conn.execute("DELETE FROM reviews WHERE id = ?", (review_id,))
+def delete_review(conn: psycopg.Connection, *, review_id: int) -> int:
+    """신고 기록은 FK ON DELETE CASCADE 로 함께 사라진다(Postgres는 FK를 항상 강제)."""
+    cur = conn.execute("DELETE FROM reviews WHERE id = %s", (review_id,))
     return int(cur.rowcount)
 
 
@@ -100,7 +110,7 @@ def delete_review(conn: sqlite3.Connection, *, review_id: int) -> int:
 
 
 def list_courses(
-    conn: sqlite3.Connection, *, status: str, limit: int, offset: int
+    conn: psycopg.Connection, *, status: str, limit: int, offset: int
 ) -> list[dict[str, Any]]:
     """payload(최대 32KB/건)는 절대 SELECT 하지 않는다 — 목록 응답 폭발 방지."""
     where = _COURSE_WHERE.get(status, _COURSE_WHERE["all"])
@@ -109,37 +119,85 @@ def list_courses(
         SELECT share_code, nickname, title, spot_count, created_at, view_count, hidden, device_id
           FROM shared_courses
          WHERE {where}
-         ORDER BY created_at DESC, rowid DESC
-         LIMIT ? OFFSET ?
+         ORDER BY created_at DESC, seq DESC
+         LIMIT %s OFFSET %s
         """,
         (limit, offset),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def count_courses(conn: sqlite3.Connection, *, status: str) -> int:
+def count_courses(conn: psycopg.Connection, *, status: str) -> int:
     where = _COURSE_WHERE.get(status, _COURSE_WHERE["all"])
     row = conn.execute(f"SELECT COUNT(*) AS c FROM shared_courses WHERE {where}").fetchone()
     return int(row["c"]) if row else 0
 
 
-def set_course_hidden(conn: sqlite3.Connection, *, share_code: str, hidden: bool) -> int:
+def set_course_hidden(conn: psycopg.Connection, *, share_code: str, hidden: bool) -> int:
     cur = conn.execute(
-        "UPDATE shared_courses SET hidden = ? WHERE share_code = ?",
+        "UPDATE shared_courses SET hidden = %s WHERE share_code = %s",
         (1 if hidden else 0, share_code),
     )
     return int(cur.rowcount)
 
 
-def delete_course(conn: sqlite3.Connection, *, share_code: str) -> int:
-    cur = conn.execute("DELETE FROM shared_courses WHERE share_code = ?", (share_code,))
+def delete_course(conn: psycopg.Connection, *, share_code: str) -> int:
+    cur = conn.execute("DELETE FROM shared_courses WHERE share_code = %s", (share_code,))
+    return int(cur.rowcount)
+
+
+# --- 고객문의 (2026-08-18, 대표 지시 "답변도 작성하는 칸이 있었으면 좋겠어") -----------------
+#
+# users를 조인해 표시 이름(닉네임)을 함께 내려준다 — 리뷰/코스처럼 UGC 익명 게시물이 아니라
+# 로그인 계정이 남긴 문의라 device_id 지문이 아니라 실제 계정 닉네임을 보여주는 게 맞다
+# (문의는 애초에 로그인 필수라 "누가 물어봤는지"가 이미 계정에 묶여 있다).
+
+
+def list_inquiries(
+    conn: psycopg.Connection, *, status: str, limit: int, offset: int
+) -> list[dict[str, Any]]:
+    where = _INQUIRY_WHERE.get(status, _INQUIRY_WHERE["all"])
+    rows = conn.execute(
+        f"""
+        SELECT i.id, i.user_id, i.contact_email, i.message, i.status,
+               i.created_at, i.reply, i.replied_at, i.replied_by,
+               u.display_name AS nickname
+          FROM inquiries i
+          JOIN users u ON u.id = i.user_id
+         WHERE {where}
+         ORDER BY i.created_at DESC, i.id DESC
+         LIMIT %s OFFSET %s
+        """,
+        (limit, offset),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def count_inquiries(conn: psycopg.Connection, *, status: str) -> int:
+    where = _INQUIRY_WHERE.get(status, _INQUIRY_WHERE["all"])
+    row = conn.execute(f"SELECT COUNT(*) AS c FROM inquiries i WHERE {where}").fetchone()
+    return int(row["c"]) if row else 0
+
+
+def set_inquiry_reply(
+    conn: psycopg.Connection, *, inquiry_id: int, reply: str, replied_by: str, replied_at: str
+) -> int:
+    """답변 등록과 동시에 status를 'resolved'로 바꾼다. 변경된 행 수(0이면 그런 문의가 없다)."""
+    cur = conn.execute(
+        """
+        UPDATE inquiries
+           SET reply = %s, replied_by = %s, replied_at = %s, status = 'resolved'
+         WHERE id = %s
+        """,
+        (reply, replied_by, replied_at, inquiry_id),
+    )
     return int(cur.rowcount)
 
 
 # --- 통계 ---------------------------------------------------------------------
 
 
-def stats(conn: sqlite3.Connection, *, today_prefix: str) -> dict[str, int]:
+def stats(conn: psycopg.Connection, *, today_prefix: str) -> dict[str, int]:
     """가벼운 COUNT 만. 대시보드 첫 화면이 무거워지면 관리자가 쓰지 않게 된다.
 
     `today_prefix` 는 KST 기준 `YYYY-MM-DD`. created_at 이 ISO8601+09:00 문자열이라
@@ -154,7 +212,7 @@ def stats(conn: sqlite3.Connection, *, today_prefix: str) -> dict[str, int]:
         "reviews_total": one("SELECT COUNT(*) AS c FROM reviews"),
         "reviews_hidden": one("SELECT COUNT(*) AS c FROM reviews WHERE hidden = 1"),
         "reviews_today": one(
-            "SELECT COUNT(*) AS c FROM reviews WHERE created_at >= ?", (today_prefix,)
+            "SELECT COUNT(*) AS c FROM reviews WHERE created_at >= %s", (today_prefix,)
         ),
         # 처리 대기 = 신고가 쌓였는데 아직 숨겨지지 않은 리뷰 수(관리자가 볼 유일한 대기열).
         "reports_pending": one(
@@ -167,6 +225,8 @@ def stats(conn: sqlite3.Connection, *, today_prefix: str) -> dict[str, int]:
         "reports_total": one("SELECT COUNT(*) AS c FROM review_reports"),
         "courses_total": one("SELECT COUNT(*) AS c FROM shared_courses"),
         "courses_hidden": one("SELECT COUNT(*) AS c FROM shared_courses WHERE hidden = 1"),
+        "inquiries_total": one("SELECT COUNT(*) AS c FROM inquiries"),
+        "inquiries_new": one("SELECT COUNT(*) AS c FROM inquiries WHERE status = 'new'"),
     }
 
 
@@ -174,7 +234,7 @@ def stats(conn: sqlite3.Connection, *, today_prefix: str) -> dict[str, int]:
 
 
 def insert_action(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     action: str,
     target_type: str,
@@ -186,16 +246,16 @@ def insert_action(
     conn.execute(
         """
         INSERT INTO admin_actions (action, target_type, target_id, at, ip_hash)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
         """,
         (action, target_type, target_id, at, ip_hash),
     )
 
 
-def list_actions(conn: sqlite3.Connection, *, limit: int) -> list[dict[str, Any]]:
+def list_actions(conn: psycopg.Connection, *, limit: int) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT id, action, target_type, target_id, at, ip_hash FROM admin_actions "
-        "ORDER BY id DESC LIMIT ?",
+        "ORDER BY id DESC LIMIT %s",
         (limit,),
     ).fetchall()
     return [dict(r) for r in rows]
@@ -205,6 +265,7 @@ __all__ = (
     "DEFAULT_LIMIT",
     "MAX_LIMIT",
     "count_courses",
+    "count_inquiries",
     "count_reviews",
     "delete_course",
     "delete_review",
@@ -212,8 +273,10 @@ __all__ = (
     "insert_action",
     "list_actions",
     "list_courses",
+    "list_inquiries",
     "list_reviews",
     "set_course_hidden",
+    "set_inquiry_reply",
     "set_review_hidden",
     "stats",
 )

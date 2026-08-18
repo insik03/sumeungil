@@ -93,9 +93,18 @@ input:focus-visible,
   /* 2026-08-01(대표 지적 "헤더 아래 회색 빈 띠") — margin collapse 때문이었다.
      첫 자식(로그인 인사 문구)의 위쪽 여백 32px 가 이 흰 박스 **밖으로 빠져나가**
      그 자리에 body 배경(연회색 파랑)이 그대로 드러났다.
-     flow-root 로 블록 서식 문맥을 만들어 자식 여백이 안쪽에 머물게 한다.
-     (로그인 상태에서만 보이던 현상이라 비로그인 화면에서는 재현되지 않았다.) */
-  display: flow-root;
+     (로그인 상태에서만 보이던 현상이라 비로그인 화면에서는 재현되지 않았다.)
+     2026-08-17(대표 지적 "남색 푸터 밑에 흰 띠") — flow-root는 margin collapse는
+     막았지만, 콘텐츠가 뷰포트보다 짧은 페이지(예: 로그인 게이트만 뜬 상태)에서는
+     .page의 min-height:100vh 만큼 남는 여백이 **흰 배경 그대로** 남색 푸터 아래에
+     드러났다. flex column + main이 남는 세로 공간을 흡수하게 하면 푸터가 항상
+     실제 뷰포트 맨 아래에 붙어 이 문제도 함께 해결되고, flex 컨테이너도 flow-root와
+     동일하게 자식 margin collapse를 막아준다(위 8월 1일 수정 효과도 유지됨). */
+  display: flex;
+  flex-direction: column;
+}
+.page > main {
+  flex: 1 0 auto;
 }
 @media (min-width: 960px) {
   body {
@@ -277,17 +286,12 @@ input:focus-visible,
   font-weight: 800;
   color: var(--ink);
   white-space: nowrap;
+  transition: color 0.18s;
 }
-/* 계정 삭제(QA C-4, 2026-08-17) — 로그아웃보다 눈에 덜 띄게, 확인 대기 중엔 경고색으로. */
-.gnb__delete-account {
-  font-size: var(--text-xs);
-  color: var(--gray-400, #9aa5ab);
-  white-space: nowrap;
+/* 2026-08-17 — 마이페이지(/mypage) 링크로 바뀌면서 클릭 가능함을 hover로도 드러낸다. */
+.gnb__greeting:hover {
+  color: var(--g-500);
 }
-.gnb__delete-account:hover {
-  color: var(--coral-600, #d9534f);
-}
-
 /* 데모 로그인 모달 */
 .login-modal__backdrop {
   position: fixed;
@@ -391,6 +395,40 @@ input:focus-visible,
   outline-offset: 2px;
 }
 .btn-google svg {
+  flex: 0 0 auto;
+}
+
+/* 카카오 브랜드 가이드(카카오 로그인 버튼 매뉴얼) — 배경 #FEE500, 텍스트/아이콘 검정 계열
+   고정색. .btn-google과 같은 크기·모양이지만 테두리가 없다(카카오 버튼은 배경색 자체가
+   경계를 준다는 게 가이드의 전제). 2026-08-17 카카오 로그인 추가. */
+.btn-kakao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  width: 100%;
+  height: 44px;
+  margin-top: var(--sp-3);
+  padding: 0 var(--sp-4);
+  background: #fee500;
+  border: none;
+  border-radius: var(--r-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  font-family: inherit;
+  color: #191919;
+  cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-kakao:hover {
+  filter: brightness(0.97);
+  box-shadow: 0 1px 2px rgba(25, 25, 25, 0.2);
+}
+.btn-kakao:focus-visible {
+  outline: 2px solid #191919;
+  outline-offset: 2px;
+}
+.btn-kakao svg {
   flex: 0 0 auto;
 }
 
@@ -1199,6 +1237,137 @@ input:focus-visible,
     width: 26px;
     height: 26px;
   }
+}
+
+/* =========================================================================
+   마이페이지 "나의 활동" 그리드 (2026-08-17, 대표 지시 — 대한민국 구석구석 마이페이지
+   참고, 그대로 베끼지 않고 숨은길에 실제로 있는 기능만 타일로 구성). .quick-menu__item
+   과 같은 시각 언어(원형 아이콘+라벨)를 쓰되, 완전히 별개 클래스라 홈의 실제 퀵메뉴에는
+   영향이 없다. 카운트 배지는 구석구석의 "즐겨찾기 0/댓글 0..." 표기를 브랜드 컬러 배지로
+   재해석한 것.
+   ========================================================================= */
+.mypage-activity__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-4) var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.mypage-activity__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: var(--sp-2) 2px;
+  border-radius: var(--r-md);
+  text-align: center;
+  transition: background 0.15s ease;
+  /* "계정관리" 타일은 <button>(페이지 안에서 화면만 전환)이라 나머지 <a> 타일과 똑같이
+     보이도록 버튼 기본 테두리/배경을 지운다 — <a>엔 원래 없는 스타일이라 부작용 없다. */
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.mypage-activity__item:hover,
+.mypage-activity__item:focus-visible {
+  background: var(--g-50);
+}
+.mypage-activity__icon-wrap {
+  position: relative;
+}
+.mypage-activity__icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--g-100), var(--g-50));
+  color: var(--g-500);
+  box-shadow: 0 4px 14px rgba(47, 122, 84, 0.16);
+}
+.mypage-activity__icon svg {
+  width: 22px;
+  height: 22px;
+}
+.mypage-activity__count {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--g-500);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px var(--white);
+}
+.mypage-activity__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  line-height: 1.3;
+}
+
+/* 마이페이지 "계정관리" — 표시 이름 변경 + 계정 삭제를 한 카드 안에 담는 필드 레이아웃. */
+.mypage-field {
+  margin-bottom: var(--sp-5);
+}
+.mypage-field__display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.mypage-field__value {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--ink);
+}
+.mypage-field__edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.mypage-field__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.mypage-divider {
+  border: none;
+  border-top: 1px solid var(--n-100);
+  margin: var(--sp-5) 0;
+}
+
+/* --- 마이페이지 문의 내역 (2026-08-18) --- */
+.mypage-inquiry-history { display: flex; flex-direction: column; gap: var(--sp-3); }
+.mypage-inquiry-history__item {
+  border: 1px solid var(--n-100);
+  border-radius: 12px;
+  padding: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.mypage-inquiry-history__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+}
+.mypage-inquiry-history__date { font-size: var(--text-sm); color: var(--ink-muted); }
+.mypage-inquiry-history__status {
+  font-size: var(--text-sm); font-weight: 700; padding: 2px 10px; border-radius: 999px;
+  background: var(--n-100); color: var(--ink-muted);
+}
+.mypage-inquiry-history__status.is-answered { background: var(--n-50); color: var(--g-700); }
+.mypage-inquiry-history__reply {
+  margin: 0; padding: var(--sp-3); border-radius: 10px;
+  background: var(--n-50); font-size: var(--text-sm); line-height: 1.55; color: var(--ink);
+  white-space: pre-wrap;
 }
 
 /* =========================================================================
@@ -6342,6 +6511,14 @@ input:focus-visible,
   font-size: 15px;
 }
 .admin-field__input:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 1px; }
+.admin-field__input--textarea { min-height: 72px; resize: vertical; font-family: inherit; line-height: 1.5; }
+
+/* --- 문의 답변 칸 (2026-08-18) --- */
+.admin-reply {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 4px; padding-top: 12px;
+  border-top: 1px dashed var(--admin-border);
+}
 
 /* --- 상단바 --- */
 .admin-bar {

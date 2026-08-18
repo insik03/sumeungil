@@ -26,12 +26,12 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-import sqlite3
+import psycopg
 from datetime import timedelta
 from typing import Any
 
 from ..config import settings
-from ..db.sqlite import Database
+from ..db.postgres import Database
 from ..repositories import shared_course_repo
 from ..schemas.community import (
     NICKNAME_MAX,
@@ -158,12 +158,12 @@ def _retention_cutoff_iso(now: Any = None) -> str | None:
     return to_iso_kst(base - timedelta(days=days))
 
 
-def _enforce_caps_in_tx(conn: sqlite3.Connection, *, device_id: str, now: Any) -> None:
+def _enforce_caps_in_tx(conn: psycopg.Connection, *, device_id: str, now: Any) -> None:
     """생성 트랜잭션 안에서 도는 **소량** 정리. 예외를 밖으로 내보내지 않는다.
 
     여기서 실패해도 공유 생성 자체는 성공해야 한다 — 정리는 부가 작업이고, 사용자는
     "정리 실패" 때문에 자기 코스를 못 올리는 상황을 이해할 수 없다. 다만 트랜잭션이
-    깨지는 종류의 오류(sqlite3.Error)는 삼키면 INSERT 까지 함께 롤백되므로 그대로 올린다.
+    깨지는 종류의 오류(psycopg.Error)는 삼키면 INSERT 까지 함께 롤백되므로 그대로 올린다.
     """
     batch = max(1, settings.share_cleanup_batch)
     # ① 기기당 상한 — 새로 들어올 1건의 자리를 미리 비운다(keep = 상한 - 1).
@@ -199,7 +199,7 @@ async def run_cleanup(db: Database) -> dict[str, int]:
 
     if cutoff_iso is not None:
         for _ in range(_CLEANUP_MAX_ROUNDS):
-            def _tx(conn: sqlite3.Connection) -> int:
+            def _tx(conn: psycopg.Connection) -> int:
                 return shared_course_repo.delete_expired(
                     conn, cutoff_iso=cutoff_iso, batch=batch, grace_since_iso=grace_iso
                 )
@@ -211,7 +211,7 @@ async def run_cleanup(db: Database) -> dict[str, int]:
 
     max_total = max(1, settings.share_max_total)
     for _ in range(_CLEANUP_MAX_ROUNDS):
-        def _tx_overflow(conn: sqlite3.Connection) -> int:
+        def _tx_overflow(conn: psycopg.Connection) -> int:
             return shared_course_repo.delete_overflow(
                 conn, max_total=max_total, batch=batch, grace_since_iso=grace_iso
             )
@@ -221,7 +221,7 @@ async def run_cleanup(db: Database) -> dict[str, int]:
         if n < batch:
             break
 
-    def _count(conn: sqlite3.Connection) -> int:
+    def _count(conn: psycopg.Connection) -> int:
         return shared_course_repo.count_all_shares(conn)
 
     remaining = await db.aread(_count)
@@ -257,7 +257,7 @@ async def create_share(
     for _ in range(_CODE_MAX_TRIES):
         code = generate_share_code()
 
-        def _tx(conn: sqlite3.Connection, _code: str = code) -> None:
+        def _tx(conn: psycopg.Connection, _code: str = code) -> None:
             # 보존정책(QA M-2): 상한 정리와 INSERT 를 **같은 트랜잭션**에 둔다.
             # 나누면 "자리를 비웠는데 INSERT 가 실패해 데이터만 사라진" 상태가 생긴다.
             _enforce_caps_in_tx(conn, device_id=device_id, now=now)
@@ -274,7 +274,7 @@ async def create_share(
 
         try:
             await db.awrite(_tx)
-        except sqlite3.IntegrityError:
+        except psycopg.errors.UniqueViolation:
             continue
         logger.info(
             "course shared spot_count=%d payload_bytes=%d",
@@ -290,7 +290,7 @@ async def create_share(
 async def delete_share(db: Database, *, share_code: str, device_id: str) -> None:
     code = normalize_share_code(share_code)
 
-    def _tx(conn: sqlite3.Connection) -> None:
+    def _tx(conn: psycopg.Connection) -> None:
         row = shared_course_repo.get_share(conn, share_code=code)
         if row is None:
             raise errors.not_found("공유된 코스를 찾을 수 없습니다.")
@@ -314,7 +314,7 @@ async def get_share(
     """
     code = normalize_share_code(share_code)
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         row = shared_course_repo.get_share(conn, share_code=code)
         if row is None or int(row["hidden"]) == 1:
             raise errors.not_found("공유된 코스를 찾을 수 없습니다.")
@@ -342,7 +342,7 @@ async def list_shares(
     limit = max(1, min(shared_course_repo.MAX_LIMIT, limit))
     offset = max(0, offset)
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         rows = shared_course_repo.list_shares(conn, limit=limit, offset=offset)
         total = shared_course_repo.count_shares(conn)
         return rows, total

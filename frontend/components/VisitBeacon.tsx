@@ -26,7 +26,8 @@ export default function VisitBeacon() {
 
   useEffect(() => {
     if (!pathname) return;
-    if (pathname === "/admin" || pathname.startsWith("/admin/")) return;
+    // 경로가 무작위 문자열인 이유는 app/ops-37878f1b71/page.tsx 상단 주석 참고.
+    if (pathname === "/ops-37878f1b71" || pathname.startsWith("/ops-37878f1b71/")) return;
 
     try {
       void fetch(`${API_BASE}/api/v1/visit`, {

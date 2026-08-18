@@ -18,15 +18,17 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
+import psycopg
 
 from ..config import settings
-from ..db.sqlite import Database
+from ..db.postgres import Database
 from ..repositories import admin_repo, visit_repo
 from ..schemas.admin import (
     AdminTrafficResponse,
     AdminCourseItem,
     AdminCourseListResponse,
+    AdminInquiryItem,
+    AdminInquiryListResponse,
     AdminModerationResponse,
     AdminReviewItem,
     AdminReviewListResponse,
@@ -40,6 +42,7 @@ logger = logging.getLogger("sumeungil.services.admin")
 
 TARGET_REVIEW = "review"
 TARGET_COURSE = "course"
+TARGET_INQUIRY = "inquiry"
 
 
 def _clamp(value: int, low: int, high: int) -> int:
@@ -80,6 +83,22 @@ def _course_item(auth: AdminAuth, row: dict) -> AdminCourseItem:
     )
 
 
+def _inquiry_item(row: dict) -> AdminInquiryItem:
+    """리뷰/코스와 달리 device_id 지문화가 없다 — 로그인 계정의 실제 닉네임을 그대로 쓴다
+    (admin_repo.list_inquiries 주석 참고)."""
+    return AdminInquiryItem(
+        id=int(row["id"]),
+        nickname=row["nickname"],
+        contact_email=row.get("contact_email"),
+        message=row["message"],
+        status=row["status"],
+        created_at=row["created_at"],
+        reply=row.get("reply"),
+        replied_at=row.get("replied_at"),
+        replied_by=row.get("replied_by"),
+    )
+
+
 # --- 조회 ---------------------------------------------------------------------
 
 
@@ -89,7 +108,7 @@ async def list_reviews(
     limit = _clamp(limit, 1, admin_repo.MAX_LIMIT)
     offset = max(0, offset)
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         rows = admin_repo.list_reviews(
             conn, status=status, sort=sort, limit=limit, offset=offset
         )
@@ -108,7 +127,7 @@ async def list_courses(
     limit = _clamp(limit, 1, admin_repo.MAX_LIMIT)
     offset = max(0, offset)
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         rows = admin_repo.list_courses(conn, status=status, limit=limit, offset=offset)
         total = admin_repo.count_courses(conn, status=status)
         return rows, total
@@ -119,11 +138,28 @@ async def list_courses(
     )
 
 
+async def list_inquiries(
+    db: Database, *, status: str, limit: int, offset: int
+) -> AdminInquiryListResponse:
+    limit = _clamp(limit, 1, admin_repo.MAX_LIMIT)
+    offset = max(0, offset)
+
+    def _tx(conn: psycopg.Connection):
+        rows = admin_repo.list_inquiries(conn, status=status, limit=limit, offset=offset)
+        total = admin_repo.count_inquiries(conn, status=status)
+        return rows, total
+
+    rows, total = await db.aread(_tx)
+    return AdminInquiryListResponse(
+        items=[_inquiry_item(r) for r in rows], total=total, limit=limit, offset=offset
+    )
+
+
 async def stats(db: Database) -> AdminStatsResponse:
     now = now_kst()
     today_prefix = now.strftime("%Y-%m-%d")
 
-    def _tx(conn: sqlite3.Connection):
+    def _tx(conn: psycopg.Connection):
         return admin_repo.stats(conn, today_prefix=today_prefix)
 
     counts = await db.aread(_tx)
@@ -156,7 +192,7 @@ async def set_review_hidden(
     action = "review_hide" if hidden else "review_unhide"
     at = to_iso_kst(now_kst())
 
-    def _tx(conn: sqlite3.Connection) -> None:
+    def _tx(conn: psycopg.Connection) -> None:
         changed = admin_repo.set_review_hidden(conn, review_id=review_id, hidden=hidden)
         if changed == 0:
             # 트랜잭션 안에서 예외 → 감사 로그도 함께 롤백된다(없는 대상은 기록하지 않는다).
@@ -182,7 +218,7 @@ async def delete_review(
 ) -> AdminModerationResponse:
     at = to_iso_kst(now_kst())
 
-    def _tx(conn: sqlite3.Connection) -> None:
+    def _tx(conn: psycopg.Connection) -> None:
         changed = admin_repo.delete_review(conn, review_id=review_id)
         if changed == 0:
             raise errors.not_found("후기를 찾을 수 없습니다.")
@@ -208,7 +244,7 @@ async def set_course_hidden(
     action = "course_hide" if hidden else "course_unhide"
     at = to_iso_kst(now_kst())
 
-    def _tx(conn: sqlite3.Connection) -> None:
+    def _tx(conn: psycopg.Connection) -> None:
         changed = admin_repo.set_course_hidden(conn, share_code=share_code, hidden=hidden)
         if changed == 0:
             raise errors.not_found("공유된 코스를 찾을 수 없습니다.")
@@ -233,7 +269,7 @@ async def delete_course(
 ) -> AdminModerationResponse:
     at = to_iso_kst(now_kst())
 
-    def _tx(conn: sqlite3.Connection) -> None:
+    def _tx(conn: psycopg.Connection) -> None:
         changed = admin_repo.delete_course(conn, share_code=share_code)
         if changed == 0:
             raise errors.not_found("공유된 코스를 찾을 수 없습니다.")
@@ -253,11 +289,51 @@ async def delete_course(
     )
 
 
+async def reply_inquiry(
+    db: Database, *, inquiry_id: int, reply: str, ip_hash: str, operator: str = ""
+) -> AdminInquiryItem:
+    at = to_iso_kst(now_kst())
+
+    def _tx(conn: psycopg.Connection):
+        changed = admin_repo.set_inquiry_reply(
+            conn, inquiry_id=inquiry_id, reply=reply, replied_by=operator, replied_at=at
+        )
+        if changed == 0:
+            raise errors.not_found("문의를 찾을 수 없습니다.")
+        admin_repo.insert_action(
+            conn,
+            action="inquiry_reply",
+            target_type=TARGET_INQUIRY,
+            target_id=str(inquiry_id),
+            at=at,
+            ip_hash=ip_hash,
+        )
+        # 응답에 최신 상태를 실어 보내기 위해 방금 답변한 행을 다시 읽는다(list_inquiries와
+        # 같은 조인이지만 단건 전용 쿼리가 없어 여기서 직접 짠다).
+        return conn.execute(
+            """
+            SELECT i.id, i.user_id, i.contact_email, i.message, i.status,
+                   i.created_at, i.reply, i.replied_at, i.replied_by,
+                   u.display_name AS nickname
+              FROM inquiries i
+              JOIN users u ON u.id = i.user_id
+             WHERE i.id = %s
+            """,
+            (inquiry_id,),
+        ).fetchone()
+
+    row = await db.awrite(_tx)
+    logger.info("admin inquiry_reply id=%s by=%s ip_hash=%s", inquiry_id, operator or "?", ip_hash)
+    return _inquiry_item(dict(row))
+
+
 __all__ = (
     "delete_course",
     "delete_review",
     "list_courses",
+    "list_inquiries",
     "list_reviews",
+    "reply_inquiry",
     "set_course_hidden",
     "set_review_hidden",
     "stats",
