@@ -13,7 +13,7 @@ from .ai.summarizer import Summarizer, create_summarizer_from_settings
 from .cache.base import Cache
 from .cache.memory import MemoryCache
 from .config import settings
-from .db.sqlite import Database
+from .db.postgres import Database
 from .middleware.rate_limit import SlidingWindowLimiter
 from .repositories.congestion_repo import CongestionRepository, LiveCongestionRepository
 from .repositories.region_repo import RegionRepository, StaticRegionRepository
@@ -66,11 +66,12 @@ def get_llm_provider() -> LLMProvider:
 
 @lru_cache(maxsize=1)
 def get_database() -> Database:
-    """부록 R 저장소 싱글턴(SQLite 파일 1개). 커넥션은 최초 사용 시 lazy 생성된다.
+    """부록 R + 로그인/개인화 저장소 싱글턴(PostgreSQL 커넥션 풀). 풀은 최초 사용 시 lazy 오픈.
 
-    상용 전환(정식 회원제) 시 이 함수만 PostgreSQL 구현으로 바꾼다 — 라우터·스키마 불변.
+    2026-08-17: 이 함수가 원래 "상용 전환 시 PostgreSQL 구현으로 바꾼다"고 예고했던 지점
+    그대로 — db/postgres.py로 교체했다. 라우터·서비스·리포지토리 함수 시그니처는 불변.
     """
-    return Database(settings.sqlite_file)
+    return Database(settings.database_url)
 
 
 @lru_cache(maxsize=1)
@@ -109,13 +110,17 @@ def get_admin_auth() -> AdminAuth:
 
 @lru_cache(maxsize=1)
 def get_user_auth() -> UserAuth:
-    """구글 로그인 세션 핸들(임시, 2026-08-17 대표 지시). `.env`의 GOOGLE_CLIENT_ID/SECRET/
-    REDIRECT_URI 셋 다 있어야 `enabled=True` — main.py가 그 경우에만 auth 라우터를 등록한다.
+    """로그인 세션 핸들(구글·카카오 공용, 2026-08-17 대표 지시). 세션 시크릿이 있어야
+    `enabled=True`(main.py가 그 경우에만 auth 라우터를 등록) — provider별 client_id/
+    secret/redirect_uri는 각각 `google_enabled`/`kakao_enabled`로 따로 확인한다.
     """
     return UserAuth(
-        client_id=settings.google_client_id,
-        client_secret=settings.google_client_secret,
-        redirect_uri=settings.google_redirect_uri,
+        google_client_id=settings.google_client_id,
+        google_client_secret=settings.google_client_secret,
+        google_redirect_uri=settings.google_redirect_uri,
+        kakao_client_id=settings.kakao_client_id,
+        kakao_client_secret=settings.kakao_client_secret,
+        kakao_redirect_uri=settings.kakao_redirect_uri,
         session_secret=settings.user_session_secret,
         session_ttl_sec=settings.user_session_ttl_sec,
         cookie_name=settings.user_cookie_name,

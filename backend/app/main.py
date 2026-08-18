@@ -25,6 +25,7 @@ from .api import (
     courses,
     festivals,
     health,
+    inquiries,
     onboarding,
     places,
     plan,
@@ -128,17 +129,19 @@ async def _prewarm_all() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 부록 R: 리뷰/공유 저장소(SQLite) 스키마를 기동 시 1회 준비한다. 실패해도 부팅을 막지
-    # 않는다 — 저장소는 부록 R 전용이고, 나머지 조회 기능은 DB 없이 그대로 동작한다.
+    # 부록 R + Phase C: 저장소(PostgreSQL, 2026-08-17 SQLite에서 전환) 스키마를 기동 시
+    # 1회 준비한다. 실패해도 부팅을 막지 않는다 — 나머지 조회 기능은 DB 없이 그대로 동작한다.
     # (실패 시 해당 라우트만 503 STORAGE_UNAVAILABLE 로 응답한다.)
+    # db.safe_target(호스트:포트/DB명만)만 로그에 남긴다 — db.dsn은 비밀번호를 담고 있다.
     if settings.community_enabled:
         db = get_database()
         ok = await asyncio.to_thread(db.ensure_ready)
         if ok:
-            logger.info("community 저장소 준비 완료 path=%s", db.path)
+            logger.info("community 저장소 준비 완료 target=%s", db.safe_target)
         else:
             logger.error(
-                "community 저장소 초기화 실패 — 리뷰/공유 API 는 503 을 반환합니다 path=%s", db.path
+                "community 저장소 초기화 실패 — 리뷰/공유 API 는 503 을 반환합니다 target=%s",
+                db.safe_target,
             )
     else:
         logger.info("community 기능 비활성(COMMUNITY_ENABLED=false) — 저장소 미초기화")
@@ -259,6 +262,7 @@ app.include_router(weather.router)    # 부록 Q.1: 전국 9권역 날씨 보드
 app.include_router(plan.router)       # 부록 Q.2: 출발일 지정 전망(오늘~+180일)
 app.include_router(reviews.router)      # 부록 R: 후기(별점+한줄평) — SQLite 저장
 app.include_router(course_share.router) # 부록 R: 코스 공유(share_code) — SQLite 저장
+app.include_router(inquiries.router)    # 2026-08-18: 고객문의(마이페이지, 로그인 필수)
 app.include_router(visit.router)         # 부록 X: 페이지 조회 비콘(프론트 컨테이너가 처리하는 화면 경로 집계)
 
 # 부록 T: 관리자(운영) 콘솔.
@@ -301,16 +305,26 @@ elif _admin_auth.misconfigured:
 else:
     logger.info("관리자 기능 비활성(ADMIN_PASSWORD_HASH 미설정) — /api/v1/admin/* 라우트 미등록")
 
-# 구글 로그인(임시, 2026-08-17 대표 지시) — 데모 닉네임 로그인을 완전히 대체.
+# 구글·카카오 로그인(2026-08-17 대표 지시, 카카오는 같은 날 추가) — 데모 닉네임 로그인을
+# 완전히 대체.
 #
-# **설정하지 않으면 존재하지 않는다** — admin과 동일 원칙. GOOGLE_CLIENT_ID/SECRET/
-# REDIRECT_URI 셋 다 없으면 이 라우터를 등록조차 하지 않는다 → /api/v1/auth/* 는 404.
-# Google Cloud Console에서 대표가 직접 OAuth 클라이언트를 발급해야만 켜진다.
+# **설정하지 않으면 존재하지 않는다** — admin과 동일 원칙. 세션 시크릿(USER_SESSION_SECRET)이
+# 없으면 라우터 자체를 등록하지 않는다. 세션 시크릿은 있어도 구글·카카오 둘 다 미설정이면
+# 마찬가지로 등록하지 않는다(로그인 수단이 하나도 없는데 /api/v1/auth/* 만 살아있어봐야
+# 의미가 없다) — 반대로 둘 중 하나만 설정돼 있어도 라우터는 등록되고, 그 provider의
+# `/{provider}/login`·`/{provider}/callback`만 각자 `google_enabled`/`kakao_enabled`로
+# 개별 404 처리된다(auth.py 참고). 콘솔에서 대표가 직접 OAuth 클라이언트를 발급해야만 켜진다.
 _user_auth = get_user_auth()
-if _user_auth.enabled:
+if _user_auth.enabled and (_user_auth.google_enabled or _user_auth.kakao_enabled):
     app.include_router(auth.router)
+    active_providers = [
+        name
+        for name, on in (("구글", _user_auth.google_enabled), ("카카오", _user_auth.kakao_enabled))
+        if on
+    ]
     logger.info(
-        "구글 로그인 활성화 — /api/v1/auth/* (세션 %d일, 쿠키 secure=%s)",
+        "로그인 활성화(%s) — /api/v1/auth/* (세션 %d일, 쿠키 secure=%s)",
+        "+".join(active_providers),
         settings.user_session_ttl_sec // 86400,
         settings.user_cookie_secure,
     )
@@ -319,20 +333,28 @@ if _user_auth.enabled:
 else:
     # QA M-6(2026-08-17) — 예전엔 GOOGLE_* 3개만 안내했는데, enabled 가 세션 시크릿까지
     # 보게 되면서(C-1 수정) "GOOGLE_* 는 다 있는데 시크릿만 없는" 상태에서도 이 메시지가
-    # 나가 엉뚱한 변수를 가리켰다. 미설정 항목을 실제로 구분해 로그한다(값은 노출 안 함).
-    missing = [
-        name
-        for name, value in (
-            ("GOOGLE_CLIENT_ID", _user_auth.client_id),
-            ("GOOGLE_CLIENT_SECRET", _user_auth.client_secret),
-            ("GOOGLE_REDIRECT_URI", _user_auth.redirect_uri),
-        )
-        if not value
-    ]
+    # 나가 엉뚱한 변수를 가리켰다. 2026-08-17 카카오 추가로 provider별 필드명도 바뀌어서
+    # (client_id→google_client_id 등) 미설정 항목을 provider별로 구분해 로그한다(값은
+    # 노출 안 함).
+    missing = []
     if not settings.user_session_secret:
         missing.append("USER_SESSION_SECRET(또는 JWT_SECRET_KEY)")
+    for provider_label, cid, secret, redirect in (
+        ("GOOGLE", _user_auth.google_client_id, _user_auth.google_client_secret, _user_auth.google_redirect_uri),
+        ("KAKAO", _user_auth.kakao_client_id, _user_auth.kakao_client_secret, _user_auth.kakao_redirect_uri),
+    ):
+        provider_missing = [
+            f"{provider_label}_{field}"
+            for field, value in (("CLIENT_ID", cid), ("CLIENT_SECRET", secret), ("REDIRECT_URI", redirect))
+            if not value
+        ]
+        if len(provider_missing) == 3:
+            # 셋 다 없으면 "그 provider를 아예 안 씀"이라 개별 나열 대신 한 줄로 요약.
+            missing.append(f"{provider_label}_*(미설정)")
+        else:
+            missing.extend(provider_missing)
     logger.info(
-        "구글 로그인 비활성(%s 미설정) — /api/v1/auth/* 라우트 미등록",
+        "로그인 비활성(%s) — /api/v1/auth/* 라우트 미등록",
         ", ".join(missing) if missing else "원인 불명",
     )
 

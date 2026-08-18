@@ -207,14 +207,18 @@ class Settings:
         # 위조 IP 로 카운터 키를 무한 생성하는 메모리 공격 방지 상한.
         self.rate_limit_max_keys: int = int(os.getenv("RATE_LIMIT_MAX_KEYS", "20000"))
 
-        # --- 부록 R: 리뷰 · 코스 공유 (데모, 2026-08-01) ---
-        # 이 서비스에서 **처음으로 사용자가 쓴 것이 서버에 남는다.** 저장소는 표준 라이브러리
-        # sqlite3 파일 1개(신규 의존성 0). 정식 회원제가 아니라 device_id 기반 데모다.
-        #
-        # !!! 배포 주의 !!! 이 파일이 컨테이너 안에만 있으면 재빌드 시 사용자 데이터가 전부
-        # 사라진다. deploy/docker-compose.yml backend 서비스의 named volume
-        # (sumeungil-data:/app/data)이 반드시 있어야 한다(DEPLOY.md 백업 항목 참고).
+        # --- 부록 R: 리뷰 · 코스 공유 (2026-08-01 신설, 2026-08-17 PostgreSQL로 전환) ---
+        # 원래는 표준 라이브러리 sqlite3 파일 1개였다(신규 의존성 0, 데모 스코프 전제).
+        # 로그인 기반 개인화(온보딩 취향 프로필·AI 코스 저장, db/postgres.py)를 계정에
+        # 영구 저장하기로 하면서 PostgreSQL로 전환했다 — 아래 database_url이 실제 저장소다.
+        # sqlite_file은 과거 로컬 데이터 이관(scripts/migrate_sqlite_to_postgres.py) 참조용으로만
+        # 남겨둔다 — deps.get_database()는 더 이상 이 경로를 쓰지 않는다.
         self._sqlite_path_raw: str = os.getenv("SQLITE_PATH", "./data/sumeungil.db").strip()
+        # PostgreSQL 접속 문자열(필수). 비어 있으면 db/postgres.py의 ensure_ready()가 연결
+        # 실패로 처리해 리뷰·공유·로그인 등 DB 의존 기능만 비활성화된다(조회 위주 기능은
+        # 그대로 동작 — sqlite.py 시절부터의 "저장소 장애로 부팅을 막지 않는다" 원칙 유지).
+        # 로컬 예: postgresql://sumeungil:<비밀번호>@localhost:5433/sumeungil
+        self.database_url: str = os.getenv("DATABASE_URL", "").strip()
         # 기능 킬스위치. 운영 중 남용이 발견되면 false 로 두고 재시작하면 쓰기·읽기 모두
         # 503 FEATURE_DISABLED 로 닫힌다(코드 배포 없이 차단).
         self.community_enabled: bool = (
@@ -318,8 +322,19 @@ class Settings:
         # 예: 로컬 http://localhost:8000/api/v1/auth/google/callback
         #     운영 https://sumeungil.co.kr/api/v1/auth/google/callback (nginx가 /api를 backend로 프록시)
         self.google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+
+        # --- 카카오 로그인 (2026-08-17, 대표 지시 — 구글 옆에 간편로그인으로 추가) ---
+        # 구글과 완전히 같은 원칙: 셋 다 있어야 카카오 로그인 라우트가 활성화된다
+        # (security/user_auth.py의 kakao_enabled 참고). 카카오 개발자 콘솔에서
+        # 대표가 직접 발급 — deploy/DEPLOY.md 카카오 절 참고.
+        self.kakao_client_id: str = os.getenv("KAKAO_CLIENT_ID", "").strip()
+        self.kakao_client_secret: str = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
+        self.kakao_redirect_uri: str = os.getenv("KAKAO_REDIRECT_URI", "").strip()
+
         # 로그인 팝업이 postMessage로 결과를 돌려줄 때 origin 검증에 쓴다(다른 탭이 위조한
         # 메시지를 프론트가 신뢰하지 않게). 로컬은 프론트/백엔드 포트가 달라 필수로 채워야 한다.
+        # 구글·카카오 두 provider가 공유한다(프론트가 받는 postMessage 자체가 provider
+        # 무관 공통 포맷이라 — api/auth.py의 _popup_close_html 참고).
         self.frontend_base_url: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").strip()
         # 세션 서명 키 — 미설정이면 JWT_SECRET_KEY로 폴백(admin_session_secret과 동일 패턴).
         # admin과 **다른 라벨**로 키를 파생하므로(user_auth.py) 같은 시크릿을 공유해도 관리자

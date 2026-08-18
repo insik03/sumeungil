@@ -93,30 +93,42 @@ def _b64d(text: str) -> bytes:
 @dataclass(frozen=True)
 class UserIdentity:
     user_id: int
-    email: str
+    # 2026-08-17(카카오 추가) — 이메일이 없을 수 있다(카카오는 이메일 동의가 선택이고,
+    # 동의해도 미인증 계정이면 애초에 신뢰 안 함 — user_repo.py 계정 통합 규칙 참고).
+    email: str | None
 
 
 class UserAuth:
-    """구글 로그인 세션 핸들(프로세스당 1개, deps.get_user_auth).
+    """로그인 세션 핸들(프로세스당 1개, deps.get_user_auth) — 구글·카카오 공용.
 
-    `enabled`가 False면(GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI 중 하나라도 미설정)
-    main.py가 /api/v1/auth/* 라우터 자체를 등록하지 않는다(admin_auth.py와 동일 원칙).
+    `enabled`는 **세션 서명 인프라(시크릿)** 준비 여부만 본다 — provider별 설정 여부는
+    `google_enabled`/`kakao_enabled`로 따로 확인한다(2026-08-17 카카오 추가 전에는
+    구글 설정까지 `enabled`가 함께 봤었는데, 그러면 "카카오만 설정 안 해도 구글 로그인
+    전체가 죽는" 게 돼서 분리했다). `enabled`가 False면 main.py가 /api/v1/auth/* 라우터
+    자체를 등록하지 않는다(admin_auth.py와 동일 원칙) — 시크릿 없이는 어떤 provider도
+    안전하게 세션을 발급할 수 없으므로 이건 여전히 라우터 전체를 막는 조건이다.
     """
 
     def __init__(
         self,
         *,
-        client_id: str,
-        client_secret: str,
-        redirect_uri: str,
+        google_client_id: str,
+        google_client_secret: str,
+        google_redirect_uri: str,
+        kakao_client_id: str,
+        kakao_client_secret: str,
+        kakao_redirect_uri: str,
         session_secret: str,
         session_ttl_sec: int,
         cookie_name: str,
         cookie_secure: bool,
     ) -> None:
-        self.client_id = (client_id or "").strip()
-        self.client_secret = (client_secret or "").strip()
-        self.redirect_uri = (redirect_uri or "").strip()
+        self.google_client_id = (google_client_id or "").strip()
+        self.google_client_secret = (google_client_secret or "").strip()
+        self.google_redirect_uri = (google_redirect_uri or "").strip()
+        self.kakao_client_id = (kakao_client_id or "").strip()
+        self.kakao_client_secret = (kakao_client_secret or "").strip()
+        self.kakao_redirect_uri = (kakao_redirect_uri or "").strip()
         self.cookie_name = cookie_name
         self.cookie_secure = cookie_secure
         self.session_ttl_sec = max(60, int(session_ttl_sec))
@@ -131,9 +143,16 @@ class UserAuth:
 
     @property
     def enabled(self) -> bool:
-        return bool(
-            self.client_id and self.client_secret and self.redirect_uri and self._secret_present
-        )
+        """세션 서명 인프라만 본다 — provider 설정 여부와 무관(위 클래스 docstring 참고)."""
+        return self._secret_present
+
+    @property
+    def google_enabled(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret and self.google_redirect_uri)
+
+    @property
+    def kakao_enabled(self) -> bool:
+        return bool(self.kakao_client_id and self.kakao_client_secret and self.kakao_redirect_uri)
 
     # --- OAuth state(CSRF 방어) ---------------------------------------------------
 
@@ -198,10 +217,15 @@ class UserAuth:
 
     # --- 세션 토큰 -------------------------------------------------------------
 
-    def issue_token(self, *, user_id: int, email: str, now: int | None = None) -> tuple[str, int]:
+    def issue_token(
+        self, *, user_id: int, email: str | None, now: int | None = None
+    ) -> tuple[str, int]:
         issued = int(time.time()) if now is None else int(now)
         exp = issued + self.session_ttl_sec
-        e = email.strip()[:EMAIL_MAX_LEN]
+        # 2026-08-17(카카오 추가) — email이 없으면(카카오 미인증/미동의) 빈 문자열로 싣는다.
+        # verify_token이 빈 문자열을 다시 None으로 되돌린다 — "" 자체가 유효 이메일이 될
+        # 일은 없으므로 이 왕복 변환은 안전하다.
+        e = (email or "").strip()[:EMAIL_MAX_LEN]
         payload = f"{exp}:{int(user_id)}:{_b64e(e.encode('utf-8'))}".encode("utf-8")
         body = f"{SCHEME_VERSION}.{_b64e(payload)}"
         sig = hmac.new(self._key, body.encode("ascii"), hashlib.sha256).digest()
@@ -231,7 +255,7 @@ class UserAuth:
         current = int(time.time()) if now is None else int(now)
         if exp <= current:
             return None
-        return UserIdentity(user_id=user_id, email=email)
+        return UserIdentity(user_id=user_id, email=email or None)
 
 
 __all__ = ("UserAuth", "UserIdentity", "STATE_TTL_SEC")
