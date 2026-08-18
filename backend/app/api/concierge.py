@@ -34,6 +34,7 @@ from ..schemas.concierge import ConciergeAskRequest, ConciergeAskResponse
 from ..services import concierge_service
 from ..services.recommend_service import ProfileValidationError
 from ..services.weather_provider import WeatherProvider
+from .auth_deps import require_login
 
 logger = logging.getLogger("sumeungil.api.concierge")
 
@@ -56,8 +57,12 @@ async def ask_concierge(
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     weather_provider: WeatherProvider = Depends(get_weather_provider),
     cache: Cache = Depends(get_cache),  # 축제 의도 질문에서 festival_service 캐시 재사용
+    _identity=Depends(require_login),
 ):
-    """질문 길이 위반(2자 미만/200자 초과)은 pydantic 기본 422(계약 N.4)."""
+    """질문 길이 위반(2자 미만/200자 초과)은 pydantic 기본 422(계약 N.4).
+
+    2026-08-17(대표 지시) — AI 문답(컨시어지)도 로그인 필수. 답변 자체는 저장하지 않는다
+    (대표 확인 — 로그인만 요구, 기록은 남기지 않음)."""
     question = (req.question or "").strip()
     if not question:
         return _error(400, "EMPTY_QUESTION", "무엇이 궁금한지 적어주세요.")

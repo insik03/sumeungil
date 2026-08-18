@@ -11,10 +11,15 @@ import {
   PlaceSearchItem,
   fetchArrangeCourse,
   fetchCourse,
+  fetchMyOnboardingProfile,
+  saveMyCourse,
 } from "../lib/api";
+import { logout } from "../lib/authStorage";
 import { loadOnboardingResult } from "../lib/onboardingStorage";
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
+import { useLoggedInName } from "../lib/useLoggedInName";
+import LoginRequiredGate from "./LoginRequiredGate";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
 import SaveToggleButton from "./recommend/SaveToggleButton";
 import CourseMap from "./course/CourseMap";
@@ -22,6 +27,7 @@ import CourseStepCard from "./course/CourseStepCard";
 import CourseStepPhotoStrip from "./course/CourseStepPhotoStrip";
 import SpotSearchBox from "./course/SpotSearchBox";
 import ShareCourseButton from "./course/ShareCourseButton";
+import SaveCourseButton from "./course/SaveCourseButton";
 import { CATEGORY_META, DEFAULT_REGION, regionSelectionFromCode } from "./recommend/constants";
 
 type Status = "loading" | "success" | "error";
@@ -173,6 +179,8 @@ interface CourseTimelinePanelProps {
    * 달라(AI="{지역} 하루 코스", 커스텀="내가 만든 코스") 호출부가 결정해 넘긴다(지어내지 않음).
    */
   fallbackTitle: string;
+  /** 2026-08-17(Phase C) — "코스 저장하기" 호출 시 함께 보낼 mode(ai/custom 요청 구분용). */
+  saveMode: "ai" | "custom";
 }
 
 /**
@@ -193,6 +201,7 @@ function CourseTimelinePanel({
   emptyHint,
   errorHint,
   fallbackTitle,
+  saveMode,
 }: CourseTimelinePanelProps) {
   // §28(신규) — 스텝 앵커 id. CourseStepPhotoStrip의 썸네일 클릭 시 이 id로 스크롤 이동한다
   // (course-timeline__item에 그대로 부여, 별도 상태 없이 인덱스로만 생성).
@@ -237,6 +246,13 @@ function CourseTimelinePanel({
                 (부록 I §arrange 응답이 CourseResponse와 동일 스키마) 여기 한 곳만 붙이면 두 모드
                 모두 자동으로 적용된다(§25 comment와 동일한 "패널 재사용" 근거). */}
             <ShareCourseButton course={data} defaultTitle={data.ai_title || fallbackTitle} />
+            {/* 2026-08-17(Phase C) — 계정에 저장(공개 공유와 별개). 위와 같은 이유로 이 한
+                곳에만 붙이면 AI 추천/내 코스 만들기 둘 다 자동 적용된다. */}
+            <SaveCourseButton
+              course={data}
+              regionCode={data.region.region_code}
+              mode={saveMode}
+            />
           </div>
         </div>
       )}
@@ -370,6 +386,8 @@ function customErrorHint(error: ApiError | null): string {
 export default function CourseContent() {
   const searchParams = useSearchParams();
   const paramRegionCode = searchParams.get("region_code");
+  // 2026-08-17(대표 지시) — AI 코스짜기(추천·직접만들기 둘 다)는 로그인 필수.
+  const loggedIn = useLoggedInName();
 
   const [mode, setMode] = useState<CourseMode>("ai");
 
@@ -449,12 +467,33 @@ export default function CourseContent() {
   }, []);
   const showMap = isDesktop || mapOpen;
 
+  // 2026-08-17(Phase C) — 로그인 중이면 계정에 저장된 취향 프로필을 우선 쓴다(재로그인·
+  // 다른 기기에서도 유지). 서버에 없으면(온보딩을 아직 안 함) 이번 세션 sessionStorage로
+  // 폴백한다. 비로그인이면(사실 이 화면 자체가 게이트로 막혀 있지만 방어적으로) 기존대로
+  // sessionStorage만 본다.
   useEffect(() => {
-    setProfile(loadOnboardingResult()?.result ?? null);
-  }, []);
+    if (!loggedIn) {
+      setProfile(loadOnboardingResult()?.result ?? null);
+      return;
+    }
+    let cancelled = false;
+    fetchMyOnboardingProfile()
+      .then((serverProfile) => {
+        if (cancelled) return;
+        setProfile(serverProfile ?? loadOnboardingResult()?.result ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProfile(loadOnboardingResult()?.result ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loggedIn]);
 
   useEffect(() => {
     if (profile === undefined) return; // 프로필 확인 전엔 대기(깜빡임 방지)
+    if (!loggedIn) return; // 2026-08-17: 비로그인이면 화면 자체가 게이트로 바뀐다(아래 return문)
 
     const controller = new AbortController();
     setStatus("loading");
@@ -478,6 +517,13 @@ export default function CourseContent() {
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
+        if (err instanceof ApiError && err.status === 401) {
+          // 세션이 도중에 만료됐다 — 로컬 캐시를 정리하면 화면이 자동으로 로그인
+          // 게이트로 돌아간다(useLoggedInName()이 null로 바뀜, 위 return문 참고).
+          logout();
+          setStatus("loading");
+          return;
+        }
         setError(
           err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "추천 코스를 불러오지 못했습니다.")
         );
@@ -485,7 +531,7 @@ export default function CourseContent() {
       });
 
     return () => controller.abort();
-  }, [profile, selectedRegion, retryTick]);
+  }, [profile, selectedRegion, retryTick, loggedIn]);
 
   // §C.7-4와 동일 원칙: matched_tags(registry 코드) → 사용자 본인 프로필 tags 라벨로 치환.
   // arrange 결과(match_reasons가 있다면)도 같은 프로필 라벨을 그대로 재사용한다.
@@ -544,6 +590,7 @@ export default function CourseContent() {
   };
 
   const handleArrange = () => {
+    if (!loggedIn) return; // 방어적 가드 — 버튼은 로그인 상태에서만 렌더된다(아래 return문)
     if (!builderSpots || builderSpots.length < MIN_CART_SIZE) return;
     setArrangeStatus("loading");
     setArrangeError(null);
@@ -553,6 +600,13 @@ export default function CourseContent() {
         setArrangeStatus("success");
       })
       .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 401) {
+          // 세션이 도중에 만료됐다 — 로컬 캐시를 정리하면 화면이 자동으로 로그인
+          // 게이트로 돌아간다(useLoggedInName()이 null로 바뀜, 위 return문 참고).
+          logout();
+          setArrangeStatus("idle");
+          return;
+        }
         setArrangeError(
           err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "코스 순서를 짜지 못했습니다.")
         );
@@ -600,6 +654,12 @@ export default function CourseContent() {
         )}
       </section>
 
+      {!loggedIn ? (
+        <LoginRequiredGate
+          title="로그인이 필요해요"
+          message="AI 코스짜기는 로그인 후 이용할 수 있어요. 로그인하면 만든 코스를 저장해 다시 볼 수도 있어요."
+        />
+      ) : (
       <section className="section" aria-labelledby="courseHeading">
         <div className="course-mode-switch" role="tablist" aria-label="코스 만들기 방식">
           <button
@@ -661,6 +721,7 @@ export default function CourseContent() {
               emptyHint="다른 지역을 선택해보세요."
               errorHint={aiErrorHint}
               fallbackTitle={`${regionLabel} 하루 코스`}
+              saveMode="ai"
             />
           </>
         )}
@@ -761,12 +822,14 @@ export default function CourseContent() {
                   emptyHint="추가한 스팟 목록을 확인하고 다시 시도해주세요."
                   errorHint={customErrorHint}
                   fallbackTitle="내가 만든 코스"
+                  saveMode="custom"
                 />
               </>
             )}
           </>
         )}
       </section>
+      )}
     </>
   );
 }

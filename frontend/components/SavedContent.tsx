@@ -6,6 +6,7 @@ import { SavedSpot, loadSavedSpots, removeSavedSpot } from "../lib/savedSpotsSto
 import SavedSpotCard from "./saved/SavedSpotCard";
 import VisitStampsSection from "./saved/VisitStampsSection";
 import SharedCoursesSection from "./saved/SharedCoursesSection";
+import SavedAiCoursesSection from "./saved/SavedAiCoursesSection";
 
 /**
  * 부록 F 파트2(F.2-6-2) 저장 화면. 서버 호출 0(F.2-2) — localStorage만 읽는다.
@@ -17,6 +18,9 @@ import SharedCoursesSection from "./saved/SharedCoursesSection";
  * HomeContent.tsx의 기존 관례를 그대로 따른다 — 탭 대신 섹션을 선택한 이유는 03-design-spec.md §21 참고.
  * §41(신규) — "내가 공유한 코스" 섹션(SharedCoursesSection)을 그 아래에 추가했다(additive, 공유한
  * 적이 없으면 섹션 자체가 렌더되지 않는다).
+ * 2026-08-17(Phase C, 대표 지시) — "내가 저장한 AI 코스" 섹션(SavedAiCoursesSection)을 맨 아래에
+ * 추가했다. device_id가 아니라 **로그인 계정** 기준이라 이 화면에서 유일하게 서버 호출이 있는
+ * 섹션이다(비로그인/저장한 게 없으면 마찬가지로 렌더 안 됨 — SharedCoursesSection과 같은 원칙).
  */
 export default function SavedContent() {
   const [spots, setSpots] = useState<SavedSpot[] | null>(null);
@@ -66,6 +70,7 @@ export default function SavedContent() {
 
       <VisitStampsSection />
       <SharedCoursesSection />
+      <SavedAiCoursesSection />
     </>
   );
 }

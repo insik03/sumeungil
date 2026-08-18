@@ -7,6 +7,8 @@ CourseLeg 은 스팟쌍 이동(도보/차 소요·경로선). Tmap 실패 구간
 
 from __future__ import annotations
 
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 from .places import ProfileInput, RecommendRegion, SpotCard
@@ -79,3 +81,39 @@ class ArrangeRequest(BaseModel):
 
     spot_ids: list[int] = Field(default_factory=list)
     region_code: str | None = None
+
+
+# --- 2026-08-17 신설: 계정에 저장한 AI 코스 (Phase C, 대표 지시) --------------------
+#
+# course_share.py(공개 공유 링크, device_id 기준)와는 별개다 — 이건 로그인 계정 전용
+# 개인 보관함이다. course 필드는 CourseResponse를 프론트가 그대로 되돌려 보낸다 —
+# course_share.py의 ShareCreateRequest.course와 동일하게, 서버는 내용을 해석하지 않고
+# 그대로 저장한다(스키마 진화에 저장소가 안 얽매이게).
+
+
+class SaveCourseRequest(BaseModel):
+    region_code: str = Field(min_length=1)
+    mode: Literal["ai", "custom"]
+    course: dict[str, Any]
+
+
+class MyCourseSummary(BaseModel):
+    """목록 1건. course(payload)를 싣지 않는다(shared_courses 목록과 동일 원칙 — 경량화)."""
+
+    id: int
+    region_code: str
+    mode: Literal["ai", "custom"]
+    created_at: str
+
+
+class MyCourseListResponse(BaseModel):
+    items: list[MyCourseSummary] = Field(default_factory=list)
+
+
+class MyCourseSummaryResponse(MyCourseSummary):
+    """POST /mine 응답 — 생성된 코스 요약. `MyCourseSummary`와 필드는 같지만 의미상
+    구분(목록 항목 vs 생성 결과)을 위해 별도 이름을 둔다."""
+
+
+class MyCourseDetail(MyCourseSummary):
+    course: dict[str, Any]

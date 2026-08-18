@@ -31,6 +31,7 @@ from ..schemas.courses import ArrangeRequest, CourseRequest, CourseResponse
 from ..services import arrange_service, course_service
 from ..services.arrange_service import InvalidSpotsError
 from ..services.recommend_service import ProfileValidationError
+from .auth_deps import require_login
 
 logger = logging.getLogger("sumeungil.api.courses")
 
@@ -51,7 +52,9 @@ async def recommend_course(
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     cache: Cache = Depends(get_cache),
     summarizer: Summarizer = Depends(get_summarizer),
+    _identity=Depends(require_login),
 ):
+    """2026-08-17(대표 지시) — AI 코스짜기(추천 모드)도 로그인 필수."""
     region_code = (req.region_code or "").strip()
     # 부록 C.6 와 동일: region_code 누락/형식오류 → 400 INVALID_REGION
     if not region_code or not region_code.isdigit():
@@ -81,12 +84,15 @@ async def arrange_course(
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     cache: Cache = Depends(get_cache),
     summarizer: Summarizer = Depends(get_summarizer),
+    _identity=Depends(require_login),
 ):
     """사용자가 고른 스팟(2~8개)의 방문 순서만 최적화한다 (부록 I §arrange).
 
     응답은 /recommend 와 **동일한 CourseResponse** — 프론트는 기존 타임라인/지도 렌더를
     그대로 재사용한다. 차이는 slot_label 이 시간대가 아니라 "1번째"~"N번째" 순서 라벨이라는 점뿐.
     profile 을 받지 않으므로 match_score 는 항상 null(추천이 아니라 정렬이다).
+
+    2026-08-17(대표 지시) — AI 코스짜기(직접 만들기 모드)도 로그인 필수.
     """
     try:
         return await arrange_service.build_arrange_response(

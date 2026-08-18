@@ -6,6 +6,7 @@ const LOW_CONFIDENCE_THRESHOLD = 0.5; // §B.5-4 — 표시 전용 재량. 스�
 interface OnboardingResultViewProps {
   result: OnboardingResult;
   axisLabels: Partial<Record<OnboardingAxis, string>>;
+  displayName: string | null;
   onEdit: () => void;
   onConfirm: () => void;
 }
@@ -13,10 +14,15 @@ interface OnboardingResultViewProps {
 /**
  * §B.5-4 결과 화면 — tags만으로 렌더한다. tag_vector/scoring_weights는 서버 전용 수치라
  * 화면에 노출하거나 재계산하지 않는다(§B.5-6). "이렇게 이해했어요" 톤으로 사용자가 확인/정정하게 한다.
+ *
+ * `displayName`은 OnboardingContent가 이미 들고 있는 `useLoggedInName()` 값을 그대로
+ * 내려받는다(2026-08-17 — 하드코딩된 "서연님" 수정). 이 화면은 로그인 게이트를 통과해야만
+ * 렌더되므로 실사용 시 null이 될 일은 없지만, 타입상 null이 오면 이름 없이 문구를 보여준다.
  */
 export default function OnboardingResultView({
   result,
   axisLabels,
+  displayName,
   onEdit,
   onConfirm,
 }: OnboardingResultViewProps) {
@@ -28,7 +34,8 @@ export default function OnboardingResultView({
         <div className="onboard-result__head">
           <h2 className="onboard-result__title">이렇게 이해했어요</h2>
           <p className="onboard-result__sub">
-            서연님이 알려주신 내용을 AI가 이렇게 정리했어요. 다르면 다시 입력해도 괜찮아요.
+            {displayName ? `${displayName}님이 알려주신 내용을` : "알려주신 내용을"} AI가 이렇게
+            정리했어요. 다르면 다시 입력해도 괜찮아요.
           </p>
         </div>
 

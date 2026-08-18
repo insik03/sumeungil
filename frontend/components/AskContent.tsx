@@ -4,7 +4,10 @@ import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ApiError, ConciergeAskResponse, OnboardingAxis, TagValue, askConcierge } from "../lib/api";
+import { logout } from "../lib/authStorage";
 import { readRegionCode, withRegionCode } from "../lib/regionQuery";
+import { useLoggedInName } from "../lib/useLoggedInName";
+import LoginRequiredGate from "./LoginRequiredGate";
 import RecommendSpotCard from "./recommend/SpotCard";
 import { FestivalCard } from "./FestivalBanner";
 import { AXIS_LABEL_FALLBACK, RESULT_AXIS_ORDER } from "./onboarding/constants";
@@ -60,6 +63,8 @@ export default function AskContent() {
   const searchParams = useSearchParams();
   const initialQuestion = searchParams.get("q") ?? "";
   const regionCode = readRegionCode(searchParams.get("region_code"));
+  // 2026-08-17(대표 지시) — AI 문답은 로그인 필수.
+  const loggedIn = useLoggedInName();
 
   const [question, setQuestion] = useState(initialQuestion);
   const [status, setStatus] = useState<Status>("idle");
@@ -90,6 +95,13 @@ export default function AskContent() {
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
+        if (err instanceof ApiError && err.status === 401) {
+          // 세션이 도중에 만료됐다 — 로컬 캐시를 정리하면 이 화면이 자동으로 로그인
+          // 게이트로 돌아간다(useLoggedInName()이 null로 바뀜, 아래 return문 참고).
+          logout();
+          setStatus("idle");
+          return;
+        }
         setError(
           err instanceof ApiError
             ? err
@@ -106,11 +118,14 @@ export default function AskContent() {
   // §35 — regionCode도 의존성에 넣는다(지역만 다른 URL로 재진입하면 그 지역 기준으로 다시 묻는다).
   // 둘 다 URL 파생값이라 렌더마다 값이 흔들리지 않아 이중 마운트 패턴은 그대로 안전하다.
   useEffect(() => {
+    // 2026-08-17: 비로그인이면 카드 자체가 안 그려지므로(아래 return문) 자동 질문도 미룬다
+    // — 그렇지 않으면 로그인 게이트가 뜬 화면 뒤에서 답변만 조용히 계산되는 상태가 된다.
+    if (!loggedIn) return;
     if (initialQuestion && validQuestion(initialQuestion)) {
       runAsk(initialQuestion);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuestion, regionCode]);
+  }, [initialQuestion, regionCode, loggedIn]);
 
   const trimmed = question.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < MIN_LEN;
@@ -149,6 +164,12 @@ export default function AskContent() {
         편하게 물어보세요.
       </p>
 
+      {!loggedIn ? (
+        <LoginRequiredGate
+          title="로그인이 필요해요"
+          message="AI 문답은 로그인 후 이용할 수 있어요."
+        />
+      ) : (
       <div className="concierge-card">
         <form className="concierge__form" onSubmit={handleSubmit}>
           <label className="onboard-label" htmlFor={inputId}>
@@ -306,6 +327,7 @@ export default function AskContent() {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }

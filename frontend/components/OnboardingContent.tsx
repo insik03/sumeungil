@@ -10,7 +10,10 @@ import {
   analyzeOnboarding,
   fetchOnboardingTagSchema,
 } from "../lib/api";
+import { logout } from "../lib/authStorage";
 import { saveOnboardingResult } from "../lib/onboardingStorage";
+import { useLoggedInName } from "../lib/useLoggedInName";
+import LoginRequiredGate from "./LoginRequiredGate";
 import OnboardingForm, { SchemaStatus } from "./onboarding/OnboardingForm";
 import OnboardingLoading from "./onboarding/OnboardingLoading";
 import OnboardingResultView from "./onboarding/OnboardingResultView";
@@ -30,6 +33,9 @@ interface LastSubmission {
  */
 export default function OnboardingContent() {
   const router = useRouter();
+  // 2026-08-17(대표 지시) — 온보딩(취향분석)은 로그인 필수. "시작하기가 사실상 회원가입"
+  // 이라는 지적대로, 비로그인이면 폼 대신 로그인 게이트만 보여준다.
+  const loggedIn = useLoggedInName();
 
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<Record<string, Set<string>>>({});
@@ -47,7 +53,9 @@ export default function OnboardingContent() {
   const abortRef = useRef<AbortController | null>(null);
 
   // §B.5-1: 진입 시 tag-schema 1회 호출 — 칩 목록은 이 응답으로만 구성한다.
+  // 2026-08-17: 로그인 전에는 폼 자체를 안 보여주므로(아래 return문) 이 호출도 미룬다.
   useEffect(() => {
+    if (!loggedIn) return;
     let cancelled = false;
     const controller = new AbortController();
     setSchemaStatus("loading");
@@ -70,7 +78,7 @@ export default function OnboardingContent() {
       cancelled = true;
       controller.abort();
     };
-  }, [schemaRetryTick]);
+  }, [schemaRetryTick, loggedIn]);
 
   const axisLabels = useMemo(() => {
     const map: Partial<Record<OnboardingAxis, string>> = { ...AXIS_LABEL_FALLBACK };
@@ -118,6 +126,13 @@ export default function OnboardingContent() {
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return; // 사용자가 직접 취소 — 이미 폼으로 돌아가 있음
+        if (err instanceof ApiError && err.status === 401) {
+          // 세션이 도중에 만료됐다 — 로컬 로그인 캐시를 정리하면 useLoggedInName()이
+          // null로 바뀌어 이 화면이 자동으로 로그인 게이트로 돌아간다(아래 return문).
+          logout();
+          setStep("form");
+          return;
+        }
         setErrorInfo(
           err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "취향 분석에 실패했습니다.")
         );
@@ -155,8 +170,11 @@ export default function OnboardingContent() {
   }, []);
 
   const handleConfirmResult = useCallback(() => {
-    // MVP-4(부록 C): 추천 화면이 이 결과(sessionStorage)를 그대로 소비한다.
-    router.push("/recommend");
+    // 2026-08-17(대표 지시) — 예전엔 여기서 바로 /recommend로 보냈다(MVP-4, 부록 C: 추천
+    // 화면이 이 결과를 sessionStorage에서 그대로 소비). 이제 홈으로 보내고, 홈이 방금
+    // 만든 추천을 배너로 안내한다(HomeContent.tsx의 hasFreshOnboardingResult 참고) —
+    // sessionStorage는 그대로 두므로 recommend가 여전히 이 결과를 소비할 수 있다.
+    router.push("/");
   }, [router]);
 
   return (
@@ -181,7 +199,12 @@ export default function OnboardingContent() {
         </p>
       </section>
 
-      {step === "form" && (
+      {!loggedIn ? (
+        <LoginRequiredGate
+          title="로그인이 필요해요"
+          message="로그인하면 취향 분석 결과가 계정에 저장돼 다음에 다시 온보딩하지 않아도 돼요."
+        />
+      ) : step === "form" && (
         <OnboardingForm
           text={text}
           onTextChange={handleTextChange}
@@ -202,6 +225,7 @@ export default function OnboardingContent() {
         <OnboardingResultView
           result={result}
           axisLabels={axisLabels}
+          displayName={loggedIn}
           onEdit={handleEditAfterResult}
           onConfirm={handleConfirmResult}
         />

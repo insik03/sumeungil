@@ -24,6 +24,7 @@ injection 패턴이 탐지되면 **LLM을 아예 태우지 않고**, 즉시 LLME
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends
@@ -34,7 +35,11 @@ from ..ai import injection_guard, tag_registry
 from ..ai.llm_provider import LLMProvider
 from ..ai.onboarding_service import EmptyInputError, extract_onboarding_tags
 from ..ai.schemas import LLMExtractionError
-from ..deps import get_llm_provider
+from ..deps import get_database, get_llm_provider
+from ..repositories import onboarding_profile_repo
+from ..security.user_auth import UserIdentity
+from ..util.time import now_kst, to_iso_kst
+from .auth_deps import require_login
 
 logger = logging.getLogger("sumeungil.api.onboarding")
 
@@ -104,7 +109,11 @@ _GUARD_TRIPPED_PROVIDER = _GuardTrippedProvider()
 async def analyze_onboarding(
     req: OnboardingAnalyzeRequest,
     llm_provider: LLMProvider = Depends(get_llm_provider),
+    identity: UserIdentity = Depends(require_login),
 ):
+    """2026-08-17(대표 지시) — 온보딩(취향분석)은 로그인 필수. 비로그인은 401(프론트가
+    로그인 게이트를 보여준다, OnboardingContent.tsx). "시작하기가 사실상 회원가입"이라는
+    지적대로, 결과를 계정에 남기려면(Phase C) 애초에 누구 계정인지부터 알아야 한다."""
     text = req.text or ""
 
     # ── 인젝션 게이팅: 탐지 시 LLM 스킵 → 룰 폴백 강등 (위 파일 docstring 참고) ──
@@ -132,8 +141,51 @@ async def analyze_onboarding(
         logger.exception("onboarding/analyze 처리 중 예기치 못한 오류")
         return _error(500, "INTERNAL", "서버 오류가 발생했습니다.")
 
+    # 2026-08-17(Phase C) — 로그인 필수가 됐으니(위 require_login) 결과를 항상 계정에
+    # 남긴다. 이전 프로필은 완전히 덮어쓴다(history 아님 — 최신 취향이 곧 정답).
+    dumped = result.model_dump(exclude={"unmatched_note"})
+    db = get_database()
+    await db.awrite(
+        lambda conn: onboarding_profile_repo.upsert(
+            conn,
+            user_id=identity.user_id,
+            tags_json=json.dumps(dumped["tags"]),
+            tag_vector_json=json.dumps(dumped["tag_vector"]),
+            vector_version=dumped["vector_version"],
+            scoring_weights_json=json.dumps(dumped["scoring_weights"]),
+            extraction_confidence=dumped["extraction_confidence"],
+            extracted_by=dumped["extracted_by"],
+            fallback_used=dumped["fallback_used"],
+            now_iso=to_iso_kst(now_kst()),
+        )
+    )
+
     # 계약 §B.1: unmatched_note(내부 진단 전용)는 응답에서 제외한다(보안 S-M2).
-    return result.model_dump(exclude={"unmatched_note"})
+    return dumped
+
+
+@router.get("/me")
+async def get_my_profile(identity: UserIdentity = Depends(require_login)):
+    """2026-08-17(Phase C) — 로그인 계정에 저장된 최신 취향 프로필을 돌려준다(없으면
+    `profile: null`). `CourseContent.tsx`의 AI추천 모드가 sessionStorage 대신(우선) 이걸
+    호출해, 이번 세션에 온보딩을 새로 안 해도 이전 취향이 자동 적용되게 한다."""
+    db = get_database()
+    row = await db.aread(
+        lambda conn: onboarding_profile_repo.get_by_user_id(conn, identity.user_id)
+    )
+    if row is None:
+        return {"profile": None}
+    return {
+        "profile": {
+            "tags": json.loads(row["tags"]),
+            "tag_vector": json.loads(row["tag_vector"]),
+            "vector_version": row["vector_version"],
+            "scoring_weights": json.loads(row["scoring_weights"]),
+            "extraction_confidence": row["extraction_confidence"],
+            "extracted_by": row["extracted_by"],
+            "fallback_used": bool(row["fallback_used"]),
+        }
+    }
 
 
 @router.get("/tag-schema")

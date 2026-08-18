@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
+import psycopg
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -51,7 +51,7 @@ def to_response(exc: BaseException, *, context: str) -> JSONResponse:
     if isinstance(exc, CommunityError):
         # 업무 규칙 위반은 정상 흐름이다 — 스택트레이스를 남기지 않는다(로그 노이즈 방지).
         return error_response(exc.status, exc.code, exc.message, exc.detail)
-    if isinstance(exc, sqlite3.Error):
+    if isinstance(exc, psycopg.Error):
         # 디스크 가득참·권한·파일 손상 등. 사용자에게는 "잠시 후" 로만 알린다.
         logger.exception("%s 저장소 오류", context)
         err = errors.storage_unavailable()
