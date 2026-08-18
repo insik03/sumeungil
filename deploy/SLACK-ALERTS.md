@@ -66,8 +66,16 @@ nano /home/ubuntu/sumeungil/deploy/.env
 # 3) 반영 — restart 가 아니라 up -d 다
 cd /home/ubuntu/sumeungil/deploy && docker compose up -d backend
 
-# 4) 켜졌는지 확인 — "미등록" 이 안 보이면 성공
-docker compose logs --tail=50 backend | grep -i 슬랙
+# 4) 켜졌는지 확인 — "등록 완료" 가 보이면 성공, "미등록" 이면 실패
+docker compose logs backend | grep -iE "슬랙" | tail -5
+```
+
+로그가 **비어 있으면 판단하지 말 것**. 등록 로그는 부팅 시점에 한 번만 찍히므로
+`--tail` 범위 밖으로 밀려나면 켜졌어도 아무것도 안 나온다. 그때는 컨테이너 환경변수를
+직접 본다 — 값은 안 나오고 유무만 알려준다:
+
+```bash
+docker compose exec backend sh -c '[ -n "$SLACK_WEBHOOK_URL" ] && echo "설정됨(켜짐)" || echo "없음(꺼짐)"'
 ```
 
 > ⚠️ **`docker compose restart backend` 는 안 된다.** restart 는 같은 컨테이너를 껐다

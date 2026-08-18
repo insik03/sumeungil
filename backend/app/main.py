@@ -257,12 +257,21 @@ app.add_middleware(
 #
 # 웹훅 URL 이 없으면 **등록 자체를 생략한다** — 레이트리밋과 같은 원칙이다.
 # BaseHTTPMiddleware 는 요청마다 태스크 그룹을 만들어 통과만 시켜도 공짜가 아니다.
+#
+# 켜졌을 때도 **반드시 한 줄 남긴다.** 처음엔 꺼진 경우만 로그를 찍었는데, 운영 배포
+# 직후 "켜졌는지" 확인할 방법이 없었다 — 로그가 비어 있는 게 "켜짐"인지 "부팅 로그가
+# tail 범위 밖으로 밀려남"인지 구분이 안 됐다(2026-08-18 실제로 확인 불가). 없음을
+# 증명하는 로그보다 있음을 증명하는 로그가 낫다. URL 은 시크릿이라 절대 찍지 않는다.
 if settings.slack_webhook_url:
     app.add_middleware(
         ErrorAlertMiddleware,
         webhook_url=settings.slack_webhook_url,
         env=settings.app_env,
         dedup_window_sec=settings.slack_alert_dedup_window_sec,
+    )
+    logger.info(
+        "슬랙 5xx 알림 등록 완료 — 중복억제 창 %d초 (URL 은 로그에 남기지 않는다)",
+        settings.slack_alert_dedup_window_sec,
     )
 else:
     logger.info("슬랙 5xx 알림 미등록(SLACK_WEBHOOK_URL 미설정) — 로컬 개발 기본값")
