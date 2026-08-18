@@ -356,9 +356,14 @@ cd backend && py scripts/make_admin_hash.py
 # 2) 서버 .env 의 ADMIN_PASSWORD_HASH 를 새 값으로 교체
 nano /home/ubuntu/sumeungil/deploy/.env
 
-# 3) 반영
-cd /home/ubuntu/sumeungil/deploy && docker compose restart backend
+# 3) 반영 — restart 가 아니라 up -d 다(아래 주의 참고)
+cd /home/ubuntu/sumeungil/deploy && docker compose up -d backend
 ```
+
+> ⚠️ **`.env` 를 고친 뒤에는 `docker compose restart` 를 쓰지 말 것.** restart 는 같은
+> 컨테이너를 멈추고 다시 켜기만 해서 `env_file` 을 다시 읽지 않는다 — 새 해시가 반영되지
+> 않은 채 "바꿨는데 옛 비밀번호로 계속 로그인된다"로 보인다. `up -d` 는 설정 변경을
+> 감지해 컨테이너를 새로 만들므로 이때만 반영된다. (2026-08-18 정정)
 
 - 해시를 바꾸면 **기존 세션 쿠키가 전부 즉시 무효**가 된다(토큰에 해시 지문이 들어 있다).
   세션 탈취가 의심될 때의 강제 로그아웃 절차도 이것과 동일하다.

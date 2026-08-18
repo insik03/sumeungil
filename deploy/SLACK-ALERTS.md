@@ -50,12 +50,31 @@ flowchart LR
 
 ## 3단계 — 운영 서버 `.env` 에 등록 (5xx 알림용)
 
+이 작업은 **운영 서버(EC2) 안에서** 한다. 대표 PC 에서 하는 게 아니다.
+편집할 파일은 `backend/.env` 가 **아니라** `/home/ubuntu/sumeungil/deploy/.env` 다
+(docker-compose 가 `env_file: .env` 로 backend 컨테이너에 넘기는 그 파일).
+
 ```bash
-# 운영 서버에서
-echo 'SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...' >> backend/.env
-# 재시작해야 적용된다 (미들웨어는 부팅 시점에 등록 여부가 결정된다)
-docker compose up -d --build backend
+# 1) 개발 PC 에서 서버 접속 (키는 대표 로컬에만 있음, git 에 없음)
+ssh -i "<Sumeun.pem 경로>" ubuntu@<VM_PUBLIC_IP>
+
+# 2) 서버에서 .env 편집 — 맨 아래에 한 줄 추가
+nano /home/ubuntu/sumeungil/deploy/.env
+#    SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+#    (Ctrl+O → Enter 저장, Ctrl+X 종료)
+
+# 3) 반영 — restart 가 아니라 up -d 다
+cd /home/ubuntu/sumeungil/deploy && docker compose up -d backend
+
+# 4) 켜졌는지 확인 — "미등록" 이 안 보이면 성공
+docker compose logs --tail=50 backend | grep -i 슬랙
 ```
+
+> ⚠️ **`docker compose restart backend` 는 안 된다.** restart 는 같은 컨테이너를 껐다
+> 켜기만 해서 `env_file` 을 다시 읽지 않는다 — 넣었는데 안 켜진 것처럼 보인다.
+> `up -d` 만 설정 변경을 감지해 컨테이너를 새로 만든다.
+>
+> `--build` 도 필요 없다. 코드가 아니라 환경변수만 바뀌었기 때문이다(빌드는 몇 분 더 걸린다).
 
 `SLACK_WEBHOOK_URL` 이 비어 있으면 미들웨어를 **아예 등록하지 않는다** — 로컬 개발에서
 쓸데없이 슬랙을 두드리지 않게 한 의도적 기본값이다. 부팅 로그에서 확인:
@@ -63,6 +82,9 @@ docker compose up -d --build backend
 ```
 슬랙 5xx 알림 미등록(SLACK_WEBHOOK_URL 미설정) — 로컬 개발 기본값   ← 꺼진 상태
 ```
+
+새로 서버를 세팅하는 경우엔 `backend/.env.production.example` 에 이 키가 이미 들어 있으므로
+(e) 단계에서 함께 채우면 된다.
 
 > **운영 배포는 대표 승인 후에만.** 10~12월 심사 기간에는 서버 정지 작업 금지
 > (README 규칙). 3단계는 배포가 필요하므로 1·2단계만 먼저 해도 GitHub 알림 2종은 돈다.
