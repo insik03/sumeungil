@@ -20,6 +20,9 @@ on:
     types: [opened, closed]
   release:
     types: [published]
+  # 웹훅이 살아 있는지 확인하는 수동 실행. Actions 탭 → 이 워크플로 → Run workflow.
+  # 알림이 안 올 때 "시크릿이 잘못됐나 / 워크플로가 잘못됐나"를 가르는 데 쓴다.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -114,6 +117,12 @@ jobs:
               url=$(jq -r '.release.html_url' "$EV")
               text=$(printf '🏷️ *릴리스 %s 발행* — %s\n발행 %s\n<%s|릴리스 보기>' \
                 "$tag" "$name" "$who" "$url")
+              ;;
+
+            workflow_dispatch)
+              who=$(jq -r '.sender.login // "누군가"' "$EV")
+              text=$(printf '🔔 *알림 연결 테스트* — %s
+이 메시지가 보이면 웹훅과 시크릿이 정상입니다. (실행: %s)'                 "$REPO" "$who")
               ;;
 
             *) exit 0 ;;
