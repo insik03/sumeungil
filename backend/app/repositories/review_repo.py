@@ -1,17 +1,21 @@
 """reviews / review_reports 테이블 SQL — 부록 R.
 
-여기 있는 함수는 전부 **동기**이며 첫 인자로 `sqlite3.Connection` 을 받는다. 호출은 반드시
+여기 있는 함수는 전부 **동기**이며 첫 인자로 `psycopg.Connection` 을 받는다. 호출은 반드시
 `Database.aread/awrite` 를 통해서만 한다(서비스 레이어 책임) — 그래야 이벤트 루프가 막히지
 않고, 여러 문장이 한 트랜잭션으로 묶인다.
 
-SQL 은 **전부 파라미터 바인딩(`?`)** 이다. 문자열 포매팅으로 값을 넣은 곳이 하나도 없어야
+SQL 은 **전부 파라미터 바인딩(`%s`)** 이다. 문자열 포매팅으로 값을 넣은 곳이 하나도 없어야
 한다(IN 절의 플레이스홀더 생성도 값이 아니라 개수만 문자열로 만든다).
+
+2026-08-17: PostgreSQL 전환(db/postgres.py)으로 `?` → `%s`, `cur.lastrowid` → `RETURNING id`,
+`INSERT OR IGNORE` → `ON CONFLICT ... DO NOTHING`으로 바뀌었다(로직은 무변경).
 """
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Any, Iterable
+
+import psycopg
 
 # 목록 1회 조회 상한 — 페이지네이션 남용으로 한 번에 수천 건을 긁어가지 못하게 한다.
 MAX_LIMIT = 50
@@ -19,31 +23,31 @@ MAX_LIMIT = 50
 MAX_SUMMARY_IDS = 100
 
 
-def _row(r: sqlite3.Row | None) -> dict[str, Any] | None:
+def _row(r: dict[str, Any] | None) -> dict[str, Any] | None:
     return dict(r) if r is not None else None
 
 
 # --- 조회 ---------------------------------------------------------------------
 
 
-def get_review(conn: sqlite3.Connection, review_id: int) -> dict[str, Any] | None:
+def get_review(conn: psycopg.Connection, review_id: int) -> dict[str, Any] | None:
     """숨김 여부와 무관하게 원본 1건(소유권 판정·신고 처리에 필요)."""
-    return _row(conn.execute("SELECT * FROM reviews WHERE id = ?", (review_id,)).fetchone())
+    return _row(conn.execute("SELECT * FROM reviews WHERE id = %s", (review_id,)).fetchone())
 
 
 def find_by_device_target(
-    conn: sqlite3.Connection, *, device_id: str, target_type: str, target_id: str
+    conn: psycopg.Connection, *, device_id: str, target_type: str, target_id: str
 ) -> dict[str, Any] | None:
     return _row(
         conn.execute(
-            "SELECT * FROM reviews WHERE device_id = ? AND target_type = ? AND target_id = ?",
+            "SELECT * FROM reviews WHERE device_id = %s AND target_type = %s AND target_id = %s",
             (device_id, target_type, target_id),
         ).fetchone()
     )
 
 
 def list_reviews(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     target_type: str,
     target_id: str,
@@ -66,9 +70,9 @@ def list_reviews(
             """
             SELECT id, nickname, rating, comment, created_at, updated_at, device_id, hidden
               FROM reviews
-             WHERE target_type = ? AND target_id = ? AND (hidden = 0 OR device_id = ?)
+             WHERE target_type = %s AND target_id = %s AND (hidden = 0 OR device_id = %s)
              ORDER BY created_at DESC, id DESC
-             LIMIT ? OFFSET ?
+             LIMIT %s OFFSET %s
             """,
             (target_type, target_id, viewer_device_id, limit, offset),
         ).fetchall()
@@ -77,9 +81,9 @@ def list_reviews(
             """
             SELECT id, nickname, rating, comment, created_at, updated_at, device_id, hidden
               FROM reviews
-             WHERE target_type = ? AND target_id = ? AND hidden = 0
+             WHERE target_type = %s AND target_id = %s AND hidden = 0
              ORDER BY created_at DESC, id DESC
-             LIMIT ? OFFSET ?
+             LIMIT %s OFFSET %s
             """,
             (target_type, target_id, limit, offset),
         ).fetchall()
@@ -87,14 +91,14 @@ def list_reviews(
 
 
 def rating_histogram(
-    conn: sqlite3.Connection, *, target_type: str, target_id: str
+    conn: psycopg.Connection, *, target_type: str, target_id: str
 ) -> dict[int, int]:
     """{별점: 건수}. 평균·총건수는 이 히스토그램에서 파생한다(쿼리 1회로 3개 값을 만든다)."""
     rows = conn.execute(
         """
         SELECT rating, COUNT(*) AS c
           FROM reviews
-         WHERE target_type = ? AND target_id = ? AND hidden = 0
+         WHERE target_type = %s AND target_id = %s AND hidden = 0
          GROUP BY rating
         """,
         (target_type, target_id),
@@ -103,22 +107,22 @@ def rating_histogram(
 
 
 def bulk_rating_histogram(
-    conn: sqlite3.Connection, *, target_type: str, target_ids: Iterable[str]
+    conn: psycopg.Connection, *, target_type: str, target_ids: Iterable[str]
 ) -> dict[str, dict[int, int]]:
     """여러 대상의 히스토그램을 **쿼리 1회**로. 카드 목록 N+1 방지의 핵심.
 
-    IN 절 플레이스홀더는 개수만큼 `?` 를 이어 붙인다 — 값 자체는 바인딩되므로 인젝션 여지가 없다.
+    IN 절 플레이스홀더는 개수만큼 `%s` 를 이어 붙인다 — 값 자체는 바인딩되므로 인젝션 여지가 없다.
     """
     ids = [t for t in target_ids if t]
     if not ids:
         return {}
     ids = ids[:MAX_SUMMARY_IDS]
-    placeholders = ",".join("?" for _ in ids)
+    placeholders = ",".join("%s" for _ in ids)
     rows = conn.execute(
         f"""
         SELECT target_id, rating, COUNT(*) AS c
           FROM reviews
-         WHERE target_type = ? AND hidden = 0 AND target_id IN ({placeholders})
+         WHERE target_type = %s AND hidden = 0 AND target_id IN ({placeholders})
          GROUP BY target_id, rating
         """,
         (target_type, *ids),
@@ -133,7 +137,7 @@ def bulk_rating_histogram(
 
 
 def insert_review(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     target_type: str,
     target_id: str,
@@ -143,20 +147,21 @@ def insert_review(
     comment: str | None,
     now_iso: str,
 ) -> int:
-    """새 리뷰 id. 같은 기기+대상이 이미 있으면 `sqlite3.IntegrityError`(유니크 인덱스)."""
+    """새 리뷰 id. 같은 기기+대상이 이미 있으면 `psycopg.errors.UniqueViolation`(유니크 인덱스)."""
     cur = conn.execute(
         """
         INSERT INTO reviews
             (target_type, target_id, device_id, nickname, rating, comment, created_at, updated_at, hidden)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
+        RETURNING id
         """,
         (target_type, target_id, device_id, nickname, rating, comment, now_iso, now_iso),
     )
-    return int(cur.lastrowid)
+    return int(cur.fetchone()["id"])
 
 
 def update_review(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     review_id: int,
     nickname: str | None,
@@ -173,31 +178,31 @@ def update_review(
     sets: list[str] = []
     params: list[Any] = []
     if nickname is not None:
-        sets.append("nickname = ?")
+        sets.append("nickname = %s")
         params.append(nickname)
     if rating is not None:
-        sets.append("rating = ?")
+        sets.append("rating = %s")
         params.append(rating)
     if clear_comment:
         sets.append("comment = NULL")
     elif comment is not None:
-        sets.append("comment = ?")
+        sets.append("comment = %s")
         params.append(comment)
     if not sets:
         return
-    sets.append("updated_at = ?")
+    sets.append("updated_at = %s")
     params.append(now_iso)
     params.append(review_id)
-    conn.execute(f"UPDATE reviews SET {', '.join(sets)} WHERE id = ?", params)
+    conn.execute(f"UPDATE reviews SET {', '.join(sets)} WHERE id = %s", params)
 
 
-def delete_review(conn: sqlite3.Connection, *, review_id: int) -> None:
-    """review_reports 는 FK ON DELETE CASCADE 로 함께 지워진다(PRAGMA foreign_keys=ON 필수)."""
-    conn.execute("DELETE FROM reviews WHERE id = ?", (review_id,))
+def delete_review(conn: psycopg.Connection, *, review_id: int) -> None:
+    """review_reports 는 FK ON DELETE CASCADE 로 함께 지워진다(Postgres는 FK를 항상 강제)."""
+    conn.execute("DELETE FROM reviews WHERE id = %s", (review_id,))
 
 
 def insert_report_and_count(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     review_id: int,
     device_id: str,
@@ -206,24 +211,25 @@ def insert_report_and_count(
 ) -> int:
     """신고 1건 기록 후 그 리뷰의 **고유 신고자 수**를 반환.
 
-    같은 기기의 중복 신고는 `INSERT OR IGNORE` + UNIQUE(review_id, device_id) 로 무시된다 —
-    한 사람이 3번 눌러 남의 리뷰를 숨기는 것을 막는 최소 장치다.
+    같은 기기의 중복 신고는 `ON CONFLICT ... DO NOTHING` + UNIQUE(review_id, device_id) 로
+    무시된다 — 한 사람이 3번 눌러 남의 리뷰를 숨기는 것을 막는 최소 장치다.
     """
     conn.execute(
         """
-        INSERT OR IGNORE INTO review_reports (review_id, device_id, reason, created_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO review_reports (review_id, device_id, reason, created_at)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (review_id, device_id) DO NOTHING
         """,
         (review_id, device_id, reason, now_iso),
     )
     row = conn.execute(
-        "SELECT COUNT(*) AS c FROM review_reports WHERE review_id = ?", (review_id,)
+        "SELECT COUNT(*) AS c FROM review_reports WHERE review_id = %s", (review_id,)
     ).fetchone()
     return int(row["c"]) if row else 0
 
 
-def hide_review(conn: sqlite3.Connection, *, review_id: int) -> None:
-    conn.execute("UPDATE reviews SET hidden = 1 WHERE id = ?", (review_id,))
+def hide_review(conn: psycopg.Connection, *, review_id: int) -> None:
+    conn.execute("UPDATE reviews SET hidden = 1 WHERE id = %s", (review_id,))
 
 
 __all__ = (

@@ -12,18 +12,21 @@
 
 ## 요청마다 행을 남기지 않는다
 (날짜, ip_hash) 단위 UPSERT 누적이라 행 수가 **방문자 수**에 비례하고 요청 수와는 무관하다.
+
+2026-08-17: PostgreSQL 전환(db/postgres.py)으로 `?` → `%s`로 바뀌었다(`ON CONFLICT ...
+DO UPDATE SET ... = excluded.col`은 SQLite·Postgres 공통 문법이라 그대로 재사용).
 """
 
 from __future__ import annotations
 
-import sqlite3
+import psycopg
 
 # 보관 기간. 넘은 날짜는 기동 시 지운다 — 무기한 보관은 그 자체가 리스크다.
 RETENTION_DAYS = 90
 
 
 def record(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     day: str,
     hour: int,
@@ -35,39 +38,39 @@ def record(
     conn.execute(
         """
         INSERT INTO visit_daily (day, ip_hash, hits, first_seen, last_seen)
-        VALUES (?, ?, 1, ?, ?)
+        VALUES (%s, %s, 1, %s, %s)
         ON CONFLICT (day, ip_hash) DO UPDATE SET
-            hits = hits + 1,
+            hits = visit_daily.hits + 1,
             last_seen = excluded.last_seen
         """,
         (day, ip_hash, now_iso, now_iso),
     )
     conn.execute(
         """
-        INSERT INTO visit_path_daily (day, path, hits) VALUES (?, ?, 1)
-        ON CONFLICT (day, path) DO UPDATE SET hits = hits + 1
+        INSERT INTO visit_path_daily (day, path, hits) VALUES (%s, %s, 1)
+        ON CONFLICT (day, path) DO UPDATE SET hits = visit_path_daily.hits + 1
         """,
         (day, path),
     )
     conn.execute(
         """
-        INSERT INTO visit_hour_daily (day, hour, hits) VALUES (?, ?, 1)
-        ON CONFLICT (day, hour) DO UPDATE SET hits = hits + 1
+        INSERT INTO visit_hour_daily (day, hour, hits) VALUES (%s, %s, 1)
+        ON CONFLICT (day, hour) DO UPDATE SET hits = visit_hour_daily.hits + 1
         """,
         (day, hour),
     )
 
 
-def prune(conn: sqlite3.Connection, *, before_day: str) -> int:
+def prune(conn: psycopg.Connection, *, before_day: str) -> int:
     """보관 기간이 지난 집계를 지운다. 지운 행 수를 돌려준다."""
     total = 0
     for table in ("visit_daily", "visit_path_daily", "visit_hour_daily"):
-        cur = conn.execute(f"DELETE FROM {table} WHERE day < ?", (before_day,))
+        cur = conn.execute(f"DELETE FROM {table} WHERE day < %s", (before_day,))
         total += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
     return total
 
 
-def summary(conn: sqlite3.Connection, *, today: str, days: int) -> dict:
+def summary(conn: psycopg.Connection, *, today: str, days: int) -> dict:
     """관리자 화면용 집계.
 
     `visitors` 는 **고유 ip_hash 수**다. 같은 사람이 여러 번 와도 1로 센다.
@@ -78,7 +81,7 @@ def summary(conn: sqlite3.Connection, *, today: str, days: int) -> dict:
         """
         SELECT COUNT(*) AS visitors, COALESCE(SUM(hits), 0) AS hits,
                COALESCE(MAX(hits), 0) AS top_hits
-        FROM visit_daily WHERE day = ?
+        FROM visit_daily WHERE day = %s
         """,
         (today,),
     ).fetchone()
@@ -92,7 +95,7 @@ def summary(conn: sqlite3.Connection, *, today: str, days: int) -> dict:
             """
             SELECT day, COUNT(*) AS visitors, SUM(hits) AS hits
             FROM visit_daily
-            GROUP BY day ORDER BY day DESC LIMIT ?
+            GROUP BY day ORDER BY day DESC LIMIT %s
             """,
             (days,),
         ).fetchall()
@@ -101,13 +104,13 @@ def summary(conn: sqlite3.Connection, *, today: str, days: int) -> dict:
     top_paths = [
         {"path": r["path"], "hits": int(r["hits"])}
         for r in conn.execute(
-            "SELECT path, hits FROM visit_path_daily WHERE day = ? ORDER BY hits DESC LIMIT 10",
+            "SELECT path, hits FROM visit_path_daily WHERE day = %s ORDER BY hits DESC LIMIT 10",
             (today,),
         ).fetchall()
     ]
 
     hours = {int(r["hour"]): int(r["hits"]) for r in conn.execute(
-        "SELECT hour, hits FROM visit_hour_daily WHERE day = ?", (today,)
+        "SELECT hour, hits FROM visit_hour_daily WHERE day = %s", (today,)
     ).fetchall()}
 
     # 어뷰징 감지용 — 오늘 가장 많이 두드린 상위 5개 해시. 신원은 알 수 없고,
@@ -118,7 +121,7 @@ def summary(conn: sqlite3.Connection, *, today: str, days: int) -> dict:
         for r in conn.execute(
             """
             SELECT ip_hash, hits, first_seen, last_seen FROM visit_daily
-            WHERE day = ? ORDER BY hits DESC LIMIT 5
+            WHERE day = %s ORDER BY hits DESC LIMIT 5
             """,
             (today,),
         ).fetchall()

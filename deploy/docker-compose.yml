@@ -1,9 +1,11 @@
 # 숨은길 단일 호스트 배포 — Oracle Always Free ARM (VM.Standard.A1.Flex, 4 OCPU / 24GB)
 #
-# 서비스 4개를 VM 한 대에 올린다:
+# 서비스 5개를 VM 한 대에 올린다:
 #   nginx    : 유일하게 호스트 80 포트를 여는 엣지. 나머지는 내부 네트워크에서만 접근 가능.
 #   frontend : Next.js 14 (next start)
 #   backend  : FastAPI (uvicorn, 워커 1개 — 인메모리 캐시/레이트리밋 때문)
+#   postgres : 저장소(리뷰·공유코스·로그인 계정·온보딩 프로필·AI 코스). 2026-08-17 SQLite에서
+#              전환(대표 지시) — backend 만 접근하고 호스트 포트는 열지 않는다.
 #   ollama   : 로컬 LLM 추론(qwen2.5:7b). 모델 파일은 named volume 에 보존.
 #
 # 실행 위치: 이 파일이 있는 deploy/ 디렉터리에서 `docker compose up -d --build`
@@ -82,6 +84,30 @@ services:
     depends_on:
       ollama:
         condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - sumeungil
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sumeungil-postgres
+    restart: unless-stopped
+    # .env(POSTGRES_DB/USER/PASSWORD)에서 읽는다 — backend의 DATABASE_URL과 값이 일치해야 한다.
+    env_file:
+      - .env
+    # !!! 사용자 데이터 보존 !!! reviews/shared_courses/users/온보딩 프로필/AI 코스 전부
+    # 여기 있다. 이 볼륨이 없으면 배포할 때마다 전부 사라진다(sumeungil-data와 동급 취급).
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # backend 외 누구도 접근할 필요 없다(nginx/ollama와 동일한 "호스트 미노출" 원칙).
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sumeungil} -d ${POSTGRES_DB:-sumeungil}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - sumeungil
 
@@ -129,6 +155,9 @@ networks:
 
 volumes:
   ollama-models:
-  # 후기·공유 코스 SQLite (부록 R). ollama-models 와 달리 **다시 만들 수 없는 데이터**다 —
-  # `docker compose down -v` 는 이 볼륨까지 지운다. 백업 절차는 DEPLOY.md "백업" 항목 참고.
+  # 2026-08-17부터 실제 사용자 데이터는 postgres-data가 정본이다(sumeungil-data는 과거
+  # SQLite 파일의 잔재 — 이관 스크립트가 다 읽으면 삭제해도 되지만, 안전을 위해 당분간
+  # 볼륨 정의만 남겨둔다). ollama-models 와 달리 **다시 만들 수 없는 데이터**다 —
+  # `docker compose down -v` 는 이 볼륨들까지 지운다. 백업 절차는 DEPLOY.md "백업" 항목 참고.
   sumeungil-data:
+  postgres-data:

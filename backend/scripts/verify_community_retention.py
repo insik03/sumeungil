@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-import tempfile
 import threading
 import uuid
 from datetime import timedelta
@@ -23,10 +22,14 @@ from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# !!! import 전에 !!! 임시 DB + 검증용 작은 상한을 주입한다(설정은 import 시점에 고정된다).
-_TMP_DB = Path(tempfile.gettempdir()) / f"sumeungil_retention_{uuid.uuid4().hex[:8]}.db"
-os.environ["SQLITE_PATH"] = str(_TMP_DB)
+# !!! import 전에 !!! 임시 Postgres 스키마 + 검증용 작은 상한을 주입한다(설정은 import
+# 시점에 고정된다 — 2026-08-17 PostgreSQL 전환으로 tempfile SQLite 파일 방식에서 바뀌었다).
+from _pg_test_helpers import drop_schema, isolated_database_url  # noqa: E402
+
+_ISOLATED_DSN, _BASE_DSN, _SCHEMA = isolated_database_url()
+os.environ["DATABASE_URL"] = _ISOLATED_DSN
 os.environ["SHARE_MAX_PER_DEVICE"] = "3"
 os.environ["SHARE_MAX_TOTAL"] = "10"
 os.environ["SHARE_RETENTION_DAYS"] = "180"
@@ -82,7 +85,7 @@ def backdate(code: str, days: int) -> None:
     stamp = to_iso_kst(now_kst() - timedelta(days=days))
     db.write(
         lambda conn: conn.execute(
-            "UPDATE shared_courses SET created_at = ? WHERE share_code = ?", (stamp, code)
+            "UPDATE shared_courses SET created_at = %s WHERE share_code = %s", (stamp, code)
         )
     )
 
@@ -103,7 +106,7 @@ codes = [share(D, f"코스 {i}") for i in range(5)]
 check("5회 생성 모두 201(409 로 막지 않음)", len(codes) == 5)
 device_rows = db.read(
     lambda conn: conn.execute(
-        "SELECT share_code FROM shared_courses WHERE device_id = ? ORDER BY rowid",
+        "SELECT share_code FROM shared_courses WHERE device_id = %s ORDER BY seq",
         (D["X-Device-Id"],),
     ).fetchall()
 )
@@ -197,7 +200,7 @@ before = client.get("/api/v1/reviews", params=TARGET).json()["summary"]
 for h in (R1, R2, R3):
     client.post(f"/api/v1/reviews/{own_id}/report", json={"reason": "신고"}, headers=h)
 hidden_now = db.read(
-    lambda conn: conn.execute("SELECT hidden FROM reviews WHERE id = ?", (own_id,)).fetchone()["hidden"]
+    lambda conn: conn.execute("SELECT hidden FROM reviews WHERE id = %s", (own_id,)).fetchone()["hidden"]
 )
 check("신고 3건으로 자동 숨김 처리됨", int(hidden_now) == 1, str(hidden_now))
 
@@ -266,12 +269,8 @@ print("\n" + "=" * 64)
 print(f"PASS {len(PASS)} / FAIL {len(FAIL)}")
 for f in FAIL:
     print("  FAIL:", f)
-try:
-    db.close()
-    for suffix in ("", "-wal", "-shm"):
-        Path(str(_TMP_DB) + suffix).unlink(missing_ok=True)
-    print("임시 DB 삭제 완료")
-except OSError as exc:
-    print("임시 DB 삭제 실패(무해):", exc)
+db.close()
+drop_schema(_BASE_DSN, _SCHEMA)
+print("임시 스키마 삭제 완료")
 
 sys.exit(1 if FAIL else 0)

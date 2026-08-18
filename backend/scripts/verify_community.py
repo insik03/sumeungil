@@ -12,16 +12,19 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 import uuid
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# !!! import 전에 !!! 임시 DB 경로를 주입한다(개발용 backend/data/*.db 를 건드리지 않게).
-_TMP_DB = Path(tempfile.gettempdir()) / f"sumeungil_verify_{uuid.uuid4().hex[:8]}.db"
-os.environ["SQLITE_PATH"] = str(_TMP_DB)
+# !!! import 전에 !!! 임시 Postgres 스키마를 만들어 주입한다(개발용 실데이터를 건드리지
+# 않게 — 2026-08-17 PostgreSQL 전환으로 tempfile SQLite 파일 방식에서 바뀌었다).
+from _pg_test_helpers import drop_schema, isolated_database_url  # noqa: E402
+
+_ISOLATED_DSN, _BASE_DSN, _SCHEMA = isolated_database_url()
+os.environ["DATABASE_URL"] = _ISOLATED_DSN
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -222,12 +225,25 @@ for i, tid in enumerate(["7001", "7002", "7003"]):
                 headers=dev(f"bulk{i}"))
 
 db = get_database()
-sql_log: list[str] = []
-db._conn.set_trace_callback(sql_log.append)  # noqa: SLF001 — 검증 목적의 의도적 내부 접근
+# 2026-08-17 PostgreSQL 전환 — sqlite3.Connection.set_trace_callback(SQLite 전용)을
+# 대체한다. review_repo.bulk_rating_histogram 은 그 자체가 "IN절 단일 쿼리 1회"만 실행
+#하도록 고정돼 있으므로(코드 확인됨), 이 함수의 호출 횟수 = 실제 SQL 실행 횟수와 동치다.
+import app.repositories.review_repo as _review_repo_module  # noqa: E402
+
+_bulk_calls: list[int] = []
+_original_bulk = _review_repo_module.bulk_rating_histogram
+
+
+def _counting_bulk(*a, **kw):
+    _bulk_calls.append(1)
+    return _original_bulk(*a, **kw)
+
+
+_review_repo_module.bulk_rating_histogram = _counting_bulk
 r = client.get("/api/v1/reviews/summary",
                params={"target_type": "spot", "ids": "7001,7002,7003,9999,7001"})
-selects = [s for s in sql_log if s.strip().upper().startswith("SELECT")]
-db._conn.set_trace_callback(None)  # noqa: SLF001
+_review_repo_module.bulk_rating_histogram = _original_bulk
+selects = _bulk_calls
 
 data = r.json()["summaries"]
 check("일괄 요약 200", r.status_code == 200, str(r.status_code))
@@ -350,13 +366,9 @@ print(f"PASS {len(PASS)} / FAIL {len(FAIL)}")
 if FAIL:
     for f in FAIL:
         print("  FAIL:", f)
-print(f"임시 DB: {_TMP_DB}")
-try:
-    get_database().close()
-    for suffix in ("", "-wal", "-shm"):
-        Path(str(_TMP_DB) + suffix).unlink(missing_ok=True)
-    print("임시 DB 삭제 완료")
-except OSError as exc:
-    print("임시 DB 삭제 실패(무해):", exc)
+print(f"임시 스키마: {_SCHEMA}")
+get_database().close()
+drop_schema(_BASE_DSN, _SCHEMA)
+print("임시 스키마 삭제 완료")
 
 sys.exit(1 if FAIL else 0)
