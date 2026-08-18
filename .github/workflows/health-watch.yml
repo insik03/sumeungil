@@ -68,6 +68,12 @@ jobs:
             detail="HTTP $code 응답 — 서버는 살아 있으나 헬스체크가 정상 응답하지 않음"
           fi
 
+          # **stdout 에도 반드시 남긴다.** 요약($GITHUB_STEP_SUMMARY)은 파일이라
+          # `gh run view --log` 에 안 나온다. 사후에 "그때 뭐가 fail 이었나"를 CLI 로
+          # 확인하려면 stdout 에 있어야 한다(2026-08-18 실제로 이것 때문에 헤맴).
+          echo "판정: 상태=$state / $detail"
+          echo "원본 응답: $(cat /tmp/health.json 2>/dev/null | head -c 400)"
+
           echo "상태=$state / $detail" >> "$GITHUB_STEP_SUMMARY"
           echo "state=$state" >> "$GITHUB_OUTPUT"
           {
