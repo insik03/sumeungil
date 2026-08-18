@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { RegionSearchItem } from "../lib/api";
 import { clearLastRegion, loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
+import { loadOnboardingResult } from "../lib/onboardingStorage";
 import Hero from "./Hero";
+import HeroGreeting from "./HeroGreeting";
 import ServiceQuickMenu from "./ServiceQuickMenu";
 import ConciergeSection from "./ConciergeSection";
 import FeaturedSpots from "./FeaturedSpots";
@@ -92,6 +95,17 @@ export default function HomeContent() {
     const last = loadLastRegion();
     if (last) setSelectedRegionState(last);
   }, []);
+
+  // 2026-08-17(대표 지시) — 온보딩 결과 확인("이 취향으로 계속하기")은 이제 /recommend로
+  // 바로 넘기지 않고 홈으로 보낸다(OnboardingContent.tsx handleConfirmResult 참고). 대신
+  // 방금 만든 결과가 sessionStorage에 있으면 여기서 배너로 안내한다 — RecommendContent
+  // 등이 이미 쓰는 .recommend-cta-banner를 그대로 재사용(새 컴포넌트를 만들지 않음, §38
+  // "홈에 새 섹션 추가 전 전용 페이지부터 검토"와 별개로 이건 조건부 배너라 상시 섹션이
+  // 아니다). 같은 이유로 서버/첫 클라이언트 렌더는 항상 false — mount 후에만 반영.
+  const [hasFreshOnboardingResult, setHasFreshOnboardingResult] = useState(false);
+  useEffect(() => {
+    setHasFreshOnboardingResult(loadOnboardingResult() !== null);
+  }, []);
   const handleSelectRegion = (region: RegionSearchItem | null) => {
     setSelectedRegionState(region);
     // 검색창 지우기(대표: destInput의 × 버튼)로 명시적으로 지역을 비운 것도 하나의 선택이다
@@ -104,6 +118,19 @@ export default function HomeContent() {
 
   return (
     <>
+      {/* 2026-08-18(대표 지시) — 배너·인사말을 페이지 맨 위, Hero(검색바 "어디로 떠나시나요")
+          보다도 위로. 한 번 카테고리 창(ServiceQuickMenu) 밑으로 옮겼다가 "맨 위로, 검색바
+          위로" 재지시받아 되돌렸다. hero-greeting은 HeroGreeting.tsx로 분리했다(Hero.tsx
+          주석 참고) — 여기서 Hero보다 먼저 렌더하면 그게 곧 "검색바 위"가 된다. */}
+      {hasFreshOnboardingResult && (
+        <div className="recommend-cta-banner">
+          <p className="recommend-cta-banner__text">방금 알려주신 취향으로 맞춤 추천을 만들어뒀어요.</p>
+          <Link className="btn btn--mint" href="/recommend">
+            방금 만든 추천 보러가기
+          </Link>
+        </div>
+      )}
+      <HeroGreeting />
       <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} />
       <ServiceQuickMenu regionCode={regionCode} />
       <ConciergeSection regionCode={regionCode} />

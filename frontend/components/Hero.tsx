@@ -9,33 +9,18 @@ import {
   fetchFeatured,
   fetchRegionSearch,
 } from "../lib/api";
-import { AUTH_CHANGED_EVENT, getNickname } from "../lib/authStorage";
-import { loadOnboardingResult } from "../lib/onboardingStorage";
 import { PROVINCE_REGIONS, SIDO_REGIONS, SidoRegion } from "./regions/constants";
 import ChipScrollRow from "./ChipScrollRow";
 
 /**
- * 동행(companion) 태그 → 히어로 카피 분기 (대표 지시, 2026-07-29).
- * "아이와 함께 걷기 좋은"이 하드코딩돼 있었는데 커플·혼자일 수도 있다는 지적 —
- * 온보딩에서 실제로 고른 동행 태그가 있을 때만 그 문구를 쓰고, 없으면 중립 문구.
- * (회원가입에서 새 개인정보를 받지 않는다 — 이미 있는 온보딩 취향만 사용, 법률 보류 방침 부합.)
- * 우선순위: 아이>반려동물>연인>부모님>친구>혼자>가족 — 더 구체적인 동행을 먼저 반영.
- *
  * §43(2026-08-01, 03-design-spec.md, 대표 지시 4건 — 레이아웃 재설계) — 마케팅 헤드라인/서브카피
  * ("혼잡한 관광 대신…")를 통째로 없애면서 routeOwner(코스 소유격 문구, 옛 h1 전용)는 더 이상
- * 쓰이지 않아 제거했다. walkWith(동행 문구)만 남겨 로그인 사용자용 한 줄 인사에 재사용한다
- * (아래 hero-greeting, 스킬 근거는 컴포넌트 하단 §43 주석 참고).
+ * 쓰이지 않아 제거했다.
+ *
+ * 2026-08-18(대표 지시) — 로그인 사용자용 한 줄 인사("OO님, 둘이서 걷기 좋은…")는 이 파일에
+ * 있었지만 HeroGreeting.tsx로 옮겼다("카테고리 창 밑, 추천 배너 밑"으로 위치를 옮겨달라는
+ * 요청 — HomeContent.tsx가 원하는 자리에 독립 렌더).
  */
-const COMPANION_COPY: { value: string; walkWith: string }[] = [
-  { value: "with_child", walkWith: "아이와 함께 걷기 좋은" },
-  { value: "with_pet", walkWith: "반려견과 함께 걷기 좋은" },
-  { value: "couple", walkWith: "둘이서 걷기 좋은" },
-  { value: "with_parents", walkWith: "부모님과 함께 걷기 좋은" },
-  { value: "friends", walkWith: "친구와 함께 걷기 좋은" },
-  { value: "solo", walkWith: "혼자 사색하며 걷기 좋은" },
-  { value: "family", walkWith: "가족과 함께 걷기 좋은" },
-];
-const NEUTRAL_WALK_WITH = "천천히 걷기 좋은";
 
 /**
  * §30(03-design-spec.md, 2026-07-29) — "빠른 추천 여행지" 칩을 4개(경주·전주·강릉·부산)에서 17개
@@ -122,27 +107,6 @@ interface HeroProps {
  */
 export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
   const [value, setValue] = useState("");
-
-  // ---- 개인화 카피(대표 지시) ----
-  // SSR/첫 클라이언트 렌더는 중립값으로 맞춰 하이드레이션 경고를 막고, mount 후 실제값 반영
-  // (RegionPicker·SaveToggle과 동일 패턴). 닉네임=데모 로그인, 동행=온보딩 태그.
-  const [nickname, setNickname] = useState<string | null>(null);
-  const [companionValues, setCompanionValues] = useState<string[]>([]);
-  useEffect(() => {
-    const syncAuth = () => setNickname(getNickname());
-    syncAuth();
-    window.addEventListener(AUTH_CHANGED_EVENT, syncAuth);
-    window.addEventListener("storage", syncAuth);
-    const stored = loadOnboardingResult()?.result;
-    setCompanionValues(stored?.tags?.companion?.map((t) => t.value) ?? []);
-    return () => {
-      window.removeEventListener(AUTH_CHANGED_EVENT, syncAuth);
-      window.removeEventListener("storage", syncAuth);
-    };
-  }, []);
-  const companionCopy =
-    COMPANION_COPY.find((c) => companionValues.includes(c.value)) ?? null;
-  const walkWith = companionCopy?.walkWith ?? NEUTRAL_WALK_WITH;
 
   // ---- 캐러셀 슬라이드 ----
   const [slides, setSlides] = useState<FeaturedSpot[]>([]);
@@ -344,18 +308,13 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
           원문 2 그대로 반영). 확보된 세로 공간은 전부 아래 히어로 캐러셀(사진) 확대에 쓴다.
           단, 페이지에는 h1이 정확히 하나 있어야 한다는 접근성 규칙(이 코드베이스의 다른 모든
           화면이 지키는 관례 — FestivalsContent/RegionsContent 등 h1=section__title 패턴)을
-          깨지 않기 위해 시각적으로는 숨기되(sr-only) 의미상 h1은 유지한다. 로그인 사용자에게는
-          그 자리에 마케팅 문장 대신 사실 기반 한 줄 인사만 남긴다(아래 hero-greeting) —
-          design-taste-frontend 스킬 §4.7 "히어로 텍스트 요소는 최소한으로, 하나의 작은 텍스트
-          요소만" 원칙과 redesign-skill "Missing whitespace — 밀도를 낮추고 여백을 늘려라" 원칙을
-          함께 적용한 선택. 비로그인 사용자는 이 자리에 아무 텍스트도 없다(추측 카피로 채우지
-          않는다 — 이 코드베이스의 기존 "정직" 원칙과 동일선상). */}
+          깨지 않기 위해 시각적으로는 숨기되(sr-only) 의미상 h1은 유지한다. 로그인 사용자용
+          한 줄 인사(hero-greeting)는 2026-08-18부터 HeroGreeting.tsx로 옮겨 HomeContent.tsx가
+          더 아래(카테고리 창 밑)에 따로 배치한다 — design-taste-frontend 스킬 §4.7 "히어로
+          텍스트 요소는 최소한으로" 원칙과 redesign-skill "Missing whitespace" 원칙은 이 h1
+          자리에 여전히 적용된다. 비로그인 사용자는 이 자리에 아무 텍스트도 없다(추측 카피로
+          채우지 않는다 — 이 코드베이스의 기존 "정직" 원칙과 동일선상). */}
       <h1 className="sr-only">숨은길 — 혼잡한 명소 대신 숨은 코스를 추천하는 AI 여행 서비스</h1>
-      {nickname && (
-        <p className="hero-greeting">
-          {nickname}님, {walkWith} 오늘의 코스를 아래에서 찾아보세요
-        </p>
-      )}
 
       {/* §24 — 부킹형 큰 검색 카드(라벨+박스+칩+CTA 버튼, shadow-lg, 히어로 위 겹침)를 없애고
           인라인 컴팩트 바로 축소했다. CTA 버튼은 아래 서비스 퀵메뉴의 "AI 코스" 타일과 의도가
