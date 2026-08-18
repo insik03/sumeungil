@@ -1,6 +1,6 @@
 """한국관광공사 국문 관광정보 서비스(KorService2) 클라이언트 — 지역기반 스팟 목록.
 
-원천: GET http://apis.data.go.kr/B551011/KorService2/areaBasedList2
+원천: GET https://apis.data.go.kr/B551011/KorService2/areaBasedList2
   - TourAPI 자체 areaCode/sigunguCode 사용(법정동 코드 아님 — region_map.py 참고).
   - contentTypeId: 12(관광지) 14(문화시설) 28(레포츠) 38(쇼핑) 39(음식점) ...
 
@@ -19,10 +19,11 @@ import logging
 import httpx
 
 from ..config import settings
+from ..util.redact import redact_secrets
 
 logger = logging.getLogger("sumeungil.tourapi")
 
-BASE_URL = "http://apis.data.go.kr/B551011/KorService2/areaBasedList2"
+BASE_URL = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2"
 
 
 class TourApiError(Exception):
@@ -45,11 +46,12 @@ _QUOTA_SIGNS = (
 
 
 def _redact(text: str) -> str:
-    """로그에 남길 응답 본문에서 혹시라도 섞인 serviceKey 를 제거한다."""
-    key = settings.public_data_api_key
-    if key and key in text:
-        text = text.replace(key, "***")
-    return text
+    """로그에 남길 응답 본문에서 혹시라도 섞인 serviceKey 를 제거한다.
+
+    구현은 `util.redact.redact_secrets` 로 옮겼다(2026-08-18 보안 감사 A-2) — detail/festival/
+    kma 클라이언트도 같은 함수를 써야 해서 한 곳으로 모았다. 이 이름은 호출부 호환용 얇은 별칭.
+    """
+    return redact_secrets(text)
 
 
 async def fetch_area_based_page(

@@ -1,6 +1,6 @@
 """한국관광공사 국문 관광정보 서비스(KorService2) 축제/공연/행사 클라이언트 — searchFestival2.
 
-원천: GET http://apis.data.go.kr/B551011/KorService2/searchFestival2
+원천: GET https://apis.data.go.kr/B551011/KorService2/searchFestival2
   - areaCode(+선택 sigunguCode) 지역의 축제 목록을 조회한다(콘텐츠타입 15=행사/공연/축제).
   - eventStartDate(YYYYMMDD) 파라미터는 "그 날짜 이후로도 진행/예정인" 축제를 준다.
     실호출로 확정(2026-07-25, backend-engineer): 필터는 **eventEndDate >= eventStartDate 파라미터**다.
@@ -36,10 +36,11 @@ import logging
 import httpx
 
 from ..config import settings
+from ..util.redact import redact_secrets
 
 logger = logging.getLogger("sumeungil.tourapi.festival")
 
-BASE_URL = "http://apis.data.go.kr/B551011/KorService2/searchFestival2"
+BASE_URL = "https://apis.data.go.kr/B551011/KorService2/searchFestival2"
 
 
 class TourApiFestivalError(Exception):
@@ -87,7 +88,7 @@ async def fetch_festivals(
     try:
         data = resp.json()
     except ValueError as exc:
-        logger.warning("searchFestival2 응답 JSON 파싱 실패: %s", resp.text[:200])
+        logger.warning("searchFestival2 응답 JSON 파싱 실패: %s", redact_secrets(resp.text)[:200])
         raise TourApiFestivalError("upstream returned non-JSON body") from exc
 
     return _parse_items(data)
@@ -135,7 +136,7 @@ async def fetch_all_festivals(
             try:
                 data = resp.json()
             except ValueError as exc:
-                logger.warning("searchFestival2 JSON 파싱 실패: %s", resp.text[:200])
+                logger.warning("searchFestival2 JSON 파싱 실패: %s", redact_secrets(resp.text)[:200])
                 raise TourApiFestivalError("upstream returned non-JSON body") from exc
 
             items = _parse_items(data)

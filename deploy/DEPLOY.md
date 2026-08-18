@@ -176,6 +176,7 @@ nano deploy/.env
 | `APP_ENV` | `production` |
 | `RATE_LIMIT_ENABLED` | **`true`** (공개 배포에서는 필수. 로컬 기본값은 false) |
 | `ADMIN_PASSWORD_HASH` | 선택. 관리자 콘솔을 쓸 때만. **평문이 아니라 scrypt 해시** — 아래 (h) 참고. 비우면 `/api/v1/admin/*` 자체가 없다(404) |
+| `ADMIN_SESSION_SECRET` | **필수, 새로 생성**: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`. 비우면 ① 관리자 세션 서명키가 `ADMIN_PASSWORD_HASH` 에서 파생되고(해시 유출 = 세션 위조) ② 방문 통계 IP 가명화 키가 없어 **방문 집계가 꺼진다**(fail-closed). 아래 (h-1) ②-b 참고 |
 | `ADMIN_COOKIE_SECURE` | **설정하지 않는다**(기본 true). HTTPS 운영이므로 false 금지 — (h-2) 이력 참고 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인. **로컬 개발용과 별도의 OAuth 클라이언트**로 발급받는다 — 아래 (h-3) 참고. 셋 중 하나라도 비면 `/api/v1/auth/google/*` 만 없다(404, 카카오와 독립) |
 | `GOOGLE_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/google/callback` — 구글 클라이언트의 "승인된 리디렉션 URI"와 문자 그대로 일치해야 한다 |
@@ -309,12 +310,41 @@ ADMIN_PASSWORD_HASH=scrypt$16384$8$1$....$....
 # 세션 쿠키가 평문으로 흐른다 — 예전의 "HTTP 운영 중 false" 안내는 폐기됨(M-3, 2026-08-10).
 ```
 
+**②-b `ADMIN_SESSION_SECRET` 생성 — 빠뜨리기 쉬운 필수 키 (2026-08-18 보안감사)**
+
+해시만 넣어도 로그인은 **된다.** 그래서 이 단계를 건너뛰기 쉬운데, 비워두면 두 가지가
+조용히 나빠진다:
+
+1. 관리자 세션 서명키가 `ADMIN_PASSWORD_HASH` 에서 파생된다 → 해시 한 줄이 새면
+   비밀번호를 몰라도 **세션 토큰을 위조**할 수 있다(키 하나가 두 역할을 겸함).
+2. 방문 통계의 IP 가명화 키가 없는 것으로 판정돼 **방문 집계가 통째로 꺼진다**
+   (fail-closed). 예전에는 저장소에 적힌 고정 문자열을 폴백 키로 썼는데, 그러면
+   가명화가 성립하지 않아(누구나 같은 키로 대입 가능) 그 폴백을 제거했다.
+
+```bash
+# 대표 PC 또는 VM 어디서든 1회 생성 (값은 채팅·문서에 남기지 않는다)
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+```dotenv
+ADMIN_SESSION_SECRET=<위 명령 출력 그대로>
+```
+
+> 이 값을 **나중에 바꾸면 로그인된 관리자 세션이 전부 끊긴다**(재로그인하면 끝).
+> 방문 통계는 키가 바뀐 시점 이후의 ip_hash 가 달라져 그날 하루 고유 방문자 수가
+> 부풀어 보일 수 있다 — 값 교체는 트래픽이 적은 시간에 한다.
+
 **③ 반영**
 
 ```bash
 docker compose up -d backend
 docker compose logs --tail=20 backend | grep -i 관리자
 #  "관리자 콘솔 활성화 — /api/v1/admin/* (세션 4시간, 쿠키 secure=True)" 가 보이면 성공
+
+# ADMIN_SESSION_SECRET 미설정 경고가 0회여야 한다(출력이 비어 있으면 정상).
+docker compose logs backend | grep ADMIN_SESSION_SECRET
+#  "방문 집계 비활성화 — IP 가명화 키가 없습니다. ADMIN_SESSION_SECRET(권장) ..." 이
+#  한 줄이라도 보이면 ②-b 를 빠뜨린 것이다. .env 를 고치고 `docker compose up -d backend`.
 ```
 
 브라우저에서 `https://sumeungil.co.kr/ops-37878f1b71` 접속 → 비밀번호 입력.
@@ -740,7 +770,8 @@ docker compose run --rm --entrypoint certbot certbot renew --dry-run   # 갱신 
 |---|---|
 | 경로 | `https://sumeungil.co.kr/ops-37878f1b71` (서브도메인 아님 — CT 로그 노출 회피. 2026-08-18부터 `/admin`이 아닌 무작위 경로 — 대표 지시) |
 | 인증 | `.env` 의 `ADMIN_PASSWORD_HASH` 하나 (scrypt). 관리자 3명이 공유 |
-| 표시 이름 | `.env` 의 `ADMIN_OPERATORS=지훈,인식,태준` (부록 V) |
+| 표시 이름 | `.env` 의 `ADMIN_OPERATORS=지훈,인식,태준` (부록 V). **2026-08-18부터 로그인 화면이 이 목록을 드롭다운으로 보여주지 않는다** — 운영자가 자기 이름을 직접 입력한다(인증 없이 열리는 API 가 운영진 명단을 광고하지 않도록. 외부 보안감사 3차). 틀린 이름은 비밀번호 오류와 같은 401 |
+| 세션 서명 | `.env` 의 `ADMIN_SESSION_SECRET` (미설정 시 비밀번호 해시에서 파생 — (h-1) ②-b 참고, **반드시 채울 것**) |
 | 세션 | 8시간, HttpOnly + Secure + SameSite=Lax |
 | 로그인 제한 | IP 기준 분당 5회 → 초과 시 429 |
 

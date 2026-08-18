@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../lib/api";
-import { adminLogin, fetchAdminOperators } from "../../lib/adminApi";
+import { adminLogin, fetchAdminOperatorPolicy } from "../../lib/adminApi";
 
 /**
  * 관리자 로그인 (03-admin-console-design.md §5.1, 계약 부록 T·V)
@@ -11,10 +11,17 @@ import { adminLogin, fetchAdminOperators } from "../../lib/adminApi";
  * 비밀번호가 틀렸는지 이름이 목록에 없는지 **화면도 구분하지 않는다**. 백엔드가 둘 다 동일한
  * 401 로 수렴시키는 이유와 같다 — 어느 쪽이 맞았는지 알려주면 추측을 도와주는 셈이다.
  *
- * ## 이름 선택은 보안 장치가 아니다
- * 비밀번호를 아는 세 사람은 서로의 이름을 고를 수 있다(자기 신고 방식). 감사 로그에 "누가"를
+ * ## 이름 입력은 보안 장치가 아니다
+ * 비밀번호를 아는 세 사람은 서로의 이름을 적을 수 있다(자기 신고 방식). 감사 로그에 "누가"를
  * 남기기 위한 장치이지 신원 인증이 아니다. 그래서 화면에도 "본인 확인"·"인증" 같은 과신 유발
  * 단어를 쓰지 않고, 한계를 상시 노출한다.
+ *
+ * ## 운영자 이름을 화면에 나열하지 않는다 (2026-08-18, 외부 보안감사 3차)
+ * 예전에는 인증 없이 열리는 `/admin/operators` 가 실제 이름 목록을 내려줬고 이 화면이 그걸로
+ * 드롭다운을 그렸다. 관리자 URL 을 찾아낸 사람에게 **운영진이 누구인지** 공짜로 알려주는
+ * 셈이라(사칭 메일·사회공학의 출발점), 이제 서버는 `required` 불리언만 주고 이름은 **직접
+ * 입력**한다. 이름이 목록과 다르면 비밀번호 오류와 구분되지 않는 401 이다(위 원칙 그대로).
+ * 브라우저 자동완성으로도 남지 않게 `autoComplete="off"` 를 준다.
  */
 export default function AdminLogin({
   onSuccess,
@@ -24,7 +31,8 @@ export default function AdminLogin({
   /** 세션 만료로 되돌아온 직후 1회 표시하는 중립 톤 안내(에러가 아니다). */
   expiredNotice?: boolean;
 }) {
-  const [operators, setOperators] = useState<string[] | null>(null);
+  /** null = 아직 확인 전. true = 이름 입력칸을 그려야 한다(ADMIN_OPERATORS 설정됨). */
+  const [operatorRequired, setOperatorRequired] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   /** 관리자 기능 자체가 꺼져 있음(라우터 미등록 → 404). 폼을 아예 그리지 않는다. */
   const [disabled, setDisabled] = useState(false);
@@ -38,8 +46,8 @@ export default function AdminLogin({
 
   useEffect(() => {
     let alive = true;
-    fetchAdminOperators()
-      .then((list) => alive && setOperators(list))
+    fetchAdminOperatorPolicy()
+      .then((policy) => alive && setOperatorRequired(policy.required))
       .catch((e: unknown) => {
         if (!alive) return;
         // 404 = ADMIN_PASSWORD_HASH 미설정으로 라우터가 없는 상태. "기능이 있는데 막혔다"는
@@ -60,10 +68,14 @@ export default function AdminLogin({
     return () => clearTimeout(t);
   }, [retryAfter]);
 
-  const needsOperator = operators !== null && operators.length > 0;
-  const ready = operators !== null;
+  const needsOperator = operatorRequired === true;
+  const ready = operatorRequired !== null;
   const canSubmit =
-    ready && !submitting && retryAfter <= 0 && password.length > 0 && (!needsOperator || !!operator);
+    ready &&
+    !submitting &&
+    retryAfter <= 0 &&
+    password.length > 0 &&
+    (!needsOperator || operator.trim().length > 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,8 +83,9 @@ export default function AdminLogin({
     setSubmitting(true);
     setError(null);
     try {
-      const session = await adminLogin(password, operator);
-      onSuccess(operator, session.expires_at);
+      const name = operator.trim();
+      const session = await adminLogin(password, name);
+      onSuccess(name, session.expires_at);
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         const sec = Number(err.detail?.retry_after_sec ?? 60);
@@ -112,7 +125,7 @@ export default function AdminLogin({
 
         {loadFailed ? (
           <>
-            <p className="admin-auth__msg">운영자 목록을 불러오지 못했습니다.</p>
+            <p className="admin-auth__msg">관리자 설정을 불러오지 못했습니다.</p>
             <button
               type="button"
               className="admin-btn admin-btn--primary"
@@ -126,20 +139,18 @@ export default function AdminLogin({
             {needsOperator && (
               <label className="admin-field">
                 <span className="admin-field__label">이름</span>
-                <select
+                {/* 목록을 그리지 않는다(위 주석) — 본인이 직접 적는다. autoComplete/자동
+                    포커스를 두지 않아 남의 브라우저에 이름이 남거나 되살아나지 않게 한다. */}
+                <input
                   className="admin-field__input"
+                  type="text"
                   value={operator}
                   onChange={(e) => setOperator(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={32}
                   disabled={submitting}
-                >
-                  {/* 자동 선택하지 않는다 — 남의 이름으로 무심코 로그인하는 것을 막는다. */}
-                  <option value="">선택해주세요</option>
-                  {operators!.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             )}
 
@@ -161,7 +172,7 @@ export default function AdminLogin({
             </button>
 
             <p className="admin-auth__hint">
-              이름 선택은 감사 기록용 표시일 뿐, 비밀번호 없이는 아무 것도 할 수 없어요.
+              이름은 감사 기록용 표시일 뿐, 비밀번호 없이는 아무 것도 할 수 없어요.
             </p>
 
             {retryAfter > 0 && (

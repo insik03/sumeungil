@@ -208,13 +208,20 @@ async function adminFetch<T>(
  * 로그인 화면 드롭다운용 표시 이름 목록. **인증 없이** 호출된다(로그인 전에 필요하므로).
  * 관리자 기능이 꺼져 있으면 라우터가 등록되지 않아 404 가 온다.
  */
-export async function fetchAdminOperators(): Promise<string[]> {
-  const data = await adminFetch<{ operators: string[] }>(
+/**
+ * 로그인 화면이 "이름 입력칸을 그려야 하는가"만 확인한다.
+ *
+ * 2026-08-18(외부 보안감사 3차) — 예전에는 운영자 이름 배열을 받아 드롭다운을 그렸다.
+ * 그 응답은 인증이 없어서 관리자 URL 을 찾은 사람에게 운영진 명단을 그대로 보여줬다.
+ * 이제 서버가 `required` 불리언만 준다(`operators` 는 항상 빈 배열).
+ */
+export async function fetchAdminOperatorPolicy(): Promise<{ required: boolean }> {
+  const data = await adminFetch<{ operators?: string[]; required?: boolean }>(
     "/operators",
     { method: "GET" },
-    "관리자 목록을 불러오지 못했습니다.",
+    "관리자 설정을 불러오지 못했습니다.",
   );
-  return data.operators ?? [];
+  return { required: !!data.required };
 }
 
 /**

@@ -75,8 +75,14 @@ class OnboardingAnalyzeRequest(BaseModel):
     스크립트가 쓰는 `free_text` 별칭도 동일하게 수용한다(둘 중 무엇이 와도 동작).
     """
 
+    # max_length 는 `/concierge/ask` 의 question 과 같은 방식(스키마 레벨 422)이다.
+    # 2026-08-18 보안 감사 A-5: AI 레이어가 300자로 "절단"하긴 하지만, 그 전에 수 MB 짜리
+    # 문자열이 injection_guard 정규식 스캔과 pydantic 파싱을 통과해야 한다 — 인증이 있는
+    # 경로라도 계정 하나로 CPU 를 태울 수 있다. 상한을 300 이 아니라 2000 으로 둔 이유는
+    # 기존 동작(길게 써도 접수는 되고 뒤에서 잘린다)을 깨지 않기 위해서다.
     text: str = Field(
         default="",
+        max_length=2000,
         validation_alias=AliasChoices("text", "free_text"),
         description="자유 텍스트 취향 입력(선택, 빈 문자열 허용, 최대 300자는 AI 레이어가 절단)",
     )

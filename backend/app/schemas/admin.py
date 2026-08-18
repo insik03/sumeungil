@@ -38,15 +38,21 @@ class AdminLoginRequest(BaseModel):
 
 
 class AdminOperatorsResponse(BaseModel):
-    """로그인 화면 드롭다운용 표시 이름 목록.
+    """로그인 화면이 "이름 입력칸을 그려야 하는가"만 알려준다.
 
-    인증 없이 조회된다 — /admin 로그인 화면이 이름을 그려야 하기 때문이다. 노출되는
-    것은 성 없는 표시 이름뿐이고, 이 값을 안다고 로그인에 가까워지지 않는다(비밀번호가
-    유일한 관문). 그래도 노출이 싫으면 .env 의 ADMIN_OPERATORS 를 라벨(A/B/C)로 바꾸면 된다.
-    관리자 기능 자체가 꺼져 있으면(ADMIN_PASSWORD_HASH 미설정) 라우터가 등록되지 않아 404 다.
+    **2026-08-18 변경(외부 보안감사 3차)** — 예전에는 `operators` 에 실제 운영자 표시 이름을
+    담아 인증 없이 내려줬고, 로그인 화면이 그 값으로 드롭다운을 그렸다. 로그인에 가까워지는
+    정보는 아니지만, 관리자 URL 을 찾아낸 사람에게 **운영진이 몇 명이고 누구인지**를 공짜로
+    알려주는 것은 소규모 팀에서 사회공학의 출발점이 된다(이름을 알면 사칭 메일을 쓸 수 있다).
+
+    이제 이름은 내려보내지 않고 `required` 불리언만 준다. 운영자는 자기 이름을 **직접 입력**
+    한다(값 검증은 서버가 ADMIN_OPERATORS 와 대조 — 그 로직은 그대로다).
+    `operators` 필드는 응답 형태 호환을 위해 남기되 **항상 빈 배열**이다.
     """
 
     operators: list[str] = Field(default_factory=list)
+    # 이름 입력이 필요한가(= ADMIN_OPERATORS 가 설정돼 있는가).
+    required: bool = False
 
 class AdminSessionResponse(BaseModel):
     authenticated: bool = True

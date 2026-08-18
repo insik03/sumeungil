@@ -112,7 +112,17 @@ services:
       - sumeungil
 
   ollama:
-    image: ollama/ollama:latest
+    # 2026-08-18(외부 보안감사 2차) — `latest` 는 재배포마다 무엇이 올라올지 모르는 태그다.
+    # 같은 명령이 어제와 오늘 다른 바이너리를 띄우면 장애 원인을 되짚을 수 없고, 공급망
+    # 사고가 나도 "언제부터"를 특정할 수 없다. 고정 태그로 바꾼다.
+    #
+    # 2026-08-18 확인: 이 태그의 다이제스트는 그 시점 `latest` 와 **동일**하다
+    #   sha256:9d30908e41144b1f1da89b9d8e33c07e4aeb43ff41a8660241b1686e2cc330ad (amd64+arm64)
+    # 즉 지금 배포 동작은 바뀌지 않는다. 다만 운영 서버가 예전 `latest` 를 물고 있었다면
+    # 다음 배포에서 ollama 가 그만큼 올라간다 — 배포 후 `docker compose logs ollama` 로
+    # 모델 로드가 정상인지 한 번 확인할 것.
+    # 올릴 때는 https://hub.docker.com/r/ollama/ollama/tags 에서 태그를 확인하고 여기만 고친다.
+    image: ollama/ollama:0.32.14
     container_name: sumeungil-ollama
     restart: unless-stopped
     # 모델 가중치(qwen2.5:7b ≈ 4.7GB)를 컨테이너 밖에 보존한다.
@@ -140,7 +150,11 @@ services:
   # 12시간마다 renew 를 돌린다 — 만료 30일 전이 아니면 certbot 이 아무것도 안 한다.
   # 최초 발급만 `docker compose run --rm certbot certonly ...` 로 한 번 수동 실행한다.
   certbot:
-    image: certbot/certbot:latest
+    # 2026-08-18(외부 보안감사 2차) — ollama 와 같은 이유로 고정. 이 컨테이너는 인증서
+    # 개인키가 있는 볼륨을 마운트하므로 "어떤 이미지가 도는지 모름" 상태를 더더욱 두면 안 된다.
+    # 2026-08-18 확인: 다이제스트가 그 시점 `latest` 와 동일하다
+    #   sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4 (amd64+arm+arm64)
+    image: certbot/certbot:v5.7.0
     container_name: sumeungil-certbot
     restart: unless-stopped
     volumes:

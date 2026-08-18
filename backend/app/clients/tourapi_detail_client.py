@@ -1,6 +1,6 @@
 """한국관광공사 국문 관광정보 서비스(KorService2) 공통정보 클라이언트 — 소개글(overview)+대표이미지.
 
-원천: GET http://apis.data.go.kr/B551011/KorService2/detailCommon2
+원천: GET https://apis.data.go.kr/B551011/KorService2/detailCommon2
   - contentId 로 스팟 1건의 공통정보(제목·주소·overview·대표이미지 등)를 조회.
   - 소개글은 응답 item 의 `overview` 필드에 담긴다.
   - 대표이미지는 응답 item 의 `firstimage` 필드(URL)에 담긴다. 별도 이미지 API 아님(같은 키·같은 호출).
@@ -27,10 +27,11 @@ import logging
 import httpx
 
 from ..config import settings
+from ..util.redact import redact_secrets
 
 logger = logging.getLogger("sumeungil.tourapi.detail")
 
-BASE_URL = "http://apis.data.go.kr/B551011/KorService2/detailCommon2"
+BASE_URL = "https://apis.data.go.kr/B551011/KorService2/detailCommon2"
 
 
 class TourApiDetailError(Exception):
@@ -65,13 +66,18 @@ async def fetch_detail_common(content_id: int) -> dict | None:
     try:
         data = resp.json()
     except ValueError as exc:
-        logger.warning("detailCommon2 응답 JSON 파싱 실패(contentId=%s): %s", content_id, resp.text[:200])
+        logger.warning(
+            "detailCommon2 응답 JSON 파싱 실패(contentId=%s): %s",
+            content_id,
+            # 원천 오류 본문은 요청 쿼리(=serviceKey)를 되비추는 경우가 있다 — 반드시 마스킹.
+            redact_secrets(resp.text)[:200],
+        )
         raise TourApiDetailError("upstream returned non-JSON body") from exc
 
     return _parse_item(data, content_id)
 
 
-IMAGE_BASE_URL = "http://apis.data.go.kr/B551011/KorService2/detailImage2"
+IMAGE_BASE_URL = "https://apis.data.go.kr/B551011/KorService2/detailImage2"
 
 
 async def fetch_detail_images(content_id: int, num_of_rows: int = 5) -> list[dict]:

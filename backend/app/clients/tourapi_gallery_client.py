@@ -1,6 +1,6 @@
 """한국관광공사 포토갤러리(PhotoGalleryService1) 클라이언트 — 키워드 사진 검색.
 
-원천: GET http://apis.data.go.kr/B551011/PhotoGalleryService1/gallerySearchList1
+원천: GET https://apis.data.go.kr/B551011/PhotoGalleryService1/gallerySearchList1
 
 실호출로 확정(2026-07-29, backend-engineer):
   - **예전엔 403 이었으나 현재 200 으로 열려 있다**(활용신청 승인 반영).
@@ -30,7 +30,7 @@ from ..config import settings
 
 logger = logging.getLogger("sumeungil.tourapi.gallery")
 
-BASE_URL = "http://apis.data.go.kr/B551011/PhotoGalleryService1/gallerySearchList1"
+BASE_URL = "https://apis.data.go.kr/B551011/PhotoGalleryService1/gallerySearchList1"
 
 
 class TourApiGalleryError(Exception):

@@ -180,13 +180,14 @@ def admin_login(request: Request, req: AdminLoginRequest):
 
 @router.get("/operators", response_model=AdminOperatorsResponse)
 async def admin_operators():
-    """로그인 화면 드롭다운용 표시 이름 목록. **인증 없이** 조회된다.
+    """로그인 화면이 "이름 입력칸이 필요한가"만 확인한다. **인증 없이** 조회된다.
 
-    로그인 화면 자체가 이름을 그려야 하므로 불가피하다. 노출되는 것은 성 없는 표시
-    이름뿐이고, 이 값을 알아도 비밀번호 없이는 아무것도 못 한다. 관리자 기능이 꺼져
-    있으면 라우터가 등록되지 않아 이 경로도 존재하지 않는다(404).
+    2026-08-18(외부 보안감사 3차): 운영자 표시 이름을 인증 없이 나열하던 응답을 **불리언
+    하나로 줄였다**. 화면은 드롭다운 대신 입력칸을 그리고, 이름 대조는 종전대로 서버가
+    ADMIN_OPERATORS 와 한다(틀리면 비밀번호 오류와 **같은 401**).
+    관리자 기능이 꺼져 있으면 라우터가 등록되지 않아 이 경로도 존재하지 않는다(404).
     """
-    return AdminOperatorsResponse(operators=list(settings.admin_operators))
+    return AdminOperatorsResponse(operators=[], required=bool(settings.admin_operators))
 
 @router.post("/logout", response_model=AdminOkResponse)
 async def admin_logout():

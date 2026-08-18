@@ -6,10 +6,15 @@
 "추측 불가능한 URL" 자체가 접근 제어다. 그래도 **비밀 URL 은 비밀번호가 아니다** — 공유
 코스에는 개인정보를 담지 않는다는 전제(닉네임+제목+스팟 목록)가 계약에 명시돼 있다.
 
-## payload 를 해석하지 않는 이유
-서버는 `course` JSON 을 검증만 하고 그대로 보관·반환한다. 코스 응답 구조(부록 I)가 바뀌어도
-저장소 스키마를 손댈 필요가 없다. 대신 **크기(32KB)·중첩 깊이(16)** 상한을 강제한다 —
-그게 없으면 디스크와 JSON 파서가 곧바로 공격면이 된다.
+## payload 를 재구성하는 이유 (2026-08-18 변경 — 외부 보안감사 3차 최우선 지적)
+**예전에는** `course` JSON 을 크기·깊이만 검사하고 그대로 보관·반환했다. 그 결과 공개 피드
+(`/shared`)에 클라이언트가 지어낸 장소명·"여유" 혼잡도 배지·임의 이미지·"공식 인증" 류 문구를
+API 한 번으로 올릴 수 있었다(XSS 가 아니라 **콘텐츠 위조** — 텍스트 노드 렌더로는 못 막는다).
+
+이제 `course_payload.rebuild_course_for_store` 가 **스팟 id 만 신뢰**하고 나머지 표시값을
+`spot_repo`(+ 서버 사진/설명 캐시)에서 다시 채운다. 혼잡도는 아예 저장하지 않고 상세 조회
+시점에 서버가 붙인다(시점 데이터). 크기(32KB)·중첩 깊이(16) 상한은 그대로 유지한다 —
+재구성 **전에** 파서를 보호해야 하기 때문이다.
 
 ## 보존정책 (QA M-2, 2026-08-01)
 크기 상한만으로는 부족하다. 건수 상한이 없으면 32KB × 무제한 = 디스크가 찬다(= SQLite 쓰기
@@ -30,9 +35,12 @@ import psycopg
 from datetime import timedelta
 from typing import Any
 
+from ..cache.base import Cache
 from ..config import settings
 from ..db.postgres import Database
 from ..repositories import shared_course_repo
+from ..repositories.congestion_repo import CongestionRepository
+from ..repositories.spot_repo import SpotRepository
 from ..schemas.community import (
     NICKNAME_MAX,
     TITLE_MAX,
@@ -45,6 +53,7 @@ from ..schemas.community import (
 from ..util.time import now_kst, to_iso_kst
 from ..util.user_text import clean_user_text, is_impersonating_staff
 from . import community_errors as errors
+from . import course_payload
 
 logger = logging.getLogger("sumeungil.services.share")
 
@@ -237,7 +246,13 @@ async def run_cleanup(db: Database) -> dict[str, int]:
 
 
 async def create_share(
-    db: Database, *, req: ShareCreateRequest, device_id: str, max_bytes: int
+    db: Database,
+    *,
+    req: ShareCreateRequest,
+    device_id: str,
+    max_bytes: int,
+    spot_repo: SpotRepository,
+    cache: Cache,
 ) -> ShareCreateResponse:
     nickname = clean_user_text(req.nickname, max_chars=NICKNAME_MAX)
     if not nickname:
@@ -248,8 +263,18 @@ async def create_share(
     if not title:
         raise errors.invalid_input("INVALID_TITLE", "코스 제목을 입력해 주세요.")
 
-    payload_json = _encode_payload(req.course, max_bytes)
-    spot_count = _spot_count(req.course)
+    # ① 먼저 크기·깊이 상한으로 파서를 보호하고(재구성은 입력을 순회하므로 그 전에 잘라야 한다),
+    # ② 그 다음 스팟 id 만 신뢰해 서버 값으로 재구성한다(2026-08-18 보안감사).
+    _encode_payload(req.course, max_bytes)
+    try:
+        course = course_payload.rebuild_course_for_store(req.course, spot_repo=spot_repo)
+    except course_payload.InvalidCoursePayload as exc:
+        raise errors.invalid_input("INVALID_COURSE", "코스 내용을 확인할 수 없습니다.") from exc
+    # 사진·설명은 서버 캐시에서 채운다(클라이언트가 준 값은 위에서 이미 버렸다).
+    await course_payload.enrich_stored_course(course, cache=cache, spot_repo=spot_repo)
+
+    payload_json = _encode_payload(course, max_bytes)
+    spot_count = _spot_count(course)
     now = now_kst()
     now_iso = to_iso_kst(now)
 
@@ -306,11 +331,20 @@ async def delete_share(db: Database, *, share_code: str, device_id: str) -> None
 
 
 async def get_share(
-    db: Database, *, share_code: str, device_id: str | None
+    db: Database,
+    *,
+    share_code: str,
+    device_id: str | None,
+    spot_repo: SpotRepository,
+    congestion_repo: CongestionRepository,
 ) -> SharedCourseDetail:
     """상세 조회 + view_count 증가를 **한 트랜잭션**으로 처리한다.
 
     조회와 증가를 나누면 두 번의 락 획득이 필요하고, 그 사이에 삭제되면 유령 카운트가 남는다.
+
+    저장된 payload 도 **읽을 때 한 번 더** allowlist 를 통과시킨다(2026-08-18 보안감사) —
+    이 코드 배포 전에 이미 조작돼 들어간 공유가 화면에 뜨지 않게 하기 위해서다. 혼잡도는
+    저장돼 있지 않으므로 여기서 **지금 값**을 붙인다(옛 라벨을 현재처럼 보여주지 않는다).
     """
     code = normalize_share_code(share_code)
 
@@ -323,6 +357,10 @@ async def get_share(
 
     row = await db.awrite(_tx)
     item = _to_item(row)
+    course = course_payload.filter_stored_course(
+        _decode_payload(row["payload"]), spot_repo=spot_repo
+    )
+    await course_payload.attach_congestion(course, congestion_repo)
     return SharedCourseDetail(
         share_code=item.share_code,
         nickname=item.nickname,
@@ -331,7 +369,7 @@ async def get_share(
         created_at=item.created_at,
         # 방금 +1 한 값을 돌려준다(응답과 DB 가 어긋나 보이지 않게).
         view_count=item.view_count + 1,
-        course=_decode_payload(row["payload"]),
+        course=course,
         is_mine=bool(device_id) and row["device_id"] == device_id,
     )
 

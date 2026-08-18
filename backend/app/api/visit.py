@@ -67,12 +67,17 @@ async def record_visit(
     try:
         now = now_kst()
         ip = extract_client_ip(request, trust_proxy=settings.rate_limit_trust_proxy)
+        ip_hash = visit_ip_hash(ip)
+        if not ip_hash:
+            # 2026-08-18 보안 감사 A-3: 가명화 키가 없으면 미들웨어와 **똑같이** 집계를
+            # 건너뛴다(fail-closed). 여기만 기록하면 비콘 경로로 원본 추적이 새어 나간다.
+            return None
         await db.awrite(
             lambda conn: visit_repo.record(
                 conn,
                 day=now.strftime("%Y-%m-%d"),
                 hour=now.hour,
-                ip_hash=visit_ip_hash(ip),
+                ip_hash=ip_hash,
                 path=fold_path(raw),
                 now_iso=now.isoformat(timespec="seconds"),
             )

@@ -1,27 +1,36 @@
 # 슬랙 알림 설정 (#알림-봇)
 
-숨은팀 슬랙의 `#알림-봇` 채널로 오는 알림 3종의 구조와 설정 절차. (2026-08-18 신설)
+숨은팀 슬랙의 `#알림-봇` 채널을 쓰는 알림·봇 기능 6종의 구조와 설정 절차. (2026-08-18 신설)
 
 > **`#알림-봇` 은 자동 알림 전용이다.** 사람 대화는 `#개발` 에서 한다.
 
-## 알림 3종
+## 전체 목록
 
 | 알림 | 무엇을 알리나 | 어디서 도나 | 감지 속도 |
 |---|---|---|---|
 | **한국어 GitHub 알림** | main 커밋 / PR 열림·머지 / 이슈 등록·닫힘 / 릴리스 | GitHub Actions `slack-notify-ko.yml` | 즉시 |
 | **서버 상태 감시** | 사이트 응답 없음, 헬스체크 degraded, 복구 | GitHub Actions `health-watch.yml` (30분마다) | 최대 30분 |
-| **5xx 에러 알림** | 500 응답·미처리 예외 + 경로·예외·트레이스백 | 운영 서버 FastAPI 미들웨어 | 즉시 |
+| **5xx 에러 알림** | 500 응답·미처리 예외 + `Location: 파일 Line N` | 운영 서버 FastAPI 미들웨어 | 즉시 |
+| **아침 운영 요약** | 어제 방문·처리 대기·누적·서버 상태 | 운영 서버 백그라운드 루프 | 매일 09:00 KST |
+| **배포 알림** | 배포 시작/완료/실패 + 실행자 | `deploy/notify-slack.sh` (사람이 실행) | 즉시 |
+| **`/서버상태` ·`/문의`** | 물어보면 답하는 조회 | 운영 서버 `/api/v1/slack/commands` | 즉시 |
 
 ```mermaid
 flowchart LR
   GH[GitHub 이벤트] --> W1[slack-notify-ko.yml]
-  CRON[30분 cron] --> W2[health-watch.yml] -->|GET /api/v1/health| SRV[운영 서버]
+  CRON[30분 cron] --> W2[health-watch.yml] -->|GET /health| SRV[운영 서버]
   SRV -->|5xx 발생| MW[ErrorAlertMiddleware]
-  W1 & W2 & MW --> HOOK[(Incoming Webhook)] --> CH["#알림-봇"]
+  SRV -->|매일 09시| SUM[아침 요약 루프]
+  DEP[사람: 배포 실행] --> SH[notify-slack.sh]
+  W1 & W2 & MW & SUM & SH --> HOOK[(Incoming Webhook)] --> CH["#알림-봇"]
+  CH -.->|"/서버상태 ·/문의"| CMD[POST /api/v1/slack/commands] -.-> SRV
 ```
 
-세 경로가 **같은 웹훅 URL 하나**를 공유한다. 그래서 발급은 1회면 되고, 넣는 곳은 두 군데다
-(GitHub Secrets + 운영 서버 `.env`).
+**보내는 5개 경로가 같은 웹훅 URL 하나를 공유한다.** 그래서 발급은 1회면 되고, 넣는 곳은
+두 군데다(GitHub Secrets + 운영 서버 `.env`).
+
+슬래시 명령어만 방향이 반대다 — 슬랙이 **우리 서버를 호출**하므로 웹훅이 아니라
+별도의 `SLACK_SIGNING_SECRET` 이 필요하다(아래 "봇 기능" 절).
 
 ---
 
@@ -181,3 +190,99 @@ cd backend
 > 이 원천은 무료 외부 API 라 종종 흔들린다 — 알림이 잦아지면 `upstream_kto` 는
 > 알림 대상에서 빼고 서버 다운·캐시 실패만 알리도록 `health-watch.yml` 의 판정을
 > 조정할 것(현재는 degraded 전부 알린다).
+
+---
+
+# 봇 기능 (2026-08-18 추가)
+
+앞의 3종이 "봇이 먼저 말하는" 알림이라면, 아래는 **묻고 답하는 기능**과 **정기 브리핑**이다.
+BCSDLab 삐봇을 참고했지만 그쪽 명령어(`/강의공지`·`/동방`)는 동아리 전용이라 가져오지 않았다.
+
+## 아침 운영 요약 — 추가 설정 없음
+
+`SLACK_WEBHOOK_URL` 만 있으면 돈다. 매일 `SLACK_DAILY_SUMMARY_HOUR`(기본 9시, KST)에
+`#알림-봇` 으로 이런 한 묶음이 온다.
+
+```
+📋 숨은길 아침 브리핑 — 2026-08-19 (수)
+· 어제(08-18) 방문자 12명(추정) · 조회 143회
+· 처리 대기: 미답변 문의 2건
+· 누적: 후기 34건 · 공유코스 12건 · 문의 15건
+🟢 서버 ok — 공공데이터 ok · 캐시 ok
+```
+
+**배포할 때는 오지 않는다.** 부팅 직후 발송하지 않고 다음 지정 시각까지 기다리게 만들었다 —
+안 그러면 재배포마다 브리핑이 와서 소음이 된다. 끄려면 `SLACK_DAILY_SUMMARY_HOUR=-1`.
+
+## 배포 알림 — 배포 절차에 두 줄 추가
+
+서버에 git 이 없어 배포가 수동(tar+scp)이라, 팀원은 누가 언제 배포했는지 알 수 없었다.
+사이트가 잠깐 끊기면 장애부터 의심하게 된다. 배포 앞뒤로 이렇게 부른다:
+
+```bash
+cd /home/ubuntu/sumeungil/deploy
+./notify-slack.sh start "관리자 콘솔 문의 탭 추가"
+docker compose up -d --build backend
+./notify-slack.sh done  "관리자 콘솔 문의 탭 추가"    # 실패했으면 fail
+```
+
+웹훅 URL 은 **인자로 받지 않는다** — 셸 히스토리에 시크릿이 남기 때문이다. 같은 폴더의
+`.env` 에서 읽는다. 알림이 실패해도 스크립트는 `exit 0` 이다(알림 때문에 배포가 멈추면 안 된다).
+
+## 슬래시 명령어 — 설정이 필요하다
+
+| 명령어 | 하는 일 | 별칭 |
+|---|---|---|
+| `/서버상태` | 종합 상태 + 공공데이터·캐시 + 오늘 방문 집계 | `/status` `/서버` |
+| `/문의` | 미답변 고객문의 건수 / 누적 | `/inquiries` |
+
+응답은 **ephemeral** — 명령을 실행한 사람에게만 보인다. 운영 수치가 90일 히스토리에 쌓이지
+않게, 그리고 3명 채널이 조회 결과로 도배되지 않게 한 선택이다.
+
+### 설정 절차
+
+1. <https://api.slack.com/apps> → **Sumeungil Alerts** → **Slash Commands** → *Create New Command*
+
+   | 항목 | 값 |
+   |---|---|
+   | Command | `/서버상태` |
+   | Request URL | `https://sumeungil.co.kr/api/v1/slack/commands` |
+   | Short Description | 서버 상태와 오늘 방문 집계 |
+
+   `/문의` 도 같은 Request URL 로 하나 더 만든다. **URL 은 둘이 같다** — 서버가 `command`
+   값을 보고 갈라준다.
+
+2. **Basic Information → App Credentials → Signing Secret** 을 복사해 운영 `.env` 에 넣는다.
+
+   ```bash
+   nano /home/ubuntu/sumeungil/deploy/.env
+   #   SLACK_SIGNING_SECRET=...
+   cd /home/ubuntu/sumeungil/deploy && docker compose up -d backend
+   ```
+
+3. 슬랙에서 `/서버상태` 를 쳐 본다. 부팅 로그로도 확인된다:
+
+   ```
+   슬랙 슬래시 명령어 등록 완료 (/api/v1/slack/commands)
+   ```
+
+### 이 엔드포인트가 안전한 이유
+
+슬랙이 호출하므로 인증 쿠키를 쓸 수 없다 — **요청 서명 검증이 유일한 방어선**이다.
+
+- `HMAC-SHA256(signing_secret, "v0:타임스탬프:원본본문")` 을 `X-Slack-Signature` 와
+  **상수시간 비교**한다(`==` 로 비교하면 응답 시간 차이로 서명을 알아낼 수 있다)
+- 타임스탬프가 5분보다 오래되면 서명이 유효해도 거부 — **재전송 공격** 방어
+- 검증은 **원본 바이트**로 한다. 파싱한 폼을 재직렬화하면 서명이 깨진다
+- `SLACK_SIGNING_SECRET` 이 비면 라우터를 **등록조차 하지 않는다**(404, fail-closed)
+- 응답에 **관리자 콘솔 경로를 넣지 않는다** — 경로를 비밀로 둔 결정(2026-08-17)을 지킨다
+
+배포 전 필수 검증 (8개 시나리오 · 15개 항목):
+
+```bash
+cd backend
+.venv/Scripts/python.exe scripts/verify_slack_commands.py   # Windows
+```
+
+정상 서명·서명 없음·서명 위조·재전송·본문 개조·키 미설정·모르는 명령어·관리자 경로 유출을
+전부 검사한다.

@@ -1,7 +1,7 @@
 """기상청 관광코스별 관광지 상세 날씨(D18) 클라이언트 — 지역 단위 강수확률(POP).
 
 원천(실호출로 확정, 2026-07-24):
-  GET http://apis.data.go.kr/1360000/TourStnInfoService1/getTourStnVilageFcst1
+  GET https://apis.data.go.kr/1360000/TourStnInfoService1/getTourStnVilageFcst1
   파라미터: serviceKey, pageNo, numOfRows, dataType(JSON),
             CURRENT_DATE(YYYYMMDDHH), HOUR(예보 리드타임), COURSE_ID(관광코스 id)
 
@@ -31,11 +31,12 @@ from dataclasses import dataclass
 import httpx
 
 from ..config import settings
+from ..util.redact import redact_secrets
 from ..util.time import now_kst
 
 logger = logging.getLogger("sumeungil.kma_weather")
 
-BASE_URL = "http://apis.data.go.kr/1360000/TourStnInfoService1/getTourStnVilageFcst1"
+BASE_URL = "https://apis.data.go.kr/1360000/TourStnInfoService1/getTourStnVilageFcst1"
 
 # ★ 예보 커버 실측(2026-07-31, backend-engineer):
 #   CURRENT_DATE=오늘 기준으로 HOUR(리드타임)를 6→240 까지 올려가며 tm(예보시각)을 확인한 결과
@@ -166,7 +167,7 @@ async def _fetch_rows(
     try:
         data = resp.json()
     except ValueError as exc:
-        logger.warning("D18 응답 JSON 파싱 실패: %s", resp.text[:120])
+        logger.warning("D18 응답 JSON 파싱 실패: %s", redact_secrets(resp.text)[:120])
         raise KmaWeatherError("upstream returned non-JSON body") from exc
 
     return _parse_items(data)

@@ -32,7 +32,7 @@ from starlette.requests import Request
 
 from ..repositories import visit_repo
 from ..util.time import now_kst
-from .rate_limit import extract_client_ip
+from .rate_limit import extract_client_ip, scope_path
 
 logger = logging.getLogger("sumeungil.middleware.visit_log")
 
@@ -84,21 +84,62 @@ def fold_path(path: str) -> str:
     return out[:PATH_MAX]
 
 
-def _secret_key() -> bytes:
-    """IP 해싱 키. 서버 `.env` 안의 값이며 응답·로그 어디에도 나가지 않는다."""
+# 키 미설정 경고는 **딱 한 번만** 찍는다 — 요청마다 찍으면 로그가 경고로 뒤덮여
+# 정작 봐야 할 오류가 묻힌다.
+_key_warned = False
+
+
+def _secret_key() -> bytes | None:
+    """IP 해싱 키. 서버 `.env` 안의 값이며 응답·로그 어디에도 나가지 않는다.
+
+    우선순위 (2026-08-18 보안 감사 A-3 — 하드코딩 폴백 제거):
+      ① `ADMIN_SESSION_SECRET`  ② `JWT_SECRET_KEY`
+      ③ `ADMIN_PASSWORD_HASH` 에서 파생(`security.admin_auth.derive_signing_key` 재사용)
+      ④ 셋 다 없으면 **None → 방문 집계를 끈다(fail-closed)**
+
+    ④가 핵심이다. 예전에는 `"sumeungil-visit-fallback"` 이라는 **저장소에 적힌 문자열**을
+    폴백 키로 썼는데, 그러면 ip_hash 가 공개 상수로 계산되는 값이 되어 "서버 시크릿 없이는
+    역산 불가"라는 전제(파일 상단 원칙 2)가 그냥 거짓이 된다 — 후보 IP 를 대입해 누가 언제
+    무엇을 봤는지 되맞출 수 있다. 가명화가 성립하지 않으면 집계 자체를 하지 않는 편이 맞다.
+    """
     from ..config import settings
 
-    raw = settings.admin_session_secret or settings.jwt_secret_key or "sumeungil-visit-fallback"
-    return raw.encode("utf-8")
+    raw = (settings.admin_session_secret or "").strip() or (settings.jwt_secret_key or "").strip()
+    if raw:
+        return raw.encode("utf-8")
+
+    # ③ 관리자 세션 서명키와 **같은 파생 방식**을 쓴다(키를 새로 만들지 않는다).
+    #    HMAC 안쪽에 _IP_LABEL 이 붙어 있어 세션 서명과 용도 분리는 유지된다.
+    password_hash = (getattr(settings, "admin_password_hash", "") or "").strip()
+    if password_hash:
+        from ..security.admin_auth import derive_signing_key
+
+        return derive_signing_key(password_hash=password_hash, session_secret=None)
+
+    return None
+
+
+def _warn_no_key_once() -> None:
+    global _key_warned
+    if _key_warned:
+        return
+    _key_warned = True
+    logger.warning(
+        "방문 집계 비활성화 — IP 가명화 키가 없습니다. "
+        "ADMIN_SESSION_SECRET(권장) 또는 JWT_SECRET_KEY 를 .env 에 설정하세요."
+    )
 
 
 def visit_ip_hash(ip: str | None) -> str:
-    """IP → 되돌릴 수 없는 16자 지문.
+    """IP → 되돌릴 수 없는 16자 지문. **키가 없으면 빈 문자열**(= 집계하지 말라는 신호).
 
     **미들웨어와 페이지 비콘(`api/visit.py`)이 반드시 같은 함수를 써야 한다.**
     해시가 갈리면 같은 사람이 두 명으로 세어져 방문자 수가 부풀어 오른다.
     """
     key = _secret_key()
+    if key is None:
+        _warn_no_key_once()
+        return ""
     raw = (ip or "unknown").encode("utf-8")
     return hmac.new(key, _IP_LABEL + raw, hashlib.sha256).hexdigest()[:16]
 
@@ -121,7 +162,9 @@ class VisitLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
-        path = request.url.path
+        # 스킵 판정도 **ASGI 원본 경로**로 한다(2026-08-18 보안 감사 A-1과 같은 이유) —
+        # Host 헤더로 재구성되는 url.path 를 쓰면 제외 목록(/api/v1/admin 등)이 흔들릴 수 있다.
+        path = scope_path(request)
         if path in _SKIP_EXACT or any(path.startswith(p) for p in _SKIP_PREFIXES):
             return response
         # 4xx/5xx 는 세지 않는다 — 없는 경로를 긁는 봇이 "인기 페이지"를 만들어버린다.
@@ -131,12 +174,16 @@ class VisitLogMiddleware(BaseHTTPMiddleware):
         try:
             now = now_kst()
             ip = extract_client_ip(request, trust_proxy=self._trust_proxy)
+            ip_hash = self._ip_hash(ip)
+            if not ip_hash:
+                # 가명화 키 미설정 → 집계 자체를 건너뛴다(fail-closed, 경고는 1회만).
+                return response
             await self._db.awrite(
                 lambda conn: visit_repo.record(
                     conn,
                     day=now.strftime("%Y-%m-%d"),
                     hour=now.hour,
-                    ip_hash=self._ip_hash(ip),
+                    ip_hash=ip_hash,
                     path=fold_path(path),
                     now_iso=now.isoformat(timespec="seconds"),
                 )

@@ -1,0 +1,15 @@
+# 숨은길(sumeungil.co.kr) 보안 취약점 신고 연락처 — RFC 9116
+#
+# Next.js `public/` 아래 파일은 그대로 정적 서빙되므로 이 파일은
+# https://sumeungil.co.kr/.well-known/security.txt 로 열린다.
+# (nginx 는 `/` 를 frontend 컨테이너로 프록시한다 — deploy/nginx.conf 참고)
+#
+# Expires 는 RFC 9116 필수 필드다. 지나면 "관리되지 않는 문서"로 간주되므로
+# 매년 갱신한다. 갱신 담당: deploy/DEPLOY.md 의 운영 점검 절차 참고.
+
+Contact: mailto:dbdlstlr25@naver.com
+Contact: https://sumeungil.co.kr/mypage
+Expires: 2027-08-18T00:00:00.000Z
+Preferred-Languages: ko, en
+Canonical: https://sumeungil.co.kr/.well-known/security.txt
+Policy: https://sumeungil.co.kr/privacy

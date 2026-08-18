@@ -37,10 +37,11 @@ import time
 import traceback
 from pathlib import Path
 
-import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+from ..services import slack_notify
 
 logger = logging.getLogger("sumeungil.middleware.error_alert")
 
@@ -196,13 +197,6 @@ class ErrorAlertMiddleware(BaseHTTPMiddleware):
         return "\n".join(lines)
 
     async def _post(self, text: str) -> None:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.post(
-                    self._url, json={"text": text, "unfurl_links": False}
-                )
-            if resp.status_code != 200:
-                # 본문에 웹훅 URL 이 들어가지 않도록 상태코드만 남긴다.
-                logger.warning("슬랙 에러 알림 전송 실패 — HTTP %s", resp.status_code)
-        except Exception:  # noqa: BLE001
-            logger.warning("슬랙 에러 알림 전송 실패 — 무시하고 계속", exc_info=True)
+        # 전송은 slack_notify 하나로 모았다(모듈 docstring "보내는 문은 하나" 참고).
+        # 그쪽이 예외를 삼키므로 여기서 다시 감쌀 필요가 없다.
+        await slack_notify.post(text, webhook_url=self._url)

@@ -209,6 +209,30 @@ def extract_client_ip(request: Any, trust_proxy: bool = True) -> str:
     return host or "unknown"
 
 
+def scope_path(request: Any) -> str:
+    """요청 경로 — **ASGI scope 원본**을 1순위로 쓴다(보안 감사 2026-08-18 A-1).
+
+    `request.url.path` 는 Starlette 가 `Host` 헤더까지 붙여 절대 URL 을 만든 뒤 다시 쪼갠
+    값이라, 헤더를 조작할 수 있는 클라이언트가 경로 파싱에 영향을 줄 여지가 있다
+    (starlette CVE-2026-48710). scope["path"] 는 서버(uvicorn)가 요청 라인에서 직접 채운
+    값이라 헤더의 영향을 받지 않는다.
+
+    scope 가 없는 객체(단위 테스트의 가짜 request)는 기존대로 `.url.path` 로 폴백한다 —
+    이 함수 때문에 테스트 더블이 깨지지 않게 하기 위해서다.
+    """
+    scope = getattr(request, "scope", None)
+    if isinstance(scope, dict):
+        path = scope.get("path")
+        if isinstance(path, str) and path:
+            return path
+    url = getattr(request, "url", None)
+    return getattr(url, "path", "") or "/"
+
+
+# 내부 별칭(dispatch 가독성용). 공개 이름은 scope_path 하나만 둔다.
+_scope_path = scope_path
+
+
 def rate_limited_response(decision: Decision, window_sec: int = 60) -> JSONResponse:
     """429 — 기존 에러 봉투 형식과 동일(01-interface-contract.md §3 / 부록 O)."""
     return JSONResponse(
@@ -268,7 +292,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not self.enabled:
             return await call_next(request)
 
-        bucket = resolve_bucket(request.method, request.url.path)
+        # 버킷 판정은 **ASGI 원본 경로**(scope["path"])로만 한다. `request.url.path` 는 Host
+        # 헤더로 절대 URL 을 재구성하는 경로라 클라이언트 헤더의 영향을 받을 수 있고
+        # (starlette CVE-2026-48710), 그 틈으로 판정이 흔들리면 LLM/UGC 버킷을 빠져나간다.
+        path = _scope_path(request)
+        bucket = resolve_bucket(request.method, path)
         if bucket is None:
             return await call_next(request)
 
@@ -279,7 +307,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             logger.warning(
                 "429 RATE_LIMITED bucket=%s path=%s client=%s limit=%d",
                 bucket,
-                request.url.path,
+                path,
                 client_key,
                 decision.limit,
             )
@@ -314,4 +342,5 @@ __all__: Iterable[str] = (
     "extract_client_ip",
     "rate_limited_response",
     "resolve_bucket",
+    "scope_path",
 )

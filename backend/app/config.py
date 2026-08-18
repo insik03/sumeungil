@@ -367,6 +367,15 @@ class Settings:
             os.getenv("SLACK_ALERT_DEDUP_WINDOW_SEC", "600")
         )
 
+        # 아침 운영 요약을 보낼 시각(KST, 0~23). 웹훅이 없으면 루프를 돌리지 않는다.
+        # -1 이면 요약 기능만 끈다(에러 알림은 그대로).
+        self.slack_daily_summary_hour: int = int(os.getenv("SLACK_DAILY_SUMMARY_HOUR", "9"))
+        # 슬래시 명령어(/서버상태 ·/문의) 서명 검증 키. slack.com/apps > Basic Information >
+        # Signing Secret. **비우면 /api/v1/slack/* 라우터를 등록하지 않는다**(404) —
+        # 관리자 라우터가 ADMIN_PASSWORD_HASH 없으면 사라지는 것과 같은 원칙이다.
+        # 서명 검증 없이 이 엔드포인트를 열면 누구나 우리 운영 수치를 조회할 수 있다.
+        self.slack_signing_secret: str = os.getenv("SLACK_SIGNING_SECRET", "").strip()
+
     @property
     def sqlite_file(self) -> Path:
         """상대 경로는 **BACKEND_DIR 기준**으로 푼다(프로세스 cwd 에 의존하지 않게).

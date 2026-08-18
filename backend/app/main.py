@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,15 +32,24 @@ from .api import (
     plan,
     regions,
     reviews,
+    slack,
     visit,
     weather,
 )
 from .config import settings
-from .deps import get_admin_auth, get_cache, get_database, get_user_auth
+from .deps import (
+    get_admin_auth,
+    get_cache,
+    get_congestion_repository,
+    get_database,
+    get_user_auth,
+)
 from .middleware.error_alert import ErrorAlertMiddleware
 from .middleware.rate_limit import RateLimitMiddleware, build_limits_from_settings
 from .middleware.visit_log import VisitLogMiddleware
-from .services import festival_service, share_service
+from .repositories import visit_repo
+from .services import festival_service, share_service, slack_notify, slack_report
+from .util.time import now_kst
 
 logging.basicConfig(
     level=logging.INFO,
@@ -119,6 +129,64 @@ async def _share_retention_loop() -> None:
         await asyncio.sleep(max(60, settings.share_cleanup_interval_sec))
 
 
+async def _visit_retention_loop() -> None:
+    """방문 집계 자동 삭제 — 기동 직후 1회 + 이후 하루 1회(2026-08-18 보안 감사 A-4).
+
+    관리자 화면(AdminTraffic.tsx)이 "90일간 보관하고 자동으로 지웁니다"라고 안내하는데,
+    실제로 `visit_repo.prune` 을 부르는 곳이 **어디에도 없었다**(집계가 무한히 쌓임 =
+    개인정보 처리방침 위반 + 디스크 증가). `_share_retention_loop` 와 같은 패턴으로 배선한다:
+    fire-and-forget · 실패해도 서비스 무영향 · 다음 주기 재시도.
+    """
+    while True:
+        try:
+            cutoff = (now_kst() - timedelta(days=visit_repo.RETENTION_DAYS)).strftime("%Y-%m-%d")
+            removed = await get_database().awrite(
+                lambda conn, _c=cutoff: visit_repo.prune(conn, before_day=_c)
+            )
+            if removed:
+                logger.info(
+                    "visit retention 정리 removed=%d (보관 %d일, cutoff=%s)",
+                    removed, visit_repo.RETENTION_DAYS, cutoff,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 정리 실패로 서비스가 죽으면 안 된다
+            logger.warning("visit retention 정리 실패(무시, 다음 주기 재시도): %s", exc)
+        await asyncio.sleep(24 * 60 * 60)
+
+
+async def _daily_summary_loop() -> None:
+    """슬랙 아침 운영 요약 — 매일 지정 시각(KST)에 1회 (2026-08-18, 대표 지시).
+
+    다른 루프들과 다른 점: **부팅 직후에 보내지 않는다.** 배포할 때마다 브리핑이 오면
+    알림이 소음이 된다. 그래서 첫 실행 전에 다음 지정 시각까지 기다린다.
+
+    시각을 맞추는 방식은 "24시간 sleep" 이 아니라 **매번 다음 목표 시각까지의 초를 다시
+    계산**하는 것이다. 24시간 고정 sleep 은 컨테이너 재시작 시점에 따라 발송 시각이
+    조금씩 밀려 결국 새벽에 오게 된다(드리프트).
+
+    `_share_retention_loop` 와 같은 안전 원칙: fire-and-forget · 실패해도 서비스 무영향 ·
+    다음 주기 재시도.
+    """
+    hour = settings.slack_daily_summary_hour
+    while True:
+        now = now_kst()
+        target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        await asyncio.sleep(max(60, (target - now).total_seconds()))
+        try:
+            text = await slack_report.build_daily_summary(
+                get_database(), get_cache(), get_congestion_repository()
+            )
+            sent = await slack_notify.post(text, webhook_url=settings.slack_webhook_url)
+            logger.info("슬랙 아침 요약 발송 %s", "완료" if sent else "실패(무시)")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 요약 실패로 서비스가 죽으면 안 된다
+            logger.warning("슬랙 아침 요약 실패(무시, 내일 재시도): %s", exc)
+
+
 async def _prewarm_all() -> None:
     """프리워밍을 **순차로** 돌린다 — 기동 직후 원천 호출이 한꺼번에 몰리면(축제 스윕 + D18 9회 +
     board 9회 + 사진) 무료 원천 쪽에서 타임아웃/스로틀이 나기 쉽고, 그 시간에 들어온 실사용
@@ -156,11 +224,27 @@ async def lifespan(app: FastAPI):
     retention_task = (
         asyncio.create_task(_share_retention_loop()) if settings.community_enabled else None
     )
+    # 방문 집계 정리도 같은 조건(저장소가 준비된 경우)에서만 돈다.
+    visit_retention_task = (
+        asyncio.create_task(_visit_retention_loop()) if settings.community_enabled else None
+    )
+    # 슬랙 아침 요약 — 웹훅이 있고 시각이 0~23 범위일 때만 돈다(-1 이면 요약만 끈다).
+    # 위 루프들과 달리 community 와 무관하다: DB 가 죽어도 서버 상태는 알려야 하고,
+    # slack_report 가 집계 조회 실패를 자체적으로 감당한다.
+    summary_task = (
+        asyncio.create_task(_daily_summary_loop())
+        if settings.slack_webhook_url and 0 <= settings.slack_daily_summary_hour <= 23
+        else None
+    )
     yield
     if not prewarm_task.done():
         prewarm_task.cancel()
     if retention_task is not None and not retention_task.done():
         retention_task.cancel()
+    if visit_retention_task is not None and not visit_retention_task.done():
+        visit_retention_task.cancel()
+    if summary_task is not None and not summary_task.done():
+        summary_task.cancel()
     get_database().close()
 
 
@@ -291,7 +375,17 @@ app.include_router(plan.router)       # 부록 Q.2: 출발일 지정 전망(오�
 app.include_router(reviews.router)      # 부록 R: 후기(별점+한줄평) — SQLite 저장
 app.include_router(course_share.router) # 부록 R: 코스 공유(share_code) — SQLite 저장
 app.include_router(inquiries.router)    # 2026-08-18: 고객문의(마이페이지, 로그인 필수)
-app.include_router(visit.router)         # 부록 X: 페이지 조회 비콘(프론트 컨테이너가 처리하는 화면 경로 집계)
+app.include_router(visit.router)        # 부록 X: 페이지 조회 비콘(프론트가 처리하는 화면 경로 집계)
+
+# 슬랙 슬래시 명령어 (2026-08-18) — **서명 검증 키가 없으면 등록하지 않는다.**
+# 이 엔드포인트는 인증 쿠키를 쓸 수 없어(슬랙 서버가 호출) 서명 검증이 유일한 방어선이다.
+# 키가 없는데 열어두면 URL 을 아는 누구나 방문자·문의 건수를 조회할 수 있다.
+# ADMIN_PASSWORD_HASH 가 없으면 관리자 라우터가 사라지는 것과 같은 fail-closed 원칙.
+if settings.slack_signing_secret:
+    app.include_router(slack.router)
+    logger.info("슬랙 슬래시 명령어 등록 완료 (/api/v1/slack/commands)")
+else:
+    logger.info("슬랙 슬래시 명령어 미등록(SLACK_SIGNING_SECRET 미설정)")
 
 # 부록 T: 관리자(운영) 콘솔.
 #
