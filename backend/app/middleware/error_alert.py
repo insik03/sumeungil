@@ -35,6 +35,7 @@ import logging
 import re
 import time
 import traceback
+from pathlib import Path
 
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -43,9 +44,12 @@ from starlette.responses import Response
 
 logger = logging.getLogger("sumeungil.middleware.error_alert")
 
-# 슬랙 메시지 상한은 4000자다. 트레이스백은 뒤쪽(터진 지점)이 중요하므로 뒤에서 자른다.
-_TRACE_MAX = 1200
 _EXC_MSG_MAX = 400
+# 호출 경로에 적을 우리 코드 프레임 최대 개수. 슬랙 메시지 상한(4000자)에 여유를 둔다.
+_TRAIL_MAX_FRAMES = 6
+
+# 우리 코드의 뿌리. 이 미들웨어는 app/middleware/ 에 있으므로 두 단계 위가 app/ 다.
+_APP_ROOT = Path(__file__).resolve().parent.parent
 
 # 값이 시크릿인 쿼리 파라미터/키 이름. `이름=값` 과 `"이름": "값"` 두 형태를 함께 잡는다.
 _SECRET_PARAM_RE = re.compile(
@@ -60,6 +64,44 @@ _SECRET_PARAM_RE = re.compile(
 def _scrub(text: str) -> str:
     """시크릿으로 보이는 값을 *** 로 가린다. 알림에 나가는 모든 문자열에 적용한다."""
     return _SECRET_PARAM_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
+
+
+def _locate(exc: BaseException) -> tuple[str, str]:
+    """예외가 터진 **우리 코드** 위치와 호출 경로를 뽑는다.
+
+    반환: (`"congestion_service.py Line 142"`, `"api/congestion.py:88 → services/...:142"`)
+
+    ## 왜 마지막 프레임을 쓰지 않는가
+    트레이스백의 맨 끝은 대개 라이브러리 내부다(httpx 의 소켓 코드, pydantic 검증기 등).
+    "Line 219 of httpcore/_sync/connection.py" 를 받아도 우리가 고칠 데는 아니다.
+    그래서 `app/` 아래에 있는 프레임만 남기고, 그중 **가장 깊은 것**을 터진 지점으로 본다.
+
+    우리 코드 프레임이 하나도 없으면(미들웨어 밖·라이브러리 단독 실패) 맨 끝 프레임을
+    쓰되 파일명만 적는다 — 그때는 호출 경로가 더 중요한 단서다.
+    """
+    frames = traceback.extract_tb(exc.__traceback__)
+    if not frames:
+        return "위치 불명 (트레이스백 없음)", ""
+
+    ours = []
+    for f in frames:
+        try:
+            rel = Path(f.filename).resolve().relative_to(_APP_ROOT)
+        except (ValueError, OSError):
+            continue
+        ours.append((rel.as_posix(), f.lineno, f.name))
+
+    if ours:
+        rel, lineno, _ = ours[-1]
+        where = f"{Path(rel).name} Line {lineno}"
+        trail = " → ".join(f"{r}:{n}" for r, n, _ in ours[-_TRAIL_MAX_FRAMES:])
+    else:
+        last = frames[-1]
+        where = f"{Path(last.filename).name} Line {last.lineno} (라이브러리 내부)"
+        trail = " → ".join(
+            f"{Path(f.filename).name}:{f.lineno}" for f in frames[-_TRAIL_MAX_FRAMES:]
+        )
+    return where, trail
 
 
 class ErrorAlertMiddleware(BaseHTTPMiddleware):
@@ -135,17 +177,16 @@ class ErrorAlertMiddleware(BaseHTTPMiddleware):
         self, request: Request, exc: BaseException | None, status: int, path: str
     ) -> str:
         lines = [
-            f"🔥 *서버 에러 {status}* — `{request.method} {path}`",
-            f"환경: {self._env}",
+            f"🔥 서버에서 에러가 발생했습니다. uri: {request.method} {path}",
         ]
         if exc is not None:
-            msg = _scrub(f"{type(exc).__name__}: {exc}")[:_EXC_MSG_MAX]
-            lines.append(f"예외: `{msg}`")
-            tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-            tb = _scrub(tb)
-            if len(tb) > _TRACE_MAX:
-                tb = "…(앞부분 생략)…\n" + tb[-_TRACE_MAX:]
-            lines.append(f"```{tb}```")
+            where, trail = _locate(exc)
+            lines.append(f"Exception: {type(exc).__name__}")
+            lines.append(f"Location: {where}  (환경: {self._env})")
+            msg = _scrub(str(exc)) or "(메시지 없음)"
+            lines.append(f"```{msg[:_EXC_MSG_MAX]}```")
+            if trail:
+                lines.append(f"호출 경로: {_scrub(trail)}")
         else:
             # 라우터가 직접 만든 5xx — 트레이스백이 없다. 서버 로그를 봐야 원인이 나온다.
             lines.append("예외 없이 반환된 5xx 입니다 — 서버 로그를 확인하세요.")

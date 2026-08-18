@@ -32,7 +32,8 @@ from starlette.responses import JSONResponse, PlainTextResponse  # noqa: E402
 from starlette.routing import Route  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
-from app.middleware.error_alert import ErrorAlertMiddleware, _scrub  # noqa: E402
+from app.middleware import error_alert  # noqa: E402
+from app.middleware.error_alert import ErrorAlertMiddleware, _locate, _scrub  # noqa: E402
 
 # 실제 키처럼 보이는 더미 — 이 문자열이 알림에 나타나면 실패다.
 FAKE_KEY = "abcd1234EFGH5678ijkl9012MNOP3456"
@@ -45,6 +46,11 @@ async def _capture(self, text: str) -> None:  # _post 대체
 
 
 ErrorAlertMiddleware._post = _capture  # type: ignore[method-assign]
+
+# _locate 는 `app/` 아래 프레임만 '우리 코드'로 본다. 이 테스트의 핸들러는 scripts/ 에
+# 있어서 그대로면 전부 '라이브러리 내부'로 떨어진다 — 뿌리를 이 파일이 있는 폴더로 바꿔
+# 실제 운영과 같은 경로(우리 코드 프레임을 집어내는 경로)를 검증한다.
+error_alert._APP_ROOT = Path(__file__).resolve().parent
 
 
 async def boom(request):
@@ -100,8 +106,20 @@ def main() -> int:
     check("500 응답이 그대로 나간다", r.status_code == 500, f"status={r.status_code}")
     check("알림 1건 발생", len(sent) == 1, f"{len(sent)}건")
     body = sent[0] if sent else ""
-    check("예외 이름이 담긴다", "RuntimeError" in body)
-    check("트레이스백이 담긴다", "```" in body and "boom" in body)
+    check("uri 가 헤더에 담긴다", "uri: GET /boom" in body)
+    check("Exception 줄", "Exception: RuntimeError" in body)
+    check(
+        "Location 이 우리 코드 파일·줄번호를 짚는다",
+        "Location: verify_error_alert.py Line " in body,
+        next((l for l in body.split("\n") if l.startswith("Location:")), "Location 줄 없음"),
+    )
+    check("예외 메시지가 코드블록에 담긴다", "```" in body and "upstream failed" in body)
+    check("호출 경로 줄", "호출 경로:" in body and ":" in body)
+    check(
+        "전체 트레이스백을 쏟아붓지 않는다(길이 800자 이하)",
+        len(body) <= 800,
+        f"{len(body)}자",
+    )
 
     # --- 2) 라우터가 직접 만든 5xx ---------------------------------------
     print("\n[2] 라우터가 반환한 5xx 감지")
