@@ -356,6 +356,17 @@ class Settings:
             os.getenv("USER_COOKIE_SECURE", "true").strip().lower() != "false"
         )
 
+        # --- 슬랙 5xx 알림 (2026-08-18, 대표 지시 — #알림-봇) ---
+        # 웹훅 URL 이 없으면 main.py 가 미들웨어를 아예 등록하지 않는다(기본 꺼짐).
+        # 그래서 로컬 개발/기존 검증 스크립트의 ASGI 스택은 이 기능 도입 전과 동일하다.
+        # 이 값은 시크릿이다 — .env 에만 두고 로그로 출력하지 않는다(config 전체 원칙).
+        self.slack_webhook_url: str = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        # 같은 (경로, 예외) 조합을 이 창 안에서 1회만 알린다. 0 이면 매번 알린다(권장하지 않음 —
+        # 원천 장애 한 건에 슬랙이 수백 줄로 잠긴다).
+        self.slack_alert_dedup_window_sec: int = int(
+            os.getenv("SLACK_ALERT_DEDUP_WINDOW_SEC", "600")
+        )
+
     @property
     def sqlite_file(self) -> Path:
         """상대 경로는 **BACKEND_DIR 기준**으로 푼다(프로세스 cwd 에 의존하지 않게).

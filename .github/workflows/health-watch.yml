@@ -1,0 +1,132 @@
+name: 서버 상태 감시
+
+# sumeungil.co.kr 이 죽었는지/degraded 인지 밖에서 확인해 #알림-봇 으로 알린다.
+# 서버 안에서 도는 감시는 서버가 통째로 죽으면 같이 죽는다 — 그래서 밖(GitHub 러너)에서 본다.
+#
+# ## 주기를 30분으로 잡은 이유 (바꾸기 전에 반드시 읽을 것)
+# 이 저장소는 **비공개**다. 비공개 저장소의 Actions 무료 한도는 계정당 월 2,000분이고,
+# GitHub 은 잡 하나를 **1분 단위로 올림 청구**한다(20초 걸려도 1분).
+#   · 5분 간격  = 8,640회/월 → 최소 8,640분  ❌ 한도의 4배 초과(요금 발생)
+#   · 10분 간격 = 4,320회/월 → 최소 4,320분  ❌ 초과
+#   · 30분 간격 = 1,440회/월 → 최소 1,440분  ✅ 한도 안 (약 560분 여유)
+# 더 촘촘한 감시(1~5분)가 필요하면 Actions 주기를 줄이지 말고 **외부 무료 업타임 모니터**
+# (UptimeRobot 등)를 쓸 것 — 그쪽은 GitHub 분수를 전혀 쓰지 않는다. deploy/SLACK-ALERTS.md 참고.
+#
+# ## 알림 폭탄 방지
+# 서버가 6시간 죽어 있으면 30분마다 12번 알릴 필요가 없다. **상태가 바뀔 때만** 보낸다
+# (정상→이상, 이상→복구). 직전 실행의 conclusion 을 GitHub API 로 읽어 판정하고, 이 잡은
+# 이상일 때 스스로 실패(exit 1)해 상태를 conclusion 에 기록한다.
+#
+# ## 알아둘 제약
+# · GitHub 의 schedule 은 정시 보장이 아니다(혼잡하면 수분~십수분 지연, 드물게 스킵).
+# · **60일간 저장소에 아무 활동이 없으면 스케줄 워크플로가 자동 비활성화된다.** 심사 기간
+#   (10~12월)에 커밋이 끊기면 감시도 멈추므로, 그때는 Actions 탭에서 켜져 있는지 볼 것.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:        # 수동 실행(지금 당장 확인하고 싶을 때)
+
+permissions:
+  contents: read
+  actions: read             # 직전 실행 conclusion 조회용
+
+concurrency:
+  group: health-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 헬스체크 호출
+        id: check
+        env:
+          HEALTH_URL: https://sumeungil.co.kr/api/v1/health
+        run: |
+          set -uo pipefail
+
+          # --retry 2: 순간적인 네트워크 흔들림으로 오탐하지 않게 3번까지 시도.
+          code=$(curl -sS --max-time 10 --retry 2 --retry-delay 5 --retry-all-errors \
+                   -o /tmp/health.json -w '%{http_code}' "$HEALTH_URL") || code="000"
+
+          state="down"
+          detail=""
+          if [ "$code" = "200" ]; then
+            st=$(jq -r '.status // "unknown"' /tmp/health.json 2>/dev/null || echo "unknown")
+            if [ "$st" = "ok" ]; then
+              state="ok"
+              detail="정상"
+            else
+              state="degraded"
+              detail=$(jq -r '"status=\(.status) · 설정=\(.checks.config) · 공공데이터=\(.checks.upstream_kto) · 캐시=\(.checks.cache)"' \
+                       /tmp/health.json 2>/dev/null || echo "status=$st")
+            fi
+          elif [ "$code" = "000" ]; then
+            detail="응답 없음 — 연결 실패 또는 10초 타임아웃 (서버·nginx 다운 또는 DNS 문제)"
+          else
+            detail="HTTP $code 응답 — 서버는 살아 있으나 헬스체크가 정상 응답하지 않음"
+          fi
+
+          echo "상태=$state / $detail" >> "$GITHUB_STEP_SUMMARY"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          {
+            echo "detail<<__EOD__"
+            echo "$detail"
+            echo "__EOD__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 직전 실행 결과 조회
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          # 이번 실행은 아직 completed 가 아니므로 목록의 첫 항목이 '직전 실행'이다.
+          prev=$(gh api "repos/${REPO}/actions/workflows/health-watch.yml/runs?status=completed&per_page=1" \
+                   --jq '.workflow_runs[0].conclusion' 2>/dev/null || echo "")
+          echo "직전 실행 결과: ${prev:-none}" >> "$GITHUB_STEP_SUMMARY"
+          echo "conclusion=${prev:-none}" >> "$GITHUB_OUTPUT"
+
+      - name: 이상 알림 (정상 → 이상 전환 시에만)
+        if: steps.check.outputs.state != 'ok' && steps.prev.outputs.conclusion != 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STATE: ${{ steps.check.outputs.state }}
+          DETAIL: ${{ steps.check.outputs.detail }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "SLACK_WEBHOOK_URL 시크릿이 없어 알림을 건너뜁니다." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$STATE" = "down" ]; then
+            icon="🔴"; label="서버 응답 없음"
+          else
+            icon="🟠"; label="서버 성능 저하(degraded)"
+          fi
+          when=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
+          text=$(printf '%s *%s* — sumeungil.co.kr\n%s\n확인 시각: %s KST\n<%s|점검 로그 보기>\n\n복구되면 이 채널에 다시 알립니다.' \
+            "$icon" "$label" "$DETAIL" "$when" "$RUN_URL")
+          payload=$(jq -nc --arg t "$text" '{text: $t, unfurl_links: false}')
+          curl -sS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
+
+      - name: 복구 알림 (이상 → 정상 전환 시에만)
+        if: steps.check.outputs.state == 'ok' && steps.prev.outputs.conclusion == 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then exit 0; fi
+          when=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
+          text=$(printf '🟢 *서버 복구됨* — sumeungil.co.kr\n헬스체크가 다시 정상(ok)입니다.\n확인 시각: %s KST' "$when")
+          payload=$(jq -nc --arg t "$text" '{text: $t, unfurl_links: false}')
+          curl -sS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
+
+      # 상태를 이 실행의 conclusion 에 남긴다 — 다음 실행이 '전환'을 판정하는 유일한 근거다.
+      # 이 스텝을 지우면 이상 상태가 계속돼도 30분마다 알림이 다시 날아온다.
+      - name: 이상 상태를 실행 결과에 반영
+        if: steps.check.outputs.state != 'ok'
+        run: exit 1

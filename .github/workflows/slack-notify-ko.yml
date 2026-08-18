@@ -1,0 +1,130 @@
+name: 슬랙 한국어 알림
+
+# GitHub 공식 Slack 앱은 알림 문구가 영어로 고정이다(마켓플레이스 지원 언어: 영어).
+# 그래서 이벤트를 직접 받아 한국어 문구를 만들어 #알림-봇 웹훅으로 보낸다.
+#
+# ⚠️ 공식 앱에서 `/github subscribe insik03/sumeungil` 를 하지 말 것 —
+#    같은 사건이 영어로 한 번 더 와서 알림이 두 배가 된다. 공식 앱은 링크 미리보기와
+#    `/github` 명령용으로만 설치해 둔다.
+#
+# 보안: 커밋 메시지·PR 제목 같은 **신뢰할 수 없는 문자열을 ${{ }} 로 스크립트에 끼워넣지
+#      않는다.** 그렇게 하면 제목에 셸 명령을 심어 러너를 조종할 수 있다(스크립트 인젝션).
+#      전부 $GITHUB_EVENT_PATH 의 JSON 에서 jq 로 읽는다.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  issues:
+    types: [opened, closed]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # 포크에서 온 PR 은 GitHub 정책상 시크릿을 받지 못한다 → 조용히 실패하는 대신 건너뛴다.
+    if: github.event.pull_request.head.repo.fork != true
+    steps:
+      - name: 한국어 메시지 만들어 슬랙으로 보내기
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "SLACK_WEBHOOK_URL 시크릿이 없어 알림을 건너뜁니다. (Settings > Secrets > Actions 에서 등록)" \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          EV="$GITHUB_EVENT_PATH"
+          text=""
+
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              n=$(jq '.commits | length' "$EV")
+              if [ "$n" -eq 0 ]; then
+                echo "커밋 없는 push(브랜치 삭제 등) — 건너뜁니다." >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              who=$(jq -r '.pusher.name // "누군가"' "$EV")
+              br=$(jq -r '.ref | ltrimstr("refs/heads/")' "$EV")
+              # 커밋은 10개까지만 적는다 — 대량 머지 때 슬랙이 메시지를 잘라버리는 것 방지.
+              lines=$(jq -r '.commits[:10][] | "· \(.message | split("\n")[0]) (\(.id[:7]))"' "$EV")
+              more=""
+              if [ "$n" -gt 10 ]; then
+                more=$(printf '\n… 외 %d개' "$((n - 10))")
+              fi
+              url=$(jq -r '.compare' "$EV")
+              text=$(printf '🚀 *%s* `%s` 에 새 커밋 %d개 — %s\n%s%s\n<%s|변경 내용 보기>' \
+                "$REPO" "$br" "$n" "$who" "$lines" "$more" "$url")
+              ;;
+
+            pull_request)
+              act=$(jq -r '.action' "$EV")
+              num=$(jq -r '.number' "$EV")
+              title=$(jq -r '.pull_request.title' "$EV")
+              who=$(jq -r '.pull_request.user.login' "$EV")
+              url=$(jq -r '.pull_request.html_url' "$EV")
+              head=$(jq -r '.pull_request.head.ref' "$EV")
+              base=$(jq -r '.pull_request.base.ref' "$EV")
+              merged=$(jq -r '.pull_request.merged' "$EV")
+              case "$act" in
+                opened|reopened)   headline="🔀 *PR #${num} 리뷰 요청*" ;;
+                ready_for_review)  headline="🔀 *PR #${num} 리뷰 준비됨*" ;;
+                closed)
+                  if [ "$merged" = "true" ]; then
+                    headline="✅ *PR #${num} 머지됨*"
+                  else
+                    headline="🚫 *PR #${num} 닫힘 (머지 안 됨)*"
+                  fi
+                  ;;
+                *) exit 0 ;;
+              esac
+              text=$(printf '%s — %s\n`%s` → `%s` · 작성자 %s\n<%s|PR 보기>' \
+                "$headline" "$title" "$head" "$base" "$who" "$url")
+              ;;
+
+            issues)
+              act=$(jq -r '.action' "$EV")
+              num=$(jq -r '.issue.number' "$EV")
+              title=$(jq -r '.issue.title' "$EV")
+              url=$(jq -r '.issue.html_url' "$EV")
+              if [ "$act" = "opened" ]; then
+                who=$(jq -r '.issue.user.login' "$EV")
+                text=$(printf '🐛 *이슈 #%s 등록* — %s\n작성자 %s\n<%s|이슈 보기>' \
+                  "$num" "$title" "$who" "$url")
+              else
+                who=$(jq -r '.sender.login' "$EV")
+                text=$(printf '☑️ *이슈 #%s 닫힘* — %s\n처리 %s\n<%s|이슈 보기>' \
+                  "$num" "$title" "$who" "$url")
+              fi
+              ;;
+
+            release)
+              tag=$(jq -r '.release.tag_name' "$EV")
+              name=$(jq -r '.release.name // .release.tag_name' "$EV")
+              who=$(jq -r '.release.author.login' "$EV")
+              url=$(jq -r '.release.html_url' "$EV")
+              text=$(printf '🏷️ *릴리스 %s 발행* — %s\n발행 %s\n<%s|릴리스 보기>' \
+                "$tag" "$name" "$who" "$url")
+              ;;
+
+            *) exit 0 ;;
+          esac
+
+          # 페이로드도 jq 로 만든다 — 제목에 " 나 개행이 있어도 JSON 이 깨지지 않게.
+          payload=$(jq -nc --arg t "$text" '{text: $t, unfurl_links: false}')
+          code=$(curl -sS -o /tmp/slack_resp.txt -w '%{http_code}' -X POST \
+            -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL")
+          if [ "$code" != "200" ]; then
+            echo "슬랙 전송 실패(HTTP $code): $(cat /tmp/slack_resp.txt)" >&2
+            exit 1
+          fi
+          echo "슬랙 알림 전송 완료." >> "$GITHUB_STEP_SUMMARY"

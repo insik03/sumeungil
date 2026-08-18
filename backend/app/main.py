@@ -36,6 +36,7 @@ from .api import (
 )
 from .config import settings
 from .deps import get_admin_auth, get_cache, get_database, get_user_auth
+from .middleware.error_alert import ErrorAlertMiddleware
 from .middleware.rate_limit import RateLimitMiddleware, build_limits_from_settings
 from .middleware.visit_log import VisitLogMiddleware
 from .services import festival_service, share_service
@@ -247,6 +248,24 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# --- 5xx 슬랙 알림 (2026-08-18, 대표 지시 — #알림-봇) ------------------------------
+# **가장 바깥에 둔다.** Starlette 는 나중에 add_middleware 한 것이 더 바깥이므로, CORS
+# 보다 나중에 등록하면 이 미들웨어가 최외곽이 되어 안쪽(CORS·레이트리밋·방문집계)에서
+# 터진 5xx 까지 한 곳에서 잡는다. 응답을 읽기만 하고 고치지 않으므로 CORS 헤더에는
+# 영향이 없다(429 에 CORS 헤더가 붙어야 한다는 위 계약은 그대로 유지된다).
+#
+# 웹훅 URL 이 없으면 **등록 자체를 생략한다** — 레이트리밋과 같은 원칙이다.
+# BaseHTTPMiddleware 는 요청마다 태스크 그룹을 만들어 통과만 시켜도 공짜가 아니다.
+if settings.slack_webhook_url:
+    app.add_middleware(
+        ErrorAlertMiddleware,
+        webhook_url=settings.slack_webhook_url,
+        env=settings.app_env,
+        dedup_window_sec=settings.slack_alert_dedup_window_sec,
+    )
+else:
+    logger.info("슬랙 5xx 알림 미등록(SLACK_WEBHOOK_URL 미설정) — 로컬 개발 기본값")
 
 app.include_router(health.router)
 app.include_router(congestion.router)
