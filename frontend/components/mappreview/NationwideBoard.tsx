@@ -21,12 +21,18 @@ const BADGE: Record<string, string> = {
  * 카드 마크업은 기존 `BoardCard` 의 클래스를 그대로 써서 두 모드의 생김새가 어긋나지 않게 했다.
  * 정렬은 **붐비는 순**이다(순위가 곧 정보인 화면). 데이터 없는 지역은 뒤로 보내고 "정보없음"으로
  * 표기한다 — 0% 로 적어 한산한 척하지 않는다.
+ *
+ * §47.4(신규, 03-design-spec.md, 2026-08-20) — `/congestion`에서 지도(KoreaSvgMap)를 없애고
+ * 이 보드를 지역 선택 자리로 승격하면서 `selected` prop을 추가했다. 일치하는 카드에
+ * `is-active`를 얹어 현재 선택된 시·도를 시각적으로 표시한다(선택 없으면 전부 비활성).
  */
 export default function NationwideBoard({
   items,
+  selected,
   onSelect,
 }: {
   items: NationwideCongestionItem[];
+  selected?: string | null;
   onSelect: (sidoCode: string) => void;
 }) {
   const ordered = [...items].sort((a, b) => {
@@ -41,8 +47,9 @@ export default function NationwideBoard({
       <button
         key={`${it.sido_code}-${idx}`}
         type="button"
-        className="board-card board-card--clickable"
+        className={`board-card board-card--clickable${it.sido_code === selected ? " is-active" : ""}`}
         onClick={() => onSelect(it.sido_code)}
+        aria-pressed={it.sido_code === selected}
         aria-label={`${it.short_name} ${
           it.available ? `${LEVEL_TEXT[key]} ${Math.round(it.index ?? 0)}퍼센트` : "정보 없음"
         } — 이 지역 보기`}

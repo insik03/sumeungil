@@ -142,6 +142,10 @@ class SharedCourseItem(BaseModel):
     spot_count: int
     created_at: str
     view_count: int
+    # 부록 R.14(2026-08-20) — additive. **항상 존재**한다(비로그인이면 liked_by_me 는 전부 false).
+    # 누가 눌렀는지(user_id)는 어떤 응답에도 나가지 않는다 — 집계와 본인 여부뿐이다.
+    like_count: int = 0
+    liked_by_me: bool = False
 
 
 class SharedCourseListResponse(BaseModel):
@@ -154,8 +158,16 @@ class SharedCourseDetail(SharedCourseItem):
     is_mine: bool = False
 
 
+class LikeResponse(BaseModel):
+    """좋아요 토글 응답(부록 R.14.1/2). `like_count` 는 **이번 요청이 반영된 값**이다."""
+
+    liked: bool
+    like_count: int
+
+
 __all__ = (
     "COMMENT_MAX",
+    "LikeResponse",
     "NICKNAME_MAX",
     "REASON_MAX",
     "ReviewCreateRequest",

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import LoginModal from "./LoginModal";
 import { logout, syncSessionFromServer } from "../lib/authStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
@@ -47,7 +47,8 @@ const NAV_ITEMS: NavItem[] = [
     href: "/course",
     children: [
       { label: "AI 코스 짜기", href: "/course" },
-      { label: "AI 여행 문답", href: "/ask" },
+      // §47.7(2026-08-20) — "AI 여행 문답"(/ask) 항목 제거. 컨시어지 화면이 삭제되고 같은 니즈는
+      // /course AI 모드 상단 의견 입력으로 흡수됐다(§47.3).
       // §41(신규) — 다른 사람이 공유한 코스 피드(/courses). 퀵메뉴(ServiceQuickMenu, 10개 유지)는
       // 건드리지 않고 GNB 드롭다운에만 추가한다(지시서 요구사항).
       { label: "다른 사람 코스", href: "/courses" },
@@ -57,7 +58,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "혼잡도·시기",
     href: "/congestion",
     children: [
-      { label: "전국 혼잡 지도", href: "/congestion" },
+      { label: "전국 혼잡 현황", href: "/congestion" },
       // 부록 D.7(2026-08-01) — 지정과제2("쏠림 완화")에 가장 직결되는 기능인데 GNB·퀵메뉴 어디에도
       // 진입점이 없어 스팟 상세를 통해서만 닿을 수 있었다. 독립 목적지로 승격한다.
       { label: "붐비는 곳 대신", href: "/compare" },
@@ -88,6 +89,7 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function Header() {
   const pathname = usePathname() ?? "/";
+  const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
   const [openLabel, setOpenLabel] = useState<string | null>(null);
   const nickname = useLoggedInName();
@@ -357,8 +359,15 @@ export default function Header() {
       </div>
 
       {/* onLoggedIn: nickname은 이제 useLoggedInName()이 AUTH_CHANGED_EVENT로 자동 반영한다
-          (LoginModal이 로그인 성공 시 setLoggedInName()을 이미 호출) — 여기선 할 일 없음. */}
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLoggedIn={() => {}} />
+          (LoginModal이 로그인 성공 시 setLoggedInName()을 이미 호출) — 여기선 이동만 한다.
+          §47.2(2026-08-20) — 헤더 로그인 버튼 경로에서 로그인 성공 시 마이페이지로 이동.
+          데스크톱·모바일 메뉴가 이 LoginModal 인스턴스를 공유하므로 이 한 곳만 고치면 된다.
+          LoginGateProvider/LoginRequiredGate의 별도 로그인 흐름은 건드리지 않는다(§47.2). */}
+      <LoginModal
+        open={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        onLoggedIn={() => router.push("/mypage")}
+      />
     </>
   );
 }

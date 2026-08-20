@@ -21,7 +21,6 @@ from .api import (
     auth,
     collections,
     compare,
-    concierge,
     congestion,
     course_share,
     courses,
@@ -34,6 +33,7 @@ from .api import (
     regions,
     reviews,
     slack,
+    tips,
     visit,
     weather,
 )
@@ -69,7 +69,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 async def _prewarm_festivals() -> None:
     """앱 기동 직후 전국 축제 스윕을 1회 미리 태워 festival_service 캐시를 채운다(QA Major 대응,
     2026-07-30). 콜드 캐시 상태로 첫 축제 문답 요청이 들어오면 원천 2개를 페이지네이션하느라
-    수 초~십수 초가 걸려 concierge_festival_fetch_timeout_sec 타임아웃에 걸리기 쉬웠다 —
+    수 초~십수 초가 걸려 축제 조회 타임아웃에 걸리기 쉬웠다 —
     부팅 시 미리 채워두면 실사용 트래픽의 첫 요청부터 캐시 히트가 된다.
 
     실패해도 앱 기동에 영향이 없다(try/except로 로그만 — 원천 API 문제로 부팅이 막히면 안 된다).
@@ -398,12 +398,12 @@ app.include_router(compare.router)
 app.include_router(courses.router)
 app.include_router(collections.router)
 app.include_router(festivals.router)
-app.include_router(concierge.router)  # 부록 N: AI 여행 문답(컨시어지)
 app.include_router(weather.router)    # 부록 Q.1: 전국 9권역 날씨 보드
 app.include_router(plan.router)       # 부록 Q.2: 출발일 지정 전망(오늘~+180일)
 app.include_router(reviews.router)      # 부록 R: 후기(별점+한줄평) — SQLite 저장
 app.include_router(course_share.router) # 부록 R: 코스 공유(share_code) — SQLite 저장
 app.include_router(inquiries.router)    # 2026-08-18: 고객문의(마이페이지, 로그인 필수)
+app.include_router(tips.router)        # 부록 Z: 개인화 여행 팁(로그인 선택 — 비로그인은 정적)
 app.include_router(visit.router)        # 부록 X: 페이지 조회 비콘(프론트가 처리하는 화면 경로 집계)
 
 # 슬랙 슬래시 명령어 (2026-08-18) — **서명 검증 키가 없으면 등록하지 않는다.**

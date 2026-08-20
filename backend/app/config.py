@@ -115,32 +115,18 @@ class Settings:
             os.getenv("COURSE_SUMMARY_ENABLED", "true").strip().lower() != "false"
         )
 
-        # --- 부록 N: AI 여행 문답(컨시어지) — POST /api/v1/concierge/ask ---
-        # 같은 로컬 Ollama 모델을 재사용한다(새 외부 API·키·비용 0). 한 요청에서 LLM 을 최대 2회
-        # 부른다(① 온보딩 태그추출 재사용 ② 답변 생성). 답변 생성은 사용자가 화면에서 기다리는
-        # 경로라 코스 요약과 같은 20초 상한을 둔다 — 초과/실패 시 템플릿 폴백(answer 는 항상 존재).
-        self.concierge_timeout_sec: float = float(os.getenv("CONCIERGE_TIMEOUT_SEC", "20"))
-        # LLM 에 넘기는 데이터 블록(스팟명=외부 문자열 포함) 상한 — DoS/비용 폭주 방지.
-        self.concierge_max_input_chars: int = int(os.getenv("CONCIERGE_MAX_INPUT_CHARS", "900"))
-        # 답변 LLM 기능 스위치(운영 중 즉시 끄기용). false 면 LLM 미호출 + 템플릿 답변만.
-        self.concierge_answer_enabled: bool = (
-            os.getenv("CONCIERGE_ANSWER_ENABLED", "true").strip().lower() != "false"
-        )
-        # 문답 1건이 돌려주는 스팟 수(계약 N: 5~8곳).
-        self.concierge_spot_limit: int = int(os.getenv("CONCIERGE_SPOT_LIMIT", "8"))
-        # 축제 의도 분기(N.9) 전용 — festival_service.build_festivals_response 콜드 캐시(전국
-        # 스윕) 지연이 사용자 응답을 막지 않도록 하는 상한(QA Major 대응, 2026-07-30).
-        # 초과 시 festivals=[] + 전용 템플릿 답변으로 즉시 응답하고, 스윕 자체는 백그라운드에서
-        # 계속 돌아(asyncio.shield) 다음 요청은 캐시 히트로 빠르게 처리된다.
-        self.concierge_festival_fetch_timeout_sec: float = float(
-            os.getenv("CONCIERGE_FESTIVAL_FETCH_TIMEOUT_SEC", "12.0")
-        )
-        # 부록 N.10(2026-07-30) — 컨시어지 전용 통합 이해(태그+intent+region_text+wants_*) LLM
-        # 호출 타임아웃. 온보딩 ollama_timeout_sec(30s)과 같은 기본값에서 시작해 운영 중
-        # 독립적으로 튜닝할 수 있게 분리했다(스키마가 커진 만큼 응답이 조금 더 걸릴 수 있음).
-        self.concierge_understanding_timeout_sec: float = float(
-            os.getenv("CONCIERGE_UNDERSTANDING_TIMEOUT_SEC", "30")
-        )
+        # --- 부록 Z: 개인화 여행 팁 — POST /api/v1/tips/personalized (2026-08-20) ---
+        # 같은 로컬 Ollama 모델을 재사용한다(새 외부 API·키·비용 0). 실패·타임아웃·킬스위치는
+        # 전부 정적 5건 폴백이므로 이 값들을 어떻게 바꿔도 화면이 비지 않는다.
+        # 코스 요약과 같은 20초 상한에서 시작한다(02-ai-strategy.md §10.4 제안값).
+        self.tips_timeout_sec: float = float(os.getenv("TIPS_TIMEOUT_SEC", "20"))
+        # 같은 취향·같은 지역·같은 날이면 LLM 을 다시 태우지 않는다(비용 0 유지의 핵심).
+        self.tips_cache_ttl_sec: int = int(os.getenv("TIPS_CACHE_TTL_SEC", str(24 * 60 * 60)))
+        # 기능 스위치(운영 중 즉시 끄기용). false 면 LLM 미호출 + 즉시 정적 폴백.
+        self.tips_enabled: bool = os.getenv("TIPS_ENABLED", "true").strip().lower() != "false"
+        # 유효 팁 건수 하한/상한(부록 Z.4). 하한 미만이면 부분 응답 대신 정적 폴백으로 간다.
+        self.tips_min_items: int = int(os.getenv("TIPS_MIN_ITEMS", "3"))
+        self.tips_max_items: int = int(os.getenv("TIPS_MAX_ITEMS", "5"))
 
         # --- MVP-7 파트4 날씨(기상청 D18) ---
         # WEATHER_PROVIDER: "kma"(기상청 D18 실호출, 기본) | "null"(항상 준비중, 순수 graceful).
@@ -188,7 +174,7 @@ class Settings:
             os.getenv("RATE_LIMIT_ENABLED", "false").strip().lower() == "true"
         )
         self.rate_limit_window_sec: int = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
-        # LLM 추론이 도는 경로(concierge/ask, onboarding/analyze). 1건당 CPU 수 초~수십 초.
+        # LLM 추론이 도는 경로(onboarding/analyze, tips/personalized). 1건당 CPU 수 초~수십 초.
         self.rate_limit_llm_per_min: int = int(os.getenv("RATE_LIMIT_LLM_PER_MIN", "6"))
         # 코스 생성/정렬(Tmap 외부 호출 + 요약 LLM).
         self.rate_limit_course_per_min: int = int(os.getenv("RATE_LIMIT_COURSE_PER_MIN", "10"))
@@ -227,6 +213,12 @@ class Settings:
         # device_id 1개 기준 분당 쓰기 상한(IP 기준 레이트리밋과 **별개**의 2차 방어선).
         self.review_write_per_min: int = int(os.getenv("REVIEW_WRITE_PER_MIN", "3"))
         self.share_write_per_min: int = int(os.getenv("SHARE_WRITE_PER_MIN", "5"))
+        # 부록 R.14(2026-08-20) 좋아요 — 여기만 **계정(user_id) 기준**이다(하트는 로그인 필수).
+        # 리뷰·공유보다 넉넉한 이유: 피드를 훑으며 여러 카드에 연속으로 누르는 것이 정상 사용이다.
+        self.like_write_per_min: int = int(os.getenv("LIKE_WRITE_PER_MIN", "30"))
+        # 좋아요 킬스위치. false 면 두 라우트가 503 FEATURE_DISABLED 이고, 피드는 like_count·
+        # liked_by_me 를 계속 내려준다(값만 고정) — 프론트가 하트를 숨길 필요 없이 서버가 막는다.
+        self.like_enabled: bool = os.getenv("LIKE_ENABLED", "true").strip().lower() != "false"
         # 서로 다른 기기 N 명이 신고하면 자동 숨김(운영자 없는 데모의 최소 안전장치).
         self.review_hide_report_threshold: int = int(
             os.getenv("REVIEW_HIDE_REPORT_THRESHOLD", "3")

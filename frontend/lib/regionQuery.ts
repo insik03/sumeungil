@@ -1,7 +1,7 @@
 /**
  * 지역 컨텍스트(region_code) URL 전파 유틸 — 03-design-spec.md §35(2026-07-31), 백로그 D21.
  *
- * 홈에서 고른 지역이 `/recommend`·`/course`·`/ask`로 이어지지 않고 끊기던 문제를 없애기 위해,
+ * 홈에서 고른 지역이 `/recommend`·`/course`로 이어지지 않고 끊기던 문제를 없애기 위해,
  * "링크에 붙이는 쪽"과 "쿼리를 읽는 쪽"이 같은 검증 규칙을 쓰도록 한 곳에 모았다.
  *
  * 검증 규칙: 법정동 시군구 코드(sigungu_cd)는 숫자 5자리다(components/regions/constants.ts의
@@ -24,7 +24,7 @@ export function readRegionCode(value: string | null | undefined): string | null 
 
 /**
  * 링크 href에 region_code를 덧붙인다. 코드가 없거나 형식이 어긋나면 원래 href를 그대로 돌려준다
- * (지역 미선택 시 기존 동작 100% 유지). 이미 쿼리가 있는 href(`/ask?q=...`)면 `&`로 잇는다.
+ * (지역 미선택 시 기존 동작 100% 유지). 이미 쿼리가 있는 href(`?...`)면 `&`로 잇는다.
  */
 export function withRegionCode(href: string, code: string | null | undefined): string {
   const valid = readRegionCode(code);

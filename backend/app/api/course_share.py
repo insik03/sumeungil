@@ -4,11 +4,13 @@
 나눈 이유: 코스 조립(무상태·공공데이터)과 코스 공유·저장(사용자 데이터·저장소)은 실패 모드도
 보안 성격도 다르다. 한 파일에 섞으면 조회 경로가 저장소 장애에 끌려 들어간다.
 
-라우트 7개:
+라우트 9개:
   POST   /api/v1/courses/share               공유 생성 → share_code(device_id 기준, 공개)
   GET    /api/v1/courses/shared              최근 공유 피드(payload 미포함)
   GET    /api/v1/courses/shared/{code}       상세(+조회수 증가)
   DELETE /api/v1/courses/shared/{code}       삭제(본인 기기만)
+  POST   /api/v1/courses/shared/{code}/like  좋아요(2026-08-20 신설, 로그인 필수·멱등)
+  DELETE /api/v1/courses/shared/{code}/like  좋아요 취소(로그인 필수·멱등)
   POST   /api/v1/courses/mine                내 코스 저장(2026-08-17 신설, 로그인 필수)
   GET    /api/v1/courses/mine                내가 저장한 코스 목록(로그인 필수)
   DELETE /api/v1/courses/mine/{id}           내 코스 삭제(본인 계정만, 로그인 필수)
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -34,6 +37,7 @@ from ..repositories import ai_course_repo, shared_course_repo
 from ..repositories.congestion_repo import CongestionRepository
 from ..repositories.spot_repo import SpotRepository
 from ..schemas.community import (
+    LikeResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     SharedCourseDetail,
@@ -49,7 +53,7 @@ from ..security.user_auth import UserIdentity
 from ..services import community_errors as errors
 from ..services import course_payload, share_service
 from ..util.time import now_kst, to_iso_kst
-from .auth_deps import require_login
+from .auth_deps import optional_identity, require_login
 from .community_common import (
     check_write_quota,
     ensure_enabled,
@@ -100,12 +104,25 @@ async def create_shared_course(
 async def list_shared_courses(
     limit: int = Query(default=share_service.DEFAULT_LIMIT, ge=1, le=shared_course_repo.MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
+    sort: Literal["latest", "popular"] = Query(default="latest"),
     db: Database = Depends(get_database),
+    identity: UserIdentity | None = Depends(optional_identity),
 ):
-    """다른 사람이 공유한 코스 피드(최신순). 항목에 payload 를 싣지 않는다(목록 경량화)."""
+    """다른 사람이 공유한 코스 피드. 항목에 payload 를 싣지 않는다(목록 경량화).
+
+    `sort` 를 **보내지 않으면 종전과 동일한 SQL·동일한 순서**다(부록 R.14.4 무회귀 계약).
+    Literal 타입이라 화이트리스트 밖 값은 FastAPI 가 422 로 막는다(문자열이 SQL 에 닿지 않는다).
+    `liked_by_me` 는 로그인했을 때만 true 가 될 수 있고, 서버가 목록 한 번에 계산한다(N+1 금지).
+    """
     try:
         ensure_enabled()
-        return await share_service.list_shares(db, limit=limit, offset=offset)
+        return await share_service.list_shares(
+            db,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+            user_id=identity.user_id if identity else None,
+        )
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="courses/shared/list")
 
@@ -117,6 +134,7 @@ async def get_shared_course(
     db: Database = Depends(get_database),
     spot_repo: SpotRepository = Depends(get_spot_repository),
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
+    identity: UserIdentity | None = Depends(optional_identity),
 ):
     try:
         ensure_enabled()
@@ -126,6 +144,7 @@ async def get_shared_course(
             device_id=read_device_id(request),
             spot_repo=spot_repo,
             congestion_repo=congestion_repo,
+            user_id=identity.user_id if identity else None,
         )
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="courses/shared/get")
@@ -144,6 +163,64 @@ async def delete_shared_course(
         return {"deleted": True}
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="courses/shared/delete")
+
+
+# --- 좋아요 (부록 R.14, 2026-08-20) --------------------------------------------
+#
+# 신원이 **로그인 계정**이라는 점이 위 /share·/shared(device_id) 와 다르다. device_id 는
+# 클라이언트가 만드는 값이라 무한히 갈아끼울 수 있어 카운트가 의미를 잃는다.
+# 경로 충돌 없음: `/shared/{code}`(2세그먼트) 와 `/shared/{code}/like`(3세그먼트) 는 템플릿이
+# 다르다. 미들웨어 레이트리밋은 수정 불필요 — resolve_bucket 이 POST|DELETE +
+# /api/v1/courses/shared/* 를 이미 `ugc` 로 분류한다. 그 위에 계정 기준 `like` 버킷을 건다.
+
+
+def _ensure_like_enabled() -> None:
+    if not settings.like_enabled:
+        raise errors.CommunityError(
+            503, "FEATURE_DISABLED", "좋아요 기능이 일시적으로 중지되었습니다."
+        )
+
+
+@router.post("/shared/{share_code}/like", response_model=LikeResponse)
+async def like_shared_course(
+    share_code: str,
+    db: Database = Depends(get_database),
+    identity: UserIdentity = Depends(require_login),
+):
+    """멱등 — 이미 눌린 상태에서 또 눌러도 200(더블탭은 오류가 아니다)."""
+    try:
+        ensure_enabled()
+        _ensure_like_enabled()
+        # 쿼터 키는 `user:` 접두어로 device_id(UUID) 와 키 공간을 분리한다
+        # (UUID 문자열과 정수 id 가 우연히 겹치지 않게).
+        limited = check_write_quota(f"user:{identity.user_id}", "like")
+        if limited is not None:
+            return limited
+        return await share_service.like_share(
+            db, share_code=share_code, user_id=identity.user_id
+        )
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="courses/shared/like")
+
+
+@router.delete("/shared/{share_code}/like", response_model=LikeResponse)
+async def unlike_shared_course(
+    share_code: str,
+    db: Database = Depends(get_database),
+    identity: UserIdentity = Depends(require_login),
+):
+    """멱등 — 누른 적 없어도 200(취소의 결과 상태가 같다). 404 를 쓰지 않는다."""
+    try:
+        ensure_enabled()
+        _ensure_like_enabled()
+        limited = check_write_quota(f"user:{identity.user_id}", "like")
+        if limited is not None:
+            return limited
+        return await share_service.unlike_share(
+            db, share_code=share_code, user_id=identity.user_id
+        )
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="courses/shared/unlike")
 
 
 # --- 2026-08-17 신설: 내가 저장한 AI 코스 (Phase C, 대표 지시) ----------------------

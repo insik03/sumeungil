@@ -43,7 +43,7 @@ _WHITESPACE_RUN_RE = re.compile(r"\s+")
 # 위 _CONTROL_CHARS_RE(탐지/DoS 방어 전용, sanitize_free_text 가 쓴다)에는 없는 추가
 # 줄바꿈류 문자 — 탭(\t)·유니코드 줄/문단 구분자(U+2028/U+2029). 정형 한 줄 문자열(스팟명·
 # 안내문 등)에 섞이면 렌더링/로그에서 개행처럼 보여 문구를 갈라놓을 수 있어 별도로 둔다.
-# concierge_service._safe_text 등 "한 줄 평문 강제" 용도로 재사용한다(2026-07-30).
+# 스팟명·안내문 등 "한 줄 평문 강제" 용도로 재사용한다(2026-07-30).
 _LINE_BREAKING_CHARS_RE = re.compile(r"[\t\x0b\x0c  ]")
 
 

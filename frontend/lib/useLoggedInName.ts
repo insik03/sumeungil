@@ -6,7 +6,7 @@
  *
  * `Header.tsx`가 원래 자기 안에서만 쓰던 "getNickname() 초기값 + AUTH_CHANGED_EVENT/
  * storage 리스너" 패턴을 그대로 추출한 것 — 이제 로그인 게이트가 필요한 페이지
- * (OnboardingContent/AskContent/CourseContent)도 같은 로직이 필요해져서 중복을 피하려고
+ * (OnboardingContent/CourseContent/MyPageContent 등)도 같은 로직이 필요해져서 중복을 피하려고
  * 훅으로 분리했다. `Header.tsx`도 이 훅을 쓰도록 리팩터한다(동작은 그대로).
  *
  * `syncSessionFromServer()`(부팅 시 서버 세션과 로컬 캐시를 맞추는 1회성 호출, QA M-2)는

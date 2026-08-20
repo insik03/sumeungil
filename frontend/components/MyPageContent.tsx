@@ -6,9 +6,11 @@ import {
   API_BASE,
   ApiError,
   InquirySummary,
+  OnboardingResult,
   createInquiry,
   fetchMyCourses,
   fetchMyInquiries,
+  fetchMyOnboardingProfile,
 } from "../lib/api";
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 import { loadMySharedCourses } from "../lib/sharedCoursesStorage";
@@ -79,6 +81,11 @@ export default function MyPageContent() {
   const [stampCount, setStampCount] = useState<number | null>(null);
   const [courseCount, setCourseCount] = useState<number | null>(null);
 
+  // §47.1(신규) — "여행 준비" 섹션 프로필 유무 판정. GET /api/v1/onboarding/me(이미 존재,
+  // CourseContent.tsx의 fetchMyOnboardingProfile 재사용) 1회 호출. 새 API 0.
+  // undefined=확인 전(문구 숨김), null=아직 취향 미분석, OnboardingResult=분석 완료.
+  const [travelProfile, setTravelProfile] = useState<OnboardingResult | null | undefined>(undefined);
+
   useEffect(() => {
     if (!nickname) return;
     setSavedSpotCount(loadSavedSpots().length);
@@ -91,6 +98,13 @@ export default function MyPageContent() {
       })
       .catch(() => {
         if (!cancelled) setCourseCount(sharedCount);
+      });
+    fetchMyOnboardingProfile()
+      .then((profile) => {
+        if (!cancelled) setTravelProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setTravelProfile(null);
       });
     return () => {
       cancelled = true;
@@ -215,7 +229,34 @@ export default function MyPageContent() {
       </div>
 
       {view === "activity" ? (
-        <nav className="mypage-activity" aria-label="나의 활동">
+        <>
+          {/* §47.1(신규, 03-design-spec.md) — "여행 준비" 섹션. 새 색·새 컴포넌트 언어를
+              만들지 않고 .onboard-card로 감싸 "나의 활동"의 배경 없는 평면 그리드와 구분한다.
+              타일은 .mypage-activity__item 등을 100% 재사용하고, 2칸 전용 그리드만 신규다. */}
+          <div className="onboard-card" style={{ marginTop: "var(--sp-6)" }}>
+            <span className="eyebrow-pill eyebrow-pill--coral">여행 준비</span>
+            <h2 className="quick-menu__title" style={{ marginTop: "var(--sp-2)" }}>
+              어디로 떠나볼까요?
+            </h2>
+            {travelProfile !== undefined && (
+              <p className="onboard-result__sub" style={{ marginTop: "4px" }}>
+                {travelProfile === null
+                  ? "아직 취향을 알려주지 않았어요"
+                  : `취향 분석 완료 · ${Object.values(travelProfile.tags).flat().length}개 키워드`}
+              </p>
+            )}
+            <ul className="mypage-activity__grid mypage-activity__grid--prep">
+              <ActivityTile
+                href="/onboarding"
+                label={travelProfile ? "취향 다시 분석하기" : "취향 알려주기"}
+                count={null}
+                icon={<SparkleIcon />}
+              />
+              <ActivityTile href="/course" label="AI 코스짜기" count={null} icon={<RouteIcon />} />
+            </ul>
+          </div>
+
+          <nav className="mypage-activity" aria-label="나의 활동">
           <h2 className="quick-menu__title" style={{ marginTop: "var(--sp-6)" }}>
             나의 활동
           </h2>
@@ -231,7 +272,8 @@ export default function MyPageContent() {
             <ActivityTile onClick={() => setView("account")} label="계정관리" count={null} icon={<GearIcon />} />
             <ActivityTile onClick={openInquiryView} label="고객문의" count={null} icon={<MailIcon />} />
           </ul>
-        </nav>
+          </nav>
+        </>
       ) : view === "account" ? (
         <div style={{ marginTop: "var(--sp-6)" }}>
           <button type="button" className="btn btn--ghost-text" onClick={() => setView("activity")}>
@@ -488,6 +530,19 @@ function MailIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** §47.1 — ServiceQuickMenu.tsx의 "onboarding" 케이스와 동일 별 모양 path 재사용(진입점마다
+ * 다른 아이콘을 쓰지 않는다). */
+function SparkleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3l1.8 5.6H20l-4.8 3.5 1.8 5.6L12 14.2 7 17.7l1.8-5.6L4 8.6h6.2L12 3z"
+        fill="currentColor"
       />
     </svg>
   );

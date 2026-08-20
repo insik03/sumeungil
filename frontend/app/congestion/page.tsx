@@ -4,9 +4,9 @@ import MapPreviewContent from "../../components/mappreview/MapPreviewContent";
 import DeparturePlanner from "../../components/DeparturePlanner";
 
 export const metadata: Metadata = {
-  title: "전국 예상 혼잡 지도 — 숨은길",
+  title: "전국 예상 혼잡 현황 — 숨은길",
   description:
-    "전국 시·도의 예상 혼잡도를 지도 한 장으로 보고, 지역을 고르면 그 지역 관광지의 예상 혼잡 현황을 확인해요.",
+    "전국 시·도의 예상 혼잡도를 한눈에 보고, 지역을 고르면 그 지역 관광지의 예상 혼잡 현황을 확인해요.",
 };
 
 /**

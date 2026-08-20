@@ -12,18 +12,19 @@ import {
 import CongestionBoard from "../CongestionBoard";
 import { loadLastRegion, saveLastRegion } from "../../lib/lastRegionStorage";
 import { SIDO_REGIONS } from "../regions/constants";
-import KoreaSvgMap from "./KoreaSvgMap";
 import NationwideBoard from "./NationwideBoard";
 import { LANDMARKS } from "./landmarks";
 import { LEVEL_TEXT } from "./shared";
 
 
 /**
- * 전국 지도 화면 (부록 U, 2026-08-01 대표 지시).
+ * 전국 혼잡 현황 화면 (부록 U, 2026-08-01 대표 지시 → §47.4(2026-08-20) 지도 제거 재작업).
  *
- * 왼쪽: 실제 행정구역 경계 SVG 지도 — 시·도를 예상 혼잡도로 칠한다(전국을 한눈에).
- * 오른쪽: 고른 시·도의 **Tmap 실지도** + 그 지역 관광지 마커(정확한 위치 확인).
- * → "전국은 한눈에, 상세는 실지도로"라는 대표 결정을 그대로 구현한 것.
+ * §47.4 조사 결과 정정: 아래 지역 선택 자리에는 원래 실제 행정구역 SVG 지도(KoreaSvgMap)가
+ * 있었지만, 오른쪽 패널은 애초에 지도가 아니었다(부록 U.4에서 이미 지도를 걷어내고 랜드마크
+ * 사진+숨은명소 카드로 바꿨다 — 아래 남은 낡은 주석 참고). 지워야 할 지도는 KoreaSvgMap
+ * 하나뿐이었다. 지도를 없애고 NationwideBoard(마퀴 카드)를 지역 선택 자리로 승격했다 —
+ * 상시 노출 + 선택 상태 표시(`is-active`)로 지역 선택 기능 공백이 없다.
  */
 export default function MapPreviewContent() {
   const [data, setData] = useState<NationwideCongestionResponse | null>(null);
@@ -115,36 +116,30 @@ export default function MapPreviewContent() {
 
   return (
     <section className="section" style={{ maxWidth: 1560, margin: "0 auto" }}>
-      <span className="eyebrow-pill eyebrow-pill--coral">전국 혼잡 지도</span>
+      <span className="eyebrow-pill eyebrow-pill--coral">전국 혼잡 현황</span>
       <h1 className="section__title">지금 전국, 어디가 붐빌까요?</h1>
       <p style={{ opacity: 0.85, margin: "0 0 6px" }}>
-        시·도를 눌러보세요. 그 지역 실제 지도와 관광지를 보여드려요.
+        시·도를 눌러보세요. 그 지역 혼잡 현황과 관광지를 보여드려요.
       </p>
       {err && <p style={{ color: "#b3261e" }}>데이터를 불러오지 못했어요: {err}</p>}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(420px, 1010px) minmax(300px, 1fr)",
-          gap: 24,
-          alignItems: "start",
-        }}
-      >
-        <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16 }}>
-          {items.length > 0 ? (
-            <KoreaSvgMap items={items} selected={selected} onSelect={handleSelect} />
-          ) : (
-            <p>불러오는 중…</p>
-          )}
-        </div>
+      {/* §47.4(2026-08-20) — 1단 세로 배치. 지역 선택(NationwideBoard)을 상시 노출로 승격했다
+          (이전엔 !picked일 때만 하단 폴백으로 보였다 — 그 중복 렌더 블록은 아래에서 제거했다). */}
+      <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16 }}>
+        {items.length > 0 ? (
+          <NationwideBoard items={items} selected={selected} onSelect={handleSelect} />
+        ) : (
+          <p>불러오는 중…</p>
+        )}
+      </div>
 
-        <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16, minHeight: 420 }}>
-          {!picked && (
-            <p style={{ opacity: 0.75 }}>
-              왼쪽 지도에서 시·도를 선택하면 그 지역 지도가 여기에 나와요.
-            </p>
-          )}
-          {picked && (
+      <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16, minHeight: 420, marginTop: 24 }}>
+        {!picked && (
+          <p style={{ opacity: 0.75 }}>
+            위에서 시·도를 선택하면 그 지역 정보가 여기에 나와요.
+          </p>
+        )}
+        {picked && (
             <>
               {/* 클릭하면 **랜드마크가 제일 먼저** 보이게 한다(대표 지시).
                   배경은 그 지역의 **실제 관광 사진**(한국관광공사 TourAPI). 사진에 찍힌 곳의
@@ -291,38 +286,21 @@ export default function MapPreviewContent() {
               </div>
             </>
           )}
-        </div>
       </div>
 
-      {/* 부록 U.3(대표 지시) — 지도 **아래**에 예상 혼잡 현황판.
-          지역은 위 지도가 정한다(고르기 전에는 기본 지역). 카드는 옆으로 천천히 순환한다. */}
+      {/* §47.4(2026-08-20) — CongestionBoard는 그대로 최하단에 유지(marquee 모드, 선택 지역
+          기준). 이전엔 !picked일 때만 등장하던 "예상 혼잡 현황판"(section--mint +
+          NationwideBoard 중복 렌더) 블록이 있었지만, 위에서 NationwideBoard가 이미 상시
+          노출되므로 같은 컴포넌트를 두 번 그릴 이유가 없어 제거했다. picked가 없는 첫 진입도
+          CongestionBoard 자체 폴백(지역 prop 없으면 백엔드 기본 지역, CongestionBoard.tsx
+          44~60행)으로 빈 화면 없이 항상 무언가를 보여준다. */}
       <div style={{ marginTop: 28 }}>
-        {picked ? (
-          <CongestionBoard
-            areaCd={picked.sido_code === "47940" ? "47" : picked.sido_code}
-            sigunguCd={picked.region_code}
-            marquee
-            subtitle={`${picked.short_name} · ${picked.basis_region_name ?? ""} 기준`}
-          />
-        ) : (
-          /* 지역을 고르기 전에는 **지도에 떠 있는 시·도 전체**의 예상 혼잡도를 흘린다(대표 지시).
-             특정 지역 전광판을 기본값으로 두면 "왜 부산이 기본이지?"가 되고, 전국 화면이라는
-             성격과도 어긋난다. 카드를 누르면 그 지역이 선택된다(지도 클릭과 동일 동작). */
-          <section className="section section--mint" aria-labelledby="nationwideBoardHeading">
-            <span className="eyebrow-pill eyebrow-pill--coral">예상 혼잡 현황판</span>
-            <h2 className="section__title" id="nationwideBoardHeading">
-              지금 전국, 어디가 붐빌까요?
-            </h2>
-            <p className="board-subtitle">
-              시·도별 예상 혼잡도예요. 카드를 누르면 그 지역만 자세히 볼 수 있어요.
-            </p>
-            {items.length > 0 ? (
-              <NationwideBoard items={items} onSelect={handleSelect} />
-            ) : (
-              <p style={{ opacity: 0.7 }}>불러오는 중…</p>
-            )}
-          </section>
-        )}
+        <CongestionBoard
+          areaCd={picked ? (picked.sido_code === "47940" ? "47" : picked.sido_code) : null}
+          sigunguCd={picked?.region_code ?? null}
+          marquee
+          subtitle={picked ? `${picked.short_name} · ${picked.basis_region_name ?? ""} 기준` : null}
+        />
       </div>
     </section>
   );

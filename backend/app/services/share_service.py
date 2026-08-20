@@ -44,6 +44,7 @@ from ..repositories.spot_repo import SpotRepository
 from ..schemas.community import (
     NICKNAME_MAX,
     TITLE_MAX,
+    LikeResponse,
     ShareCreateRequest,
     ShareCreateResponse,
     SharedCourseDetail,
@@ -156,6 +157,10 @@ def _to_item(row: dict[str, Any]) -> SharedCourseItem:
         spot_count=int(row["spot_count"]),
         created_at=row["created_at"],
         view_count=int(row["view_count"]),
+        # 부록 R.14: 좋아요는 payload 밖 컬럼이라 여기서만 읽는다. 값이 없는 행(구 데이터)도
+        # 0/False 로 안전하게 접힌다.
+        like_count=int(row.get("like_count") or 0),
+        liked_by_me=bool(row.get("liked_by_me")),
     )
 
 
@@ -248,6 +253,15 @@ async def run_cleanup(db: Database) -> dict[str, int]:
         logger.info(
             "share retention 정리 완료 expired=%d overflow=%d remaining=%d",
             expired, overflow, remaining,
+        )
+    # 부록 R.14.5 잔여 위험: 전체가 "최근 + 반응 있음"이면 유예에 걸려 정리가 0건이 되어
+    # 상한을 못 지킬 수 있다(좋아요 이전부터 view_count 로 존재하던 성질). 조용히 넘어가면
+    # 운영이 알 방법이 없으므로 관측되면 경고를 남긴다(SHARE_MAX_TOTAL 상향 또는 유예일 하향).
+    if overflow == 0 and remaining > max_total:
+        logger.warning(
+            "share retention: 정리 0건인데 전체 상한 초과 remaining=%d max_total=%d "
+            "(유예 대상이 상한을 채웠을 수 있음 — SHARE_MAX_TOTAL 상향 또는 유예일 하향 검토)",
+            remaining, max_total,
         )
     return {"expired": expired, "overflow": overflow, "remaining": remaining}
 
@@ -347,6 +361,7 @@ async def get_share(
     device_id: str | None,
     spot_repo: SpotRepository,
     congestion_repo: CongestionRepository,
+    user_id: int | None = None,
 ) -> SharedCourseDetail:
     """상세 조회 + view_count 증가를 **한 트랜잭션**으로 처리한다.
 
@@ -363,10 +378,15 @@ async def get_share(
         if row is None or int(row["hidden"]) == 1:
             raise errors.not_found("공유된 코스를 찾을 수 없습니다.")
         shared_course_repo.bump_view_count(conn, share_code=code)
-        return row
+        # U-6 결론: 상세에 하트를 붙일지는 designer 판단이고, 서버는 그 판단과 무관하게
+        # 값을 **항상** 제공한다(나중에 라우트를 다시 고치지 않기 위해서다).
+        liked, like_count = shared_course_repo.get_like_state(
+            conn, share_code=code, user_id=user_id
+        )
+        return row, liked, like_count
 
-    row = await db.awrite(_tx)
-    item = _to_item(row)
+    row, liked, like_count = await db.awrite(_tx)
+    item = _to_item(row | {"like_count": like_count, "liked_by_me": liked})
     course = course_payload.filter_stored_course(
         _decode_payload(row["payload"]), spot_repo=spot_repo
     )
@@ -379,24 +399,82 @@ async def get_share(
         created_at=item.created_at,
         # 방금 +1 한 값을 돌려준다(응답과 DB 가 어긋나 보이지 않게).
         view_count=item.view_count + 1,
+        like_count=item.like_count,
+        liked_by_me=item.liked_by_me,
         course=course,
         is_mine=bool(device_id) and row["device_id"] == device_id,
     )
 
 
 async def list_shares(
-    db: Database, *, limit: int, offset: int
+    db: Database,
+    *,
+    limit: int,
+    offset: int,
+    sort: str = "latest",
+    user_id: int | None = None,
 ) -> SharedCourseListResponse:
     limit = max(1, min(shared_course_repo.MAX_LIMIT, limit))
     offset = max(0, offset)
+    # 화이트리스트 밖 값은 라우터가 이미 422 로 막지만, 서비스도 스스로를 지킨다(기본 latest).
+    if sort not in shared_course_repo.SORT_VALUES:
+        sort = "latest"
 
     def _tx(conn: psycopg.Connection):
-        rows = shared_course_repo.list_shares(conn, limit=limit, offset=offset)
+        rows = shared_course_repo.list_shares(
+            conn, limit=limit, offset=offset, sort=sort, user_id=user_id
+        )
         total = shared_course_repo.count_shares(conn)
         return rows, total
 
     rows, total = await db.aread(_tx)
     return SharedCourseListResponse(items=[_to_item(r) for r in rows], total=total)
+
+
+# --- 좋아요 (부록 R.14) --------------------------------------------------------
+
+
+def _assert_likeable_in_tx(conn: psycopg.Connection, code: str) -> None:
+    """없는 코드 · hidden=1 이면 404. 가려진 글에 좋아요가 붙지 않게 한다.
+
+    payload 를 읽지 않는 전용 조회를 쓴다 — 하트는 목록에서 연달아 눌리는 동작이라
+    한 번에 32KB 를 읽으면 그 비용이 그대로 쌓인다.
+    """
+    if shared_course_repo.get_share_visibility(conn, share_code=code) is not True:
+        raise errors.not_found("공유된 코스를 찾을 수 없습니다.")
+
+
+async def like_share(db: Database, *, share_code: str, user_id: int) -> LikeResponse:
+    """멱등 — 이미 눌린 상태에서 다시 호출해도 200(liked=true). 409 를 쓰지 않는다."""
+    code = normalize_share_code(share_code)
+
+    def _tx(conn: psycopg.Connection) -> tuple[bool, int]:
+        _assert_likeable_in_tx(conn, code)
+        return shared_course_repo.toggle_like(
+            conn, share_code=code, user_id=user_id, now_iso=to_iso_kst(now_kst())
+        )
+
+    try:
+        liked, like_count = await db.awrite(_tx)
+    except psycopg.errors.ForeignKeyViolation:
+        # 조회와 INSERT 사이에 보존정책이 그 코스를 지운 경우 — 500 이 아니라 404 가 맞다.
+        raise errors.not_found("공유된 코스를 찾을 수 없습니다.") from None
+    # 로그에 user_id·share_code 를 남기지 않는다(부록 R.8-4/R.14.6-8 승계).
+    logger.info("shared course liked")
+    return LikeResponse(liked=liked, like_count=like_count)
+
+
+async def unlike_share(db: Database, *, share_code: str, user_id: int) -> LikeResponse:
+    """멱등 — 누른 적 없어도 200(liked=false). 404 를 쓰지 않는다(취소의 결과 상태가 같다)."""
+    code = normalize_share_code(share_code)
+
+    def _tx(conn: psycopg.Connection) -> tuple[bool, int]:
+        _assert_likeable_in_tx(conn, code)
+        return shared_course_repo.untoggle_like(conn, share_code=code, user_id=user_id)
+
+    liked, like_count = await db.awrite(_tx)
+    logger.info("shared course unliked")
+    return LikeResponse(liked=liked, like_count=like_count)
 
 
 __all__ = (
@@ -407,7 +485,9 @@ __all__ = (
     "generate_share_code",
     "get_share",
     "guard_payload_limits",
+    "like_share",
     "list_shares",
     "normalize_share_code",
     "run_cleanup",
+    "unlike_share",
 )

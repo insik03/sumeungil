@@ -342,7 +342,7 @@ section("8. 불변식 — 사용자 텍스트가 LLM 경로에 닿지 않는가 
 
 llm_dirs = [BACKEND_DIR / "app" / "ai"]
 llm_files = [
-    BACKEND_DIR / "app" / "services" / "concierge_service.py",
+    BACKEND_DIR / "app" / "services" / "tips_service.py",
     BACKEND_DIR / "app" / "services" / "course_summary_service.py",
     BACKEND_DIR / "app" / "services" / "spot_detail_service.py",
 ]

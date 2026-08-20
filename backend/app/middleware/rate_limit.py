@@ -1,7 +1,7 @@
 """레이트 리미팅 — 순수 인메모리 슬라이딩 윈도우 (외부 의존성 0).
 
 ## 왜 필요한가
-공개 배포(Oracle VM, 80 포트 오픈) 시 `/concierge/ask`·`/onboarding/analyze` 는 요청 1건이
+공개 배포(Oracle VM, 80 포트 오픈) 시 `/onboarding/analyze`·`/tips/personalized` 는 요청 1건이
 로컬 Ollama LLM 추론 수 초~수십 초를 태운다. 무제한이면 익명 1명이 CPU 를 통째로 점유해
 서비스 전체가 멈춘다(가용성 DoS). 인증이 없는 서비스라 IP 기준 제한이 유일한 1차 방어선이다.
 
@@ -41,8 +41,8 @@ logger = logging.getLogger("sumeungil.middleware.rate_limit")
 # LLM 추론이 요청당 1~2회 도는 경로 = 가장 비싼 경로.
 LLM_PATHS: frozenset[str] = frozenset(
     {
-        "/api/v1/concierge/ask",
         "/api/v1/onboarding/analyze",
+        "/api/v1/tips/personalized",  # 부록 Z(2026-08-20): 컨시어지가 비운 자리를 팁이 쓴다
     }
 )
 # 코스 생성/정렬 — Tmap 외부 호출 + 요약 LLM 이 붙는다(캐시 히트면 저렴하지만 미스가 비싸다).

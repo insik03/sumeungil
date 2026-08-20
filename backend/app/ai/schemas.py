@@ -69,52 +69,6 @@ class RawLLMExtraction(BaseModel):
         return min(max(f, 0.0), 1.0)
 
 
-class RawConciergeExtraction(RawLLMExtraction):
-    """부록 N.10(2026-07-30) — 컨시어지 전용 통합 이해 LLM 출력.
-
-    `RawLLMExtraction`(온보딩과 동일한 7축 태그 필드 + value_confidence/extraction_confidence/
-    unmatched_note, registry 재검증·AXIS_CAP 로직도 그대로 상속돼 적용된다)에 컨시어지 전용
-    필드 4개만 **additive** 로 얹는다. `RawLLMExtraction`·온보딩 스키마 자체는 한 글자도
-    바뀌지 않는다 — 이 서브클래스만 컨시어지 경로(`app.ai.concierge_understanding`)가 쓴다.
-
-    `region_text`는 LLM이 옮겨적은 지역 표현 힌트일 뿐이다. **서버가 반드시
-    `concierge_service.detect_region()`으로 재검증**하고, 사전 매칭이 안 되면 이 값을 그대로
-    지역으로 채택하지 않는다(정직 원칙 — LLM이 없는 지역을 지어내 채택시키지 않는다).
-    """
-
-    intent: str = "spots"
-    region_text: str | None = None
-    wants_multiple: bool = False
-    wants_alternative: bool = False
-
-    @field_validator("intent", mode="before")
-    @classmethod
-    def _coerce_intent(cls, v: object) -> str:
-        return v if v in ("spots", "festivals") else "spots"
-
-    @field_validator("region_text", mode="before")
-    @classmethod
-    def _coerce_region_text(cls, v: object) -> str | None:
-        # 지어내기 방지: 문자열이 아니거나 공백뿐이면 "지역 언급 없음"으로 취급(None).
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-        return None
-
-    @field_validator("wants_multiple", "wants_alternative", mode="before")
-    @classmethod
-    def _coerce_want_flag(cls, v: object) -> bool:
-        # 로컬 모델이 문자열("true"/"yes")·정수(1/0) 등으로 줄 수 있어 관대하게 받되,
-        # pydantic 기본 bool 강제로 파싱 불가능한 값(dict/list 등)은 조용히 False 로 접는다
-        # (이 필드 하나 때문에 전체 스키마 검증이 실패해 룰 폴백으로 강등되는 것을 막는다).
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, (int, float)):
-            return bool(v)
-        if isinstance(v, str):
-            return v.strip().lower() in ("true", "yes", "1", "y", "예", "네")
-        return False
-
-
 class TagValue(BaseModel):
     value: str
     label: str

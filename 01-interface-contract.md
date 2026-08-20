@@ -2372,6 +2372,13 @@ GET /api/v1/congestion/forecast?region_code={code}&spot_name={name}&days={n}&lim
 
 # 부록 N — AI 여행 문답 / 컨시어지 (`POST /api/v1/concierge/ask`) (2026-07-29, backend-engineer)
 
+> ⚠️ **폐기(deprecated, 2026-08-20)** — 대표 지시(`08-2026-08-20-기능확장-PRD.md` §4-6)로 AI 문답
+> 기능을 제거한다. `POST /api/v1/concierge/ask` 는 **라우터 등록 자체가 사라지므로 404** 가 된다.
+> 이력 보존을 위해 본문은 지우지 않는다. 아래 N·N.9~N.12 전체가 폐기 대상이며, 대체 경로는
+> `POST /api/v1/onboarding/analyze`(부록 B, **존치**) — `/course` 진입 화면의 한 줄 의견 입력이
+> 그 API 를 그대로 쓴다. 신규 코드는 이 부록을 참조하지 말 것.
+> **혼동 주의**: 폐기 대상은 컨시어지뿐이다. 부록 B(`/onboarding/analyze`)는 폐기가 아니다.
+
 **차별화 포인트**: "구석구석"류 서비스는 **필터를 고르게** 한다. 우리는 **문장을 받는다**.
 "비 오는 평일에 부모님 모시고 갈 조용한 곳 있어?" 한 줄이면 조건 해석 → 지역 감지 → 혼잡 분산
 추천 → 대화형 답변이 한 번의 요청으로 끝난다.
@@ -2538,6 +2545,9 @@ GET /api/v1/congestion/forecast?region_code={code}&spot_name={name}&days={n}&lim
 
 ## N.9 축제 의도 분기 (**2026-07-30 additive**, backend-engineer)
 
+> ⚠️ **폐기(deprecated, 2026-08-20)** — 부록 N 상단 배너 참고. 축제 조회 자체(`GET /api/v1/festivals`,
+> 부록 K)는 **존치**한다. 사라지는 것은 "문답으로 축제를 묻는 경로"뿐이다.
+
 **결함 배경(대표 실사용 보고)**: `"연인과 즐길만한 축제가 있어?"` 에 갈맷길 2코스 같은 **스팟**이 나왔다.
 N.3 ③ 이 질문 종류와 무관하게 항상 `recommend_service` 만 태웠고, 이미 완성·캐시된 축제 데이터
 (부록 K `festival_service`)를 보는 경로가 아예 없었기 때문이다.
@@ -2576,6 +2586,9 @@ N.3 ③ 이 질문 종류와 무관하게 항상 `recommend_service` 만 태웠�
 ---
 
 ## N.10 문답 고도화 — 다양화·안정화·LLM-first 이해 (**2026-07-30 additive**, ai-optimization-engineer)
+
+> ⚠️ **폐기(deprecated, 2026-08-20)** — 부록 N 상단 배너 참고. 여기서 쓰던 `extract_concierge_understanding`
+> (통합 이해 LLM 1회)도 함께 사라진다. 온보딩의 `extract_tags`(부록 B)는 **무변경 존치**다.
 
 전부 **additive**. 기존 필드·엔드포인트·에러코드·`spots`/`festivals` 카드 목록의 점수순 정렬은
 불변이다. 다양화는 "답변 문장이 언급할 스팟/축제 선택"과 "코스 조합"에만 적용된다.
@@ -4393,6 +4406,8 @@ reason=taste_priority, notice=null`. 비개인화 부산의 문구는 개정문�
 
 # 부록 N.11 — 지역 감지 오매칭 · 도(道) 단위 표현 미지원 (2026-08-01, 오케스트레이터)
 
+> ⚠️ **폐기(deprecated, 2026-08-20)** — 부록 N 상단 배너 참고.
+
 대표 지적: *"충청도 실내 데이트 추천 해달라고 하니까 경북 찾아주는데 이거 뭐냐."*
 
 ## N.11.1 결함 2건 (실측 재현)
@@ -4464,6 +4479,11 @@ reason=taste_priority, notice=null`. 비개인화 부산의 문구는 개정문�
 ---
 
 # 부록 N.12 — 도(道) 단위 질문은 **그 도 전역**에서 찾는다 (2026-08-01, 오케스트레이터)
+
+> ⚠️ **폐기(deprecated, 2026-08-20)** — 부록 N 상단 배너 참고. 단, 여기서 만든
+> `concierge_service.province_targets`(도→시군구 상위 N곳)는 **부록 Y(지역 허브)의
+> `featured_service` 가 계속 쓴다.** 컨시어지 제거 시 이 함수만 `services/region_targets.py`
+> 로 그대로 옮긴다(로직 무변경) — 자세한 것은 `01-backend-design.md` 2026-08-20 절 §3.
 
 대표 지적: *"충청도 추천이라는데 왜 청주로만 해? 충청도는 충남 충북 다 있고 그 안에 도시가
 얼마나 많은데."*
@@ -4839,3 +4859,244 @@ concierge 의 도 단위 질문이 쓰던 `province_targets()` **선례를 그�
 | `featured?region_code=26350&area_cd=41` | region_code 승 — 종전 응답과 동일 |
 | 무회귀(HEAD 대비 동일 seed) | featured 4종·festivals 4종·regions/search 3종 **응답 동일**(추가된 키는 `area`(null) 하나뿐) |
 | 오프라인 검증 스위트 | `verify_featured_limit.py` 50/50, `verify_collections_paging.py` 42/42, `verify_recommend_taste_priority.py` 17/17 |
+
+---
+
+# 부록 R.14 — 공유 코스 **좋아요 · 정렬** (2026-08-20, backend-engineer)
+
+> **번호 주의**: `08-2026-08-20-기능확장-PRD.md` §5·§7-1 은 이 절을 "부록 R.9" 라고 부른다.
+> 그러나 **R.9 는 이미 "정식 회원제 전환 메모"가 쓰고 있어**(2026-08-01) 덮어쓰면 이력이 사라진다.
+> 이 저장소 관례(부록은 append-only)에 따라 **R.13 다음 번호인 R.14** 로 신설한다.
+> PRD 의 "R.9(좋아요·정렬)"를 찾는 사람은 이 절을 보면 된다.
+
+> 대표 지시(2026-08-20): *"공유 코스 피드에 좋아요와 정렬을 붙여라."*
+> **불가침 전제**: 좋아요는 `shared_courses.payload` **밖**(별도 테이블 + 비정규화 컬럼)에만 존재한다.
+> 2026-08-18 보안감사 A-6 의 `course_payload.rebuild_course_for_store` / `filter_stored_course` /
+> `enrich_stored_course` / `guard_payload_limits` 는 **한 줄도 바뀌지 않는다**.
+
+## R.14.0 신원 — 좋아요는 **로그인 계정만** (device_id 금지)
+
+| 기능 | 신원 | 근거 |
+|---|---|---|
+| 공유 생성/삭제 (`/share`, `DELETE /shared/{code}`) | `X-Device-Id` (기존, 무변경) | 익명 공유가 원래 설계 |
+| **좋아요 (신설)** | **로그인 세션 쿠키** (`Depends(require_login)`) | `device_id` 는 클라이언트가 만드는 값이라 무한히 갈아끼울 수 있다 → 카운트가 의미를 잃는다 |
+
+- **계정당 1회**는 UI 규칙이 아니라 **PK 제약**(`PRIMARY KEY (share_code, user_id)`)으로 강제된다.
+- 비로그인 요청은 **401** 이며, 응답 형식은 다른 로그인 필수 경로와 **동일하게 FastAPI 기본**
+  `{"detail": "로그인이 필요합니다."}` 다 — 이 저장소의 `{"error":{...}}` 봉투가 **아니다**
+  (`api/auth_deps.require_login` 이 `HTTPException` 을 던지기 때문. 온보딩·`/courses/mine` 과 같은 성질).
+  프론트는 401 만 별도로 분기해 로그인 모달을 띄운다(본문 파싱 불필요).
+
+## R.14.1 `POST /api/v1/courses/shared/{share_code}/like` → `200`
+
+```jsonc
+// 요청 body 없음. 쿠키 세션 필수.
+// 응답
+{ "liked": true, "like_count": 12 }
+```
+
+- **멱등**: 이미 눌린 상태에서 다시 호출해도 `200 {liked:true, like_count:<변동 없음>}`. 409 를 쓰지 않는다
+  (좋아요 버튼의 더블탭은 오류가 아니다).
+- `like_count` 는 **이번 요청이 반영된 값**이다(토글과 카운트 갱신이 한 트랜잭션 — `bump_view_count` 관례 승계).
+
+## R.14.2 `DELETE /api/v1/courses/shared/{share_code}/like` → `200`
+
+```jsonc
+{ "liked": false, "like_count": 11 }
+```
+
+- **멱등**: 누른 적 없어도 `200 {liked:false}`. 404 를 쓰지 않는다(취소의 결과 상태가 같다).
+
+## R.14.3 에러 (두 엔드포인트 공통)
+
+| 상태 | code | 언제 |
+|---|---|---|
+| 401 | *(봉투 아님, `detail` 문자열)* | 비로그인 · 만료 세션 · 탈퇴 계정 |
+| 404 | `NOT_FOUND` | 없는 코드 · `hidden=1` · 형식 위반 코드(8자·31자 알파벳) · **처리 도중 삭제됨**(FK 위반을 404 로 흡수) |
+| 429 | `RATE_LIMITED` | IP 기준 `ugc` 버킷(부록 O) 또는 계정 기준 `like` 버킷 |
+| 503 | `FEATURE_DISABLED` / `STORAGE_UNAVAILABLE` | 킬스위치 / DB 장애 (기존과 동일) |
+
+- 404·429·503 은 **기존 `{"error":{code,message,detail}}` 봉투**를 그대로 쓴다(`community_common.to_response`).
+- 레이트리밋: 경로가 `/api/v1/courses/shared/` 하위이고 메서드가 POST/DELETE 라
+  **미들웨어 `resolve_bucket` 이 이미 `ugc` 로 분류한다 — `rate_limit.py` 수정 불필요**.
+  그 위에 계정 기준 `like` 버킷(기본 **30/분**, `LIKE_WRITE_PER_MIN`)을 라우터에서 추가로 건다.
+
+## R.14.4 `GET /api/v1/courses/shared` 확장 (**additive**)
+
+```jsonc
+// GET /api/v1/courses/shared?limit=20&offset=0&sort=latest|popular
+{
+  "items": [
+    { "share_code": "Z77ZMJBE", "nickname": "코스장인", "title": "해운대 반나절",
+      "spot_count": 2, "created_at": "...", "view_count": 5,
+      "like_count": 12,          // 신설 — 항상 존재(정수, 기본 0)
+      "liked_by_me": false }     // 신설 — 항상 존재. 비로그인이면 전부 false
+  ],
+  "total": 12
+}
+```
+
+| 파라미터 | 기본값 | 정렬 키 |
+|---|---|---|
+| `sort=latest` | **기본값(생략 시)** | `created_at DESC, seq DESC` — **기존과 동일** |
+| `sort=popular` | | `like_count DESC, created_at DESC, seq DESC` |
+
+- **무회귀 계약**: `sort` 를 **보내지 않으면 SQL 문자열까지 종전과 동일**하다(응답 순서 불변).
+  값이 `latest`/`popular` 가 아니면 FastAPI 기본 **422**(기존 `limit` 범위 위반과 같은 처리).
+- `liked_by_me` 는 로그인 시에만 true 가 될 수 있다. **N+1 금지** — 서버가 `LEFT JOIN course_likes`
+  로 목록 한 번에 계산한다(카드마다 별도 호출 금지).
+- **`payload` 미SELECT 원칙 유지**: 목록 SELECT 컬럼에 `payload` 를 추가하지 않는다.
+- `GET /shared/{code}`(상세) 응답에도 같은 이름으로 `like_count`·`liked_by_me` 를 **additive** 로 싣는다
+  (하트 노출 여부는 designer 판단 — 서버는 값만 준다. PRD §8-3 U-6 → **서버는 항상 제공, 화면은 선택**).
+
+## R.14.5 보존정책과의 상호작용 (PRD U-5 결론 — **backend 확정**)
+
+문제: `delete_overflow` 의 삭제 우선순위가 `(view_count = 0) DESC` 라서, **피드 카드에서 하트만
+눌리고 상세는 안 열린 코스**(= `like_count>0` 인데 `view_count=0`)가 **가장 먼저** 지워진다.
+피드에 하트를 다는 순간 실제로 발생 가능한 조합이다(하트는 목록에서, 조회수는 상세에서 오른다).
+
+**결론: 두 겹 모두 반영한다.**
+
+| 겹 | 변경 전 | 변경 후 |
+|---|---|---|
+| 삭제 순서 | `ORDER BY (view_count = 0) DESC, created_at ASC, seq ASC` | `ORDER BY (like_count = 0) DESC, (view_count = 0) DESC, created_at ASC, seq ASC` |
+| 유예 `_GRACE` | `NOT (view_count > 0 AND created_at >= %s)` | `NOT ((view_count > 0 OR like_count > 0) AND created_at >= %s)` |
+
+- 순서 변경이 **주된 보호**다(반응 없는 코스부터 버린다). 유예 확장은 "최근 30일 안에 반응이 있었던
+  링크는 용량 때문에 끊지 않는다"는 **기존 정책 문장을 좋아요로 확장**한 것뿐이다.
+- **`delete_expired`(기간 정리)에는 영향이 없다**: `_GRACE` 는 `created_at >= now-30일` 을 요구하고
+  기간 정리는 `created_at < now-180일` 만 대상으로 하므로 두 조건이 동시에 참일 수 없다(현재 기본값 기준).
+  즉 좋아요가 많아도 **180일이 지나면 기존과 똑같이 정리된다** — 무한 보존이 아니다.
+- **잔여 위험(정직 표기)**: 5,000건 전부가 "최근 30일 + 반응 있음"이면 용량 정리가 0건을 반환해
+  상한을 못 지킬 수 있다. 이것은 좋아요 이전부터 `view_count` 로 존재하던 성질이며, ① 기기당 상한
+  (`delete_oldest_by_device`, 유예 없음)이 계속 돌고 ② 정리 0건 + 상한 초과가 관측되면 경고 로그를
+  남겨 운영이 알 수 있게 한다(`SHARE_MAX_TOTAL` 상향 또는 유예일 하향으로 대응).
+
+## R.14.6 안전 규칙 (R.8 에 추가)
+
+6. **좋아요는 payload 에 절대 넣지 않는다.** `course` JSON 안에 like 관련 필드를 넣으면 A-6 의
+   allowlist 가 버리거나(무해) 재구성 규칙을 넓히게 되어(유해) 위조 방지 수정을 되돌린다.
+   서버는 `course_likes` 테이블과 `shared_courses.like_count` 컬럼으로만 좋아요를 표현한다.
+7. **user_id 를 응답에 싣지 않는다.** "누가 눌렀는지"는 어떤 응답에도 나가지 않는다 —
+   내려가는 것은 집계(`like_count`)와 본인 여부(`liked_by_me`)뿐이다(device_id 비노출과 같은 원칙).
+8. **로그에 user_id·share_code 를 남기지 않는다**(건수만). 부록 R.8-4 규칙 승계.
+
+## R.14.7 프론트가 할 일 (R.12 에 추가)
+
+8. 하트 클릭은 **낙관적 업데이트 + 실패 시 롤백**. 실패 응답이 401 이면 로그인 모달
+   (`LoginGateProvider`)을 띄우고, 로그인 성공 후에도 **원래 화면에 머문다**(PRD P-B).
+9. 정렬 세그먼트는 `sort` 쿼리만 바꿔 **offset 을 0 으로 리셋**해 다시 부른다(정렬이 바뀌면 페이지 경계가 달라진다).
+10. `like_count` 는 서버 응답 값만 표시한다(클라이언트가 증감을 누적 계산해 보관하지 않는다 — 재접속 시 어긋난다).
+
+---
+
+# 부록 Z — **개인화 여행 팁** (`POST /api/v1/tips/personalized`) (2026-08-20, backend-engineer)
+
+> 대표 지시(2026-08-20): *"여행 팁을 AI가 취향·코스에 맞춰 만들게 하라."*
+> 현재 `/tips` 는 `frontend/content/travel-tips.ko.json` 의 **정적 5건**이라 누가 봐도 같은 화면이다.
+> **이 부록은 인터페이스·폴백 경계만 정한다. 프롬프트 본문·LLM 호출 전략은 `02-ai-strategy.md`
+> (ai-optimization-engineer) 소관이다.**
+
+## Z.0 설계 전제 3가지
+
+1. **입력은 서버가 조립한다.** 클라이언트가 보내는 것은 `region_code` **하나뿐**이며,
+   자유 텍스트 필드가 **아예 없다**(스키마에 없다) → 이 엔드포인트의 프롬프트 인젝션 표면은 0 이다.
+2. **화면이 비는 경우가 없다.** 비로그인 · 프로필 없음 · LLM 실패/타임아웃 · 킬스위치 OFF —
+   어떤 경우에도 **정적 5건을 `source:"static"` 으로 200 응답**한다. 5xx 를 내지 않는다.
+3. **정직 표기.** AI 생성분에는 `notice` 문구를 붙이고 화면에 그대로 노출한다(부록 M/N 규율 승계).
+
+## Z.1 요청
+
+```jsonc
+// POST /api/v1/tips/personalized     (로그인 선택 — 쿠키가 있으면 개인화, 없으면 정적)
+{ "region_code": "26350" }            // 선택. null/생략 가능. 형식 위반은 422
+```
+
+| 필드 | 타입 | 규칙 |
+|---|---|---|
+| `region_code` | `string \| null` | 선택. `^[0-9A-Za-z_-]{1,10}$`. 등록되지 않은 코드는 **무시**(오류 아님 — 지역 피처만 빠진다) |
+
+- **자유 텍스트 필드를 추가하지 말 것**(추가하는 순간 Z.0-1 이 깨진다).
+- **잉여 필드는 422 다**(2026-08-20 보안검수 L-4 — 스키마 `extra="forbid"`). 예전엔 조용히
+  무시했는데, 그러면 클라이언트가 실수로 자유 텍스트를 붙여도 아무 신호가 없어 Z.0-1 전제가
+  소리 없이 흔들린다. 프론트는 `{ "region_code": ... }` 외에 어떤 키도 보내지 않는다.
+- 비로그인 호출도 **허용**한다(PRD U-4: 비로그인 = 정적 팁). 401 을 쓰지 않는다.
+
+## Z.2 응답 `200`
+
+```jsonc
+{
+  "tips": [
+    { "id": "ai-1", "category": "혼잡", "title": "오전에 먼저 움직이기",
+      "body": "…", "source": "ai" }
+  ],
+  "generated_by": "ai-v1",     // "ai-v1" | "static-v2"
+  "notice": "AI가 만든 참고용 안내예요. 방문 전 공식 정보를 확인해 주세요."   // static 이면 null
+}
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `tips` | **항상 3~5건**. 0건이 되는 경우가 없다(부족하면 정적으로 폴백) |
+| `tips[].category` | **고정 enum**: `혼잡` · `교통` · `날씨` · `반려동물` · `안전` (정적 5건과 동일 축). 이 외 값은 서버가 **버린다** |
+| `tips[].title` / `body` | 평문. 길이 상한 title 40자 · body 200자 — 초과분은 서버가 절단 |
+| `tips[].source` | `"ai"` \| `"static"`. 혼합 응답은 만들지 않는다(전부 ai 이거나 전부 static) |
+| `generated_by` | `"ai-v1"`(LLM 성공) \| `"static-v2"`(정적 폴백. `2` 는 `travel-tips.ko.json` 의 `version`) |
+| `notice` | ai 일 때만 문자열, static 이면 `null` |
+
+- 프론트는 **모든 값을 텍스트 노드로만** 렌더한다(부록 R.8-2 승계).
+- **에러 응답이 사실상 없다**: 400/500 을 만들지 않는다. 예외는 형식 위반 422 와 레이트리밋 429뿐.
+
+## Z.3 서버가 조립하는 입력 피처 (이것이 전부다)
+
+| 피처 | 출처 | 형태 |
+|---|---|---|
+| 취향 태그 | `onboarding_profiles.tags` (로그인 시) | registry **영문 코드 배열** (예: `["family","calm"]`) |
+| 코스 카테고리 분포 | 최근 저장 코스 1건(`ai_courses` 최신 1행)의 스팟 **카테고리 코드 집계** | `{"nature": 2, "cafe": 1}` |
+| 혼잡 레벨 | `congestion_repo` (선택 지역) | `"low" \| "medium" \| "high" \| null` |
+| 강수확률 | 날씨 provider | `0~100 \| null` |
+| 월 | 서버 시각(KST) | `1~12` |
+| 지역 라벨 | `regions.seed.REGIONS` 의 `label` | 서버 상수. **클라이언트 문자열이 아니다** |
+
+- **넣지 않는 것**: 사용자 자유 텍스트, 스팟명·코스 제목·닉네임 등 **모든 사용자/외부 문자열**
+  (스팟명은 공공데이터 외부 문자열이라 부록 R.8-1 의 취지상 굳이 새 경로로 들이지 않는다 —
+  카테고리 코드로 충분하다).
+- 지역 라벨만 예외적으로 허용하는 근거: 값이 **저장소 안의 고정 시드 상수**이고 사용자가 고를 수
+  있는 것은 그 중 하나를 가리키는 코드뿐이다(임의 문자열 주입 불가).
+
+## Z.4 캐시 · 성능 · 킬스위치
+
+| 항목 | 값 | env |
+|---|---|---|
+| 캐시 키 | `tips:v1:{해시(태그·카테고리분포·지역·혼잡·강수구간)}:{YYYY-MM-DD}` | — |
+| TTL | 24h (코스 요약과 동일 패턴) | `TIPS_CACHE_TTL_SEC=86400` |
+| LLM 타임아웃 | 20초 (코스 요약과 동일 상한) | `TIPS_TIMEOUT_SEC=20` |
+| 킬스위치 | `false` 면 **LLM 미호출 + 즉시 정적 폴백** | `TIPS_ENABLED=true` |
+| 건수 | 최소 3 · 최대 5 | `TIPS_MIN_ITEMS=3` / `TIPS_MAX_ITEMS=5` |
+| 레이트리밋 | `rate_limit.LLM_PATHS` 에 경로 추가 → `BUCKET_LLM`(6/분/IP) | `RATE_LIMIT_LLM_PER_MIN` |
+
+- 캐시 키에 날짜를 넣는 이유: 혼잡·강수 피처가 시점 데이터라 하루를 넘겨 재사용하면 거짓이 된다.
+- 같은 취향·같은 지역·같은 날이면 **LLM 을 다시 태우지 않는다**(비용 0 유지의 핵심).
+
+## Z.5 폴백 판정표 (계약의 일부 — QA 는 이 표를 그대로 검증한다)
+
+| 상황 | 응답 |
+|---|---|
+| 비로그인 | 정적 5건 · `generated_by:"static-v2"` · `notice:null` |
+| 로그인 O · 온보딩 프로필 없음 | 정적 5건 (동일) |
+| `TIPS_ENABLED=false` | 정적 5건 (LLM 미호출) |
+| LLM 타임아웃 · 예외 · 비정상 JSON | 정적 5건 |
+| LLM 성공하나 유효 팁이 3건 미만(카테고리 위반·빈 body 제거 후) | 정적 5건 |
+| LLM 성공 + 유효 3~5건 | AI 팁 · `generated_by:"ai-v1"` · `notice` 문자열 |
+
+- 정적 5건의 **서버측 원본**은 `backend/app/content/travel_tips.ko.json` 이며
+  `frontend/content/travel-tips.ko.json` 과 **`id`·`category` 가 일치해야 한다**(검증 스크립트가 대조).
+  프론트 파일은 **네트워크 실패 시 최후 폴백**으로 계속 남는다(화면이 비지 않게 하는 두 번째 겹).
+
+## Z.6 안전 (부록 N.5 규율 승계)
+
+1. 인젝션 표면 0 — 사용자 문자열이 프롬프트에 들어가지 않는다(Z.0-1). 그래도 온보딩과 동일하게
+   `injection_guard` 를 **재사용할 수 있도록 배선만 열어 둔다**(현재 입력에 자유 텍스트가 없어 실제 트립은 0).
+2. **단정 금지 후처리 필터**: 의학·법률·안전 단정, 금액·영업시간·요금 등 **검증 불가한 수치**가 들어간
+   팁은 서버가 폐기한다(3건 미만이 되면 정적 폴백). 필터 키워드 목록은 `02-ai-strategy.md` 소관.
+3. `notice` 문구는 서버 상수다(LLM 이 만들지 않는다).

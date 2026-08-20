@@ -1404,121 +1404,6 @@ export async function fetchFestivalDetail(
 }
 
 /* =========================================================================
- * 부록 N(신규) — AI 여행 문답 컨시어지(홈 ConciergeSection.tsx). POST /api/v1/concierge/ask.
- * 01-interface-contract.md 부록 N §N.1/§N.2 스키마와 1:1로 유지한다. extracted.tags는
- * OnboardingResult.tags와 완전히 같은 형태라 타입을 재사용하고(재정의 아님), spots는 부록 C.2
- * SpotCard 그대로다(재정의 없음) — 기존 SpotCard 표시 컴포넌트를 그대로 재사용할 수 있다.
- * ========================================================================= */
-
-/** §N.2 extracted.region — 서버가 최종 채택한 지역. seed 라벨(외부 문자열 아님). 미등록이면 null. */
-export interface ConciergeRegion {
-  region_code: string;
-  region_name: string;
-}
-
-/** §N.2 extracted — tags는 OnboardingResult.tags(§B.1)와 동일 형태(정직 노출, 모든 축 그대로). */
-export interface ConciergeExtracted {
-  tags: Partial<Record<OnboardingAxis, TagValue[]>>;
-  region: ConciergeRegion | null;
-}
-
-export interface ConciergeMeta {
-  /** 정형 안내문만(§N.2 표). 없으면 null. 텍스트 노드로만 렌더한다(HTML 주입 금지, §N.5-7). */
-  notice: string | null;
-  /** "llm" | "template" — 정직 표기용 진단 필드. 사용자 화면 노출은 필수가 아니다(§N.2). */
-  answer_source: "llm" | "template";
-  /**
-   * §N.9(2026-07-30, additive) — 질문 의도. "festivals"면 축제 질문으로 판정돼 spots 대신
-   * festivals가 채워진다. optional인 이유: 구버전 백엔드 응답(필드 없음)과의 하위호환 —
-   * 값이 없으면 "spots"로 간주한다.
-   */
-  intent?: "spots" | "festivals";
-}
-
-export interface ConciergeAskRequest {
-  /** 2~200자. 위반 시 서버가 422(§N.4) — 프론트도 참고용으로 길이를 미리 검증한다(호출부 책임). */
-  question: string;
-  region_code?: string | null;
-}
-
-export interface ConciergeAskResponse {
-  /** 절대 null·빈문자열이 아니다(§N.2). 텍스트 노드로만 렌더한다(HTML 주입 금지). */
-  answer: string;
-  extracted: ConciergeExtracted;
-  /** 부록 C.2 SpotCard[] 최대 8곳(CONCIERGE_SPOT_LIMIT). 없으면 []. 축제 의도면 항상 []. */
-  spots: SpotCard[];
-  /**
-   * §N.9(2026-07-30, additive) — 축제 의도(meta.intent="festivals")일 때만 채워지는 축제 목록
-   * (부록 K Festival과 동일 모델, 최대 6건). optional: 구버전 백엔드 하위호환 — 없으면 []로 간주.
-   */
-  festivals?: Festival[];
-  meta: ConciergeMeta;
-}
-
-/** cold 11.3초·warm 3.6~6.6초(§N.6 실측) — 백엔드 상한(추출 30s+답변 20s)보다 넉넉히 길게 잡는다. */
-const CONCIERGE_ASK_TIMEOUT_MS = 65_000;
-
-/**
- * §N.1 — POST /api/v1/concierge/ask. region_code는 선택이며 질문에서 감지된 지역이 항상 우선한다
- * (§N.3②, 요청값은 폴백일 뿐). LLM 실패·인젝션 탐지·스팟 0곳도 전부 200 정상 응답이다(§N.4) —
- * answer는 항상 채워져 온다. onboardingAnalyze와 동일한 "타이머로 직접 abort" 패턴(§B.6 승계)으로
- * 서버 권장 타임아웃보다 프론트 fetch 타임아웃을 길게 둔다. `signal`은 사용자가 취소했을 때만 넘긴다.
- */
-export async function askConcierge(
-  question: string,
-  regionCode?: string | null,
-  signal?: AbortSignal
-): Promise<ConciergeAskResponse> {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, CONCIERGE_ASK_TIMEOUT_MS);
-  const onExternalAbort = () => controller.abort();
-  signal?.addEventListener("abort", onExternalAbort);
-
-  const payload: ConciergeAskRequest = { question, region_code: regionCode ?? null };
-
-  try {
-    let res: Response;
-    try {
-      res = await fetch(`${API_BASE}/api/v1/concierge/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-        credentials: "include", // 2026-08-17: AI 문답 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
-      });
-    } catch (e) {
-      if (signal?.aborted && !timedOut) throw e; // 사용자가 직접 취소 — 호출부가 signal.aborted로 구분
-      if (timedOut) {
-        throw new ApiError(
-          0,
-          "TIMEOUT",
-          "AI 응답이 너무 오래 걸리고 있어요. 잠시 후 다시 시도해주세요."
-        );
-      }
-      throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
-    }
-
-    if (!res.ok) {
-      throw await parseErrorResponse(
-        res,
-        res.status === 422 || res.status === 400
-          ? "질문을 2자 이상 200자 이내로 다시 적어주세요."
-          : "질문에 답하지 못했어요. 잠시 후 다시 시도해주세요."
-      );
-    }
-
-    return (await res.json()) as ConciergeAskResponse;
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onExternalAbort);
-  }
-}
-
-/* =========================================================================
  * 부록 P(신규, §37 — 03-design-spec.md, 2026-07-31) — 전국 날씨 보드
  * (`/tips` 상단, WeatherBoard.tsx). GET /api/v1/weather/nationwide. 오케스트레이터
  * 병렬 계약 — 9권역 그룹핑은 backend 소유(프론트는 응답 개수·순서를 그대로 렌더하고
@@ -2062,6 +1947,7 @@ export async function fetchSharedCourse(
       method: "GET",
       headers: { Accept: "application/json", ...deviceHeaders() },
       cache: "no-store",
+      credentials: "include", // 2026-08-20(QA L-2) — 좋아요 호출과 통일. 세션 쿠키가 있어야 is_mine 등 로그인 종속 값이 정확하다.
       signal,
     });
   } catch (e) {
@@ -2075,7 +1961,8 @@ export async function fetchSharedCourse(
   return (await res.json()) as SharedCourseDetail;
 }
 
-/** R.7 피드 항목 — 목록에는 course payload를 싣지 않는다(R.7, 응답 폭발 방지). */
+/** R.7 피드 항목 — 목록에는 course payload를 싣지 않는다(R.7, 응답 폭발 방지).
+ * R.14.4(2026-08-20, additive) — like_count/liked_by_me 신설. 항상 존재(비로그인이면 liked_by_me=false). */
 export interface SharedCourseFeedItem {
   share_code: string;
   nickname: string;
@@ -2083,6 +1970,8 @@ export interface SharedCourseFeedItem {
   spot_count: number;
   created_at: string;
   view_count: number;
+  like_count: number;
+  liked_by_me: boolean;
 }
 
 export interface SharedCourseFeedResponse {
@@ -2090,15 +1979,20 @@ export interface SharedCourseFeedResponse {
   total: number;
 }
 
-/** R.7 — GET /api/v1/courses/shared?limit=&offset= (최신순). limit 기본 20 / 최대 50. */
+/** R.14.4 — 정렬 키. 생략(undefined)이면 서버 기본값 latest(무회귀 계약, SQL까지 종전과 동일). */
+export type SharedCoursesSort = "latest" | "popular";
+
+/** R.7/R.14.4 — GET /api/v1/courses/shared?limit=&offset=&sort=. limit 기본 20 / 최대 50. */
 export async function fetchSharedCoursesFeed(
   limit?: number,
   offset?: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sort?: SharedCoursesSort
 ): Promise<SharedCourseFeedResponse> {
   const qs = new URLSearchParams();
   if (limit) qs.set("limit", String(limit));
   if (offset) qs.set("offset", String(offset));
+  if (sort) qs.set("sort", sort);
   const query = qs.toString();
 
   let res: Response;
@@ -2107,6 +2001,7 @@ export async function fetchSharedCoursesFeed(
       method: "GET",
       headers: { Accept: "application/json", ...deviceHeaders() },
       cache: "no-store",
+      credentials: "include", // 2026-08-20(QA L-2) — 좋아요 호출과 통일. 빠지면 liked_by_me가 분리배포/로컬개발에서 항상 false로 보인다.
       signal,
     });
   } catch (e) {
@@ -2118,6 +2013,51 @@ export async function fetchSharedCoursesFeed(
   }
 
   return (await res.json()) as SharedCourseFeedResponse;
+}
+
+/** R.14.1/R.14.2 응답 — 멱등(이미 같은 상태여도 200, 409/404를 쓰지 않는다). */
+export interface SharedCourseLikeResponse {
+  liked: boolean;
+  like_count: number;
+}
+
+/**
+ * R.14.1 — POST /api/v1/courses/shared/{share_code}/like. 로그인 세션 쿠키 필수(device_id 아님,
+ * R.14.0) — 비로그인이면 401(봉투 아닌 FastAPI 기본 {"detail":...}, 호출부가 status만 분기).
+ */
+export async function likeSharedCourse(shareCode: string): Promise<SharedCourseLikeResponse> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/courses/shared/${encodeURIComponent(shareCode)}/like`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "좋아요를 반영하지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "좋아요를 반영하지 못했습니다.");
+  }
+  return (await res.json()) as SharedCourseLikeResponse;
+}
+
+/** R.14.2 — DELETE /api/v1/courses/shared/{share_code}/like. 규칙은 likeSharedCourse와 동일. */
+export async function unlikeSharedCourse(shareCode: string): Promise<SharedCourseLikeResponse> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/courses/shared/${encodeURIComponent(shareCode)}/like`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      credentials: "include",
+    });
+  } catch (e) {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", "좋아요를 취소하지 못했습니다.");
+  }
+  if (!res.ok) {
+    throw await parseErrorResponse(res, "좋아요를 취소하지 못했습니다.");
+  }
+  return (await res.json()) as SharedCourseLikeResponse;
 }
 
 /** R.7 — DELETE /api/v1/courses/shared/{code}. device_id 불일치 403 NOT_OWNER, 없으면 404. */
@@ -2363,4 +2303,80 @@ export async function fetchNationwideCongestion(
     throw new ApiError(res.status, "NATIONWIDE_CONGESTION_FAILED", "전국 혼잡도를 불러오지 못했습니다.");
   }
   return (await res.json()) as NationwideCongestionResponse;
+}
+
+/* =========================================================================
+ * 부록 Z(신규, 01-interface-contract.md, 2026-08-20) — 개인화 여행 팁. POST
+ * /api/v1/tips/personalized. 인터페이스·폴백 경계는 backend-engineer 소관(§Z.0~Z.6), 프롬프트
+ * 본문은 02-ai-strategy.md(ai-optimization-engineer) 소관 — 여기서는 계약대로 타입/호출만 둔다.
+ * §Z.0-2: 이 엔드포인트는 어떤 경우에도 5xx를 내지 않고 정적 5건을 200으로 폴백한다. 그래도
+ * 이 화면(TipsContent.tsx)은 로그인+프로필이 있을 때만 호출한다(불필요한 호출/레이트리밋
+ * 소모를 줄이기 위한 프론트 판단, §47.9 지시서 그대로) — 실패하면 기존 정적 5건을 그대로 둔다.
+ * ========================================================================= */
+
+/** §Z.2 tips[].category — 고정 enum(정적 5건과 동일 축). */
+export type PersonalizedTipCategory = "혼잡" | "교통" | "날씨" | "반려동물" | "안전";
+
+export interface PersonalizedTip {
+  id: string;
+  category: PersonalizedTipCategory;
+  title: string;
+  body: string;
+  source: "ai" | "static";
+}
+
+export interface PersonalizedTipsResponse {
+  tips: PersonalizedTip[];
+  generated_by: "ai-v1" | "static-v2";
+  /** ai일 때만 문자열, static이면 null(§Z.2). 화면은 이 문구를 그대로 노출해야 한다(정직 표기). */
+  notice: string | null;
+}
+
+/** §Z.4: 서버 LLM 타임아웃은 20초(TIPS_TIMEOUT_SEC) 뒤 정적 폴백으로 흡수한다(5xx 없음).
+ * 클라이언트가 무한정 매달리지 않도록 여유를 두고 끊는다(2026-08-20, QA m-3 — 삭제된
+ * askConcierge/analyzeOnboarding과 동일한 AbortController 타임아웃 패턴). */
+const PERSONALIZED_TIPS_TIMEOUT_MS = 30_000;
+
+/**
+ * §Z.1 — POST /api/v1/tips/personalized. region_code는 선택(형식 위반만 422, 미등록 코드는 무시).
+ * 비로그인도 호출 가능하지만(§Z.1) 이 화면은 로그인+프로필 있을 때만 호출한다(위 파일 헤더 설명).
+ */
+export async function fetchPersonalizedTips(
+  regionCode?: string | null,
+  signal?: AbortSignal
+): Promise<PersonalizedTipsResponse> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, PERSONALIZED_TIPS_TIMEOUT_MS);
+  const onExternalAbort = () => controller.abort();
+  signal?.addEventListener("abort", onExternalAbort);
+
+  try {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/v1/tips/personalized`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8", Accept: "application/json" },
+        body: JSON.stringify({ region_code: regionCode ?? null }),
+        credentials: "include",
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (signal?.aborted && !timedOut) throw e; // 사용자/호출부가 직접 취소
+      if (timedOut) {
+        throw new ApiError(0, "TIMEOUT", "맞춤 팁을 불러오는 데 시간이 오래 걸리고 있어요.");
+      }
+      throw new ApiError(0, "NETWORK_UNAVAILABLE", "맞춤 팁을 불러오지 못했습니다.");
+    }
+    if (!res.ok) {
+      throw await parseErrorResponse(res, "맞춤 팁을 불러오지 못했습니다.");
+    }
+    return (await res.json()) as PersonalizedTipsResponse;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onExternalAbort);
+  }
 }

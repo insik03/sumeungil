@@ -10,6 +10,7 @@ from functools import lru_cache
 
 from .ai.llm_provider import LLMProvider, create_provider_from_settings
 from .ai.summarizer import Summarizer, create_summarizer_from_settings
+from .ai.tips_generator import TipsGenerator, create_tips_generator_from_settings
 from .cache.base import Cache
 from .cache.memory import MemoryCache
 from .config import settings
@@ -65,6 +66,13 @@ def get_llm_provider() -> LLMProvider:
 
 
 @lru_cache(maxsize=1)
+def get_tips_generator() -> TipsGenerator:
+    # 부록 Z: 개인화 여행 팁. 온보딩과 **같은 로컬 Ollama 모델**을 재사용한다(새 키·비용 0).
+    # 실패·타임아웃은 tips_service 가 정적 폴백으로 흡수하므로 여기서 예외를 다루지 않는다.
+    return create_tips_generator_from_settings(settings)
+
+
+@lru_cache(maxsize=1)
 def get_database() -> Database:
     """부록 R + 로그인/개인화 저장소 싱글턴(PostgreSQL 커넥션 풀). 풀은 최초 사용 시 lazy 오픈.
 
@@ -86,6 +94,8 @@ def get_community_write_limiter() -> SlidingWindowLimiter:
         {
             "review": settings.review_write_per_min,
             "share": settings.share_write_per_min,
+            # 부록 R.14: 좋아요만 키가 device_id 가 아니라 `user:{user_id}` 다(라우터 참고).
+            "like": settings.like_write_per_min,
         },
         window_sec=60,
         max_keys=settings.rate_limit_max_keys,

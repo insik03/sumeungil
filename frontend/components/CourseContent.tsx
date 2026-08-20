@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -9,13 +9,14 @@ import {
   CourseResponse,
   OnboardingResult,
   PlaceSearchItem,
+  analyzeOnboarding,
   fetchArrangeCourse,
   fetchCourse,
   fetchMyOnboardingProfile,
   saveMyCourse,
 } from "../lib/api";
 import { logout } from "../lib/authStorage";
-import { loadOnboardingResult } from "../lib/onboardingStorage";
+import { loadOnboardingResult, saveOnboardingResult } from "../lib/onboardingStorage";
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
@@ -29,6 +30,8 @@ import SpotSearchBox from "./course/SpotSearchBox";
 import ShareCourseButton from "./course/ShareCourseButton";
 import SaveCourseButton from "./course/SaveCourseButton";
 import { CATEGORY_META, DEFAULT_REGION, regionSelectionFromCode } from "./recommend/constants";
+import { OPINION_EXAMPLES } from "./course/opinionExamples";
+import { AXIS_LABEL_FALLBACK, LOADING_EXPECTED_SECONDS, LOADING_MESSAGES, RESULT_AXIS_ORDER } from "./onboarding/constants";
 
 type Status = "loading" | "success" | "error";
 /** undefined = sessionStorage 확인 전(SSR와 값이 갈리지 않게 첫 렌더는 항상 undefined). */
@@ -87,6 +90,40 @@ function PrinterIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/** 코스짜기 의견 입력의 서버 절단 기준(§47.3, 01-interface-contract.md §B.1과 동일 300자). */
+const OPINION_MAX_LENGTH = 300;
+
+/**
+ * §47.3(신규, 03-design-spec.md) — 코스짜기 상단 의견 입력 로딩. `OnboardingLoading.tsx`(§B.5-3)와
+ * 동일한 실측 문구·경과 초 표기(20~30초)를 재사용하되, 이미 `.onboard-card` 위젯 안에 얹히는
+ * 인라인 로딩이라 `.onboard-section`/`.onboard-card` 이중 래핑 없이 `.onboard-loading`만 가져온다.
+ * "/ask의 5~10초 문구를 베끼면 실제(20~30초)와 달라 이탈한다"는 지시서 경고를 그대로 따랐다.
+ */
+function CourseOpinionLoading() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const progress = Math.min(92, Math.round((elapsed / LOADING_EXPECTED_SECONDS) * 92));
+  const messageIndex = Math.min(
+    LOADING_MESSAGES.length - 1,
+    Math.floor(elapsed / (LOADING_EXPECTED_SECONDS / LOADING_MESSAGES.length))
+  );
+  return (
+    <div className="onboard-loading course-opinion__loading" role="status" aria-live="polite">
+      <div className="onboard-loading__spinner" aria-hidden="true" />
+      <p className="onboard-loading__msg">{LOADING_MESSAGES[messageIndex]}</p>
+      <div className="onboard-loading__bar" aria-hidden="true">
+        <div className="onboard-loading__bar-fill" style={{ width: `${progress}%` }} />
+      </div>
+      <p className="onboard-loading__elapsed">
+        {elapsed}초 경과 · 보통 20~30초 정도 걸려요. 화면을 벗어나지 말고 잠시만 기다려주세요.
+      </p>
+    </div>
   );
 }
 
@@ -448,6 +485,14 @@ export default function CourseContent() {
   const [arrangeData, setArrangeData] = useState<CourseResponse | null>(null);
   const [arrangeError, setArrangeError] = useState<ApiError | null>(null);
 
+  // §47.3(신규) — AI 모드 상단 "어떤 여행을 원하세요?" 의견 입력. 컨시어지 축약판 — 신규 API
+  // 없이 POST /onboarding/analyze(text)를 그대로 재사용하고, 성공하면 profile을 갱신해 아래
+  // fetchCourse effect([profile, ...] 의존성)가 자동으로 다시 코스를 짜게 한다.
+  const [opinionText, setOpinionText] = useState("");
+  const [opinionStatus, setOpinionStatus] = useState<ArrangeStatus>("idle");
+  const [opinionError, setOpinionError] = useState<ApiError | null>(null);
+  const opinionAbortRef = useRef<AbortController | null>(null);
+
   // 마운트 시 1회만 courseCartStorage를 초기값으로 흡수한다(§26) — 이후 다른 화면에서 "코스에
   // 담기"를 눌러도 이 화면이 열려 있는 동안은 반영되지 않는다(화면을 새로고침/재진입하면 반영).
   useEffect(() => {
@@ -547,10 +592,53 @@ export default function CourseContent() {
     return map;
   }, [profile]);
 
+  // §47.3 — 의견 제출 성공 후 "이렇게 이해했어요" 칩에 쓸 축 목록(비어있지 않은 축만).
+  const opinionUnderstoodAxes = useMemo(
+    () => RESULT_AXIS_ORDER.filter((axis) => (profile?.tags[axis]?.length ?? 0) > 0),
+    [profile]
+  );
+
   const retry = () => setRetryTick((t) => t + 1);
 
   const regionLabel = data?.region.region_name ?? selectedRegion.label;
   const showOnboardingCta = profile === null;
+
+  const hasProfile = Boolean(profile);
+  const canSubmitOpinion = opinionText.trim().length > 0 && opinionStatus !== "loading";
+
+  const handleSubmitOpinion = () => {
+    const trimmed = opinionText.trim();
+    if (!trimmed || opinionStatus === "loading") return;
+    setOpinionStatus("loading");
+    setOpinionError(null);
+    const controller = new AbortController();
+    opinionAbortRef.current = controller;
+    analyzeOnboarding({ text: trimmed, region_code: selectedRegion.sigunguCd }, controller.signal)
+      .then((res) => {
+        // §B.5-7과 동일 원칙 — sessionStorage 갱신 + profile state 갱신. profile이 바뀌면
+        // 위 fetchCourse effect가 이미 [profile, ...] 의존성으로 자동 재호출한다(재구현 불필요).
+        saveOnboardingResult(res);
+        setProfile(res);
+        setOpinionStatus("success");
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return; // 사용자가 직접 취소
+        if (err instanceof ApiError && err.status === 401) {
+          logout();
+          setOpinionStatus("idle");
+          return;
+        }
+        setOpinionError(
+          err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "의견을 반영하지 못했습니다.")
+        );
+        setOpinionStatus("error");
+      });
+  };
+
+  const handleCancelOpinionLoading = () => {
+    opinionAbortRef.current?.abort();
+    setOpinionStatus("idle");
+  };
 
   const builderCount = builderSpots?.length ?? 0;
   const canArrange = builderCount >= MIN_CART_SIZE && arrangeStatus !== "loading";
@@ -688,6 +776,85 @@ export default function CourseContent() {
             <h2 className="section__title" id="courseHeading">
               {regionLabel} 하루 코스
             </h2>
+
+            {/* §47.3(신규) — 컨시어지 축약판. 신규 API·LLM 경로 없음(POST /onboarding/analyze
+                재사용). 정식 온보딩(축 전체) 배너는 그대로 아래 두고, 이 입력은 "지금 한 줄만
+                말하고 바로 반영" 경로로 보완한다. */}
+            <div className="onboard-card course-opinion">
+              <label className="onboard-label" htmlFor="courseOpinion">
+                어떤 여행을 원하세요? {hasProfile && "(선택)"}
+              </label>
+              <textarea
+                id="courseOpinion"
+                className="onboard-textarea course-opinion__textarea"
+                rows={2}
+                maxLength={OPINION_MAX_LENGTH}
+                placeholder="예: 아이랑 갈만한 비 오는 날 실내 명소 위주로"
+                value={opinionText}
+                onChange={(e) => setOpinionText(e.target.value)}
+                disabled={opinionStatus === "loading"}
+              />
+              <div className="chip-row" role="group" aria-label="예시">
+                {OPINION_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    className="onboard-chip"
+                    onClick={() => setOpinionText(ex)}
+                    disabled={opinionStatus === "loading"}
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
+              <div className="onboard-submit">
+                <button
+                  type="button"
+                  className="btn btn--mint"
+                  disabled={!canSubmitOpinion}
+                  onClick={handleSubmitOpinion}
+                >
+                  {opinionStatus === "loading" ? "코스 다시 짜는 중…" : "이 의견으로 코스 다시 짜기"}
+                </button>
+              </div>
+
+              {opinionStatus === "loading" && (
+                <>
+                  <CourseOpinionLoading />
+                  <button
+                    type="button"
+                    className="onboard-loading__cancel"
+                    onClick={handleCancelOpinionLoading}
+                  >
+                    취소하고 다시 입력하기
+                  </button>
+                </>
+              )}
+
+              {opinionStatus === "error" && (
+                <p className="onboard-validation" role="alert">
+                  {opinionError?.message ?? "의견을 반영하지 못했어요. 잠시 후 다시 시도해주세요."}
+                </p>
+              )}
+
+              {opinionStatus === "success" && opinionUnderstoodAxes.length > 0 && (
+                <div className="course-opinion__understood">
+                  <h3 className="onboard-axis-group__label">이렇게 이해했어요</h3>
+                  {opinionUnderstoodAxes.map((axis) => (
+                    <div className="onboard-axis-group" key={axis}>
+                      <span className="onboard-axis-group__label">{AXIS_LABEL_FALLBACK[axis]}</span>
+                      <div className="onboard-tag-row">
+                        {profile?.tags[axis]!.map((tag) => (
+                          <span key={tag.value} className="onboard-tag">
+                            #{tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {showOnboardingCta && (
               <div className="recommend-cta-banner">

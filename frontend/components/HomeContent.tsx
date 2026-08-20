@@ -8,7 +8,6 @@ import { loadOnboardingResult } from "../lib/onboardingStorage";
 import Hero from "./Hero";
 import HeroGreeting from "./HeroGreeting";
 import ServiceQuickMenu from "./ServiceQuickMenu";
-import ConciergeSection from "./ConciergeSection";
 import FeaturedSpots from "./FeaturedSpots";
 import CoursePromo from "./CoursePromo";
 import FestivalBanner from "./FestivalBanner";
@@ -83,6 +82,10 @@ import FestivalBanner from "./FestivalBanner";
  * 이유로 홈에서 뺐다(§38이 "번잡" 사유로 덜어낸 두 섹션과 같은 판단). `/themes` 전용 페이지로
  * 옮기고 GNB "여행지 추천" 드롭다운에 진입점을 추가했다(Header.tsx, ThemeCollections.tsx §A
  * 참고) — 퀵메뉴(10개)는 지시서 제약대로 개수를 유지하며 건드리지 않았다.
+ *
+ * §47.7(2026-08-20, 03-design-spec.md — AI 여행 문답 삭제) — ConciergeSection(퀵메뉴 바로 아래
+ * 있던 컴팩트 진입창)을 제거했다. `/ask`는 리다이렉트만 남기고, 같은 니즈는 `/course` AI 모드
+ * 상단의 "어떤 여행을 원하세요?" 의견 입력(CourseContent.tsx)으로 흡수됐다(§47.3).
  */
 export default function HomeContent() {
   // 대표 지시(2026-08-17) — "모든 기본 화면의 기준 지역은 마지막으로 고른 지역"을 기준으로.
@@ -133,7 +136,6 @@ export default function HomeContent() {
       <HeroGreeting />
       <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} />
       <ServiceQuickMenu regionCode={regionCode} />
-      <ConciergeSection regionCode={regionCode} />
       <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />
       {/* 부록 U.3(2026-08-01, 대표 지시) — 예상 혼잡 전광판은 congestion 화면으로 옮겼다.
           그 화면이 전국 지도 아래에 같은 전광판을 두므로, 홈에 남겨두면 두 번 나온다. */}

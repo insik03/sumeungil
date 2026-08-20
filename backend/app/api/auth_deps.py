@@ -44,4 +44,27 @@ async def require_login(request: Request) -> UserIdentity:
     return identity
 
 
-__all__ = ("require_login",)
+async def optional_identity(request: Request) -> UserIdentity | None:
+    """로그인 세션이 있으면 신원을, 없거나 무효면 `None`. **401 을 던지지 않는다**.
+
+    2026-08-20(부록 R.14/Z) — 좋아요 표시(`liked_by_me`)와 개인화 팁처럼 "로그인하면 개인화,
+    아니면 공개 응답"인 경로용이다. `community_common.session_display_name` 과 같은 "선택적
+    신원" 패턴이며, `require_login` 은 한 글자도 바뀌지 않는다.
+
+    탈퇴 계정 확인까지 `require_login` 과 동일하게 한다 — 서명은 유효하지만 계정이 사라진
+    토큰으로 `liked_by_me` 를 계산하면 FK 없는 user_id 로 조회가 나가고, 개인화 팁은 없는
+    계정의 프로필을 찾게 된다. 어느 쪽이든 "비로그인"으로 접는 것이 맞다.
+    """
+    auth = get_user_auth()
+    identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
+    if identity is None:
+        return None
+    db = get_database()
+    try:
+        user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
+    except Exception:  # noqa: BLE001 — 저장소 장애로 공개 조회가 막히면 안 된다(비로그인 취급)
+        return None
+    return identity if user is not None else None
+
+
+__all__ = ("optional_identity", "require_login")

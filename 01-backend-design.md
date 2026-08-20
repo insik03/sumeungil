@@ -2053,3 +2053,621 @@ py scripts/verify_collections_mixed_paging.py 100   # 혼합 per_theme 회귀 (2
 py scripts/verify_collections_paging.py             # 기존 페이징 회귀 (42/42)
 py scripts/verify_community.py                      # 무관 영역 무회귀 (67/67)
 ```
+
+---
+
+# 기능확장 애드온 — 마이페이지 허브 통합 + 기능 정리 6건 (2026-08-20, backend-engineer)
+
+> 근거 문서: `08-2026-08-20-기능확장-PRD.md` §7-1 (backend 작업 지시서).
+> 대응 계약: `01-interface-contract.md` **부록 R.14**(좋아요·정렬) · **부록 Z**(개인화 팁) ·
+> **부록 N 폐기 표기**(컨시어지).
+>
+> **이 문서의 상태: 설계 확정 + backend 구현 완료(2026-08-20 후속 세션).**
+> §9 는 "왜 그 시점에 구현하지 않았는가"의 기록으로 그대로 둔다. 실제 구현 결과·검증 결과는
+> **§13(구현 결과)** 에 적었다 — 설계와 달라진 점, 남은 리스크, 프론트 동시 배포 조건 포함.
+
+## 0. 결론 요약 (지시서 5개 항목)
+
+| 지시 | 결론 | 백엔드 변경량 |
+|---|---|---|
+| **[5] 좋아요·정렬** | 스키마 10(신규 테이블 1 + 컬럼 1 + 인덱스 1) · 라우트 2 · 피드 additive 3필드 | **중** — 6파일 |
+| **[6] 컨시어지 제거** | 삭제 가능. 단 **함정 3건**을 먼저 처리해야 기동이 깨지지 않는다(§3) | **중상** — 삭제 6 + 수정 9 |
+| **[4] 팁 API** | `POST /api/v1/tips/personalized` 신설. 계약·폴백 경계는 확정, 프롬프트는 AI팀 | **중** — 신규 4파일 |
+| **[3] 혼잡 지도 삭제** | **백엔드 변경 0** — 호출처 기준으로 확인 완료(§5) | **없음** |
+| **[1] 마이페이지 허브** | **백엔드 변경 0** — `GET /api/v1/onboarding/me` 재사용으로 충분(§6) | **없음** |
+
+**U-5(대표 확인 항목 중 backend 소관) 결론**: `delete_overflow` 의 삭제 우선순위와 `_GRACE`
+**둘 다** `like_count` 를 반영한다 — 근거·부작용 분석은 §2-6 및 계약 부록 R.14.5.
+**U-6 결론**: 서버는 상세 응답에도 `like_count`·`liked_by_me` 를 **항상 내려준다**. 상세 화면에
+하트를 붙일지는 designer 판단이며, 서버는 그 판단과 무관하게 값을 제공한다(나중에 라우트를
+다시 고치지 않기 위해서다).
+
+---
+
+## 1. 절대 불가침 (이번 작업에서 손대지 않는 것)
+
+| 대상 | 이유 |
+|---|---|
+| `services/course_payload.py` 의 `rebuild_course_for_store` · `filter_stored_course` · `enrich_stored_course` | 2026-08-18 보안감사 A-6(콘텐츠 위조 차단). **diff 0** 이어야 한다 |
+| `share_service.guard_payload_limits` | 같은 감사(L-4). 32KB·깊이16 사전검사 |
+| `shared_courses.payload` 의 내용·스키마 | 좋아요는 payload 밖에만 존재 |
+| `POST /api/v1/onboarding/analyze` · `GET /onboarding/me` · `GET /tag-schema` | 삭제 대상이 **아니다**. 오히려 6번 대체 기능의 실체 |
+| `ai/injection_guard.py`, `api/onboarding.py` 의 `_GuardTrippedProvider` | 온보딩 인젝션 방어 본체(컨시어지 전용 아님) |
+| `middleware/rate_limit.py` 의 `BUCKET_LLM` | `/onboarding/analyze` + 신설 `/tips/personalized` 가 계속 쓴다 |
+| `/api/v1/congestion/*` 3종 | §5 참고 |
+| `GET /courses/shared` 의 기본 응답 순서 | `sort` 미지정 = 기존 SQL 그대로 |
+
+---
+
+## 2. [5번] 공유 코스 좋아요 · 정렬
+
+### 2-1. 스키마 10 (기동 시 멱등 적용 — `db/postgres.py` `_SCHEMA_STATEMENTS` 말미에 append)
+
+```sql
+-- schema_version 10 (2026-08-20): 공유 코스 좋아요
+CREATE TABLE IF NOT EXISTS course_likes (
+    share_code  TEXT    NOT NULL REFERENCES shared_courses (share_code) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES users (id)         ON DELETE CASCADE,
+    created_at  TEXT    NOT NULL,
+    PRIMARY KEY (share_code, user_id)
+);
+
+ALTER TABLE shared_courses ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS ix_shared_courses_likes
+    ON shared_courses (hidden, like_count DESC, created_at DESC, seq DESC);
+
+CREATE INDEX IF NOT EXISTS ix_course_likes_user
+    ON course_likes (user_id);
+```
+
+설계 근거 5가지:
+
+1. **PK(share_code, user_id) = 계정당 1회**를 DB가 강제한다. 애플리케이션 로직이 아니라 제약이므로
+   동시 요청 2건이 들어와도 두 번 세어지지 않는다.
+2. **양쪽 CASCADE 필수.** `shared_courses` 는 보존정책이 상시 삭제하고(`delete_overflow`/`delete_expired`),
+   `users` 는 탈퇴로 사라진다. 없으면 고아 행이 쌓이거나 삭제 자체가 FK 위반으로 실패한다.
+   **단, CASCADE 는 행만 지우고 비정규화 컬럼 `like_count` 는 건드리지 않는다**(2026-08-20 보안검수
+   M-1). `shared_courses` 쪽은 부모가 통째로 사라지니 문제가 없지만, `users` 쪽(탈퇴)은 코스가 살아
+   있어 카운터만 부풀어 남는다 — "가입 → 좋아요 → 탈퇴" 반복으로 `sort=popular` 랭킹을 조작하고
+   `delete_overflow` 의 `like_count > 0` 유예를 영구화할 수 있다. 그래서 `user_repo.delete_account`
+   가 같은 트랜잭션에서 **`users` DELETE 이전에** 감산한다(§2-2 하단).
+3. **`like_count` 비정규화**는 정렬 때문이다. `ORDER BY COUNT(*)` 는 매 페이지마다 전체 집계가 필요하고,
+   목록 SELECT 에 조인 집계를 넣으면 `payload 미SELECT` 로 아낀 비용을 다시 쓴다.
+4. **인덱스 선두에 `hidden`** — 기존 `ix_shared_courses_created (hidden, created_at DESC)` 와 같은 형태다.
+   피드는 항상 `WHERE hidden = 0` 이므로 선두 컬럼이 맞아야 인덱스가 실제로 쓰인다.
+5. `ix_course_likes_user` 는 **탈퇴/관리자 삭제 시 역방향 조회**용이다(PK 는 share_code 선두라 user_id
+   단독 조회에 쓸 수 없다).
+
+**롤백성(R-10)**: 전부 `IF NOT EXISTS` + 기본값 0 이라 재적용이 무해하고, 새 코드가 없어도 기존
+동작에 영향이 없다(컬럼이 하나 늘 뿐). 기능을 급히 끄려면 `LIKE_ENABLED=false`(§2-5) 하나로 닫는다.
+
+### 2-2. 리포지토리 (`repositories/shared_course_repo.py` — additive)
+
+```python
+def toggle_like(conn, *, share_code: str, user_id: int, now_iso: str) -> tuple[bool, int]:
+    """좋아요 등록. 반환 (liked, like_count). **멱등** — 이미 눌러도 (True, 현재값)."""
+
+def untoggle_like(conn, *, share_code: str, user_id: int) -> tuple[bool, int]:
+    """좋아요 취소. 반환 (False, like_count). **멱등** — 누른 적 없어도 (False, 현재값)."""
+
+def get_like_state(conn, *, share_code: str, user_id: int | None) -> tuple[bool, int]:
+    """상세 조회용. user_id=None 이면 (False, like_count)."""
+
+def list_shares(conn, *, limit, offset, sort: str = "latest", user_id: int | None = None): ...
+```
+
+핵심 SQL(원자성 — R-4 대응):
+
+```sql
+-- ① 등록: 삽입 성공 여부가 곧 "처음 눌렀는가"다(SELECT 후 INSERT 하는 경쟁 구간이 없다)
+INSERT INTO course_likes (share_code, user_id, created_at)
+VALUES (%s, %s, %s) ON CONFLICT DO NOTHING;
+-- cur.rowcount == 1 일 때만 카운트를 올린다
+UPDATE shared_courses SET like_count = like_count + 1
+ WHERE share_code = %s RETURNING like_count;
+
+-- ② 취소
+DELETE FROM course_likes WHERE share_code = %s AND user_id = %s;
+-- cur.rowcount == 1 일 때만
+UPDATE shared_courses SET like_count = GREATEST(like_count - 1, 0)
+ WHERE share_code = %s RETURNING like_count;
+```
+
+- 두 문장은 **하나의 `db.awrite` 트랜잭션** 안에서 실행한다(`bump_view_count` 와 같은 관례).
+  중간에 실패하면 둘 다 롤백되어 `course_likes` 행 수와 `like_count` 가 갈리지 않는다.
+- `GREATEST(...,0)` 은 방어선이다. 정상 경로에서는 음수가 될 수 없지만, 과거 데이터 손상이 있어도
+  피드에 `-1` 이 표시되지 않게 한다.
+- **락 순서 고정**: 등록·취소 모두 `course_likes` → `shared_courses` 순서로 만진다(교차 데드락 방지).
+- 대상이 사라진 경우: `INSERT` 가 `psycopg.errors.ForeignKeyViolation` 을 던진다 → 서비스가 **404** 로 변환한다
+  (좋아요 도중 보존정책이 그 코스를 지운 경우. 500 이 아니라 404 가 맞다).
+
+**③ 탈퇴 시 카운터 보정** (`repositories/user_repo.py::delete_account`, 2026-08-20 보안검수 M-1):
+
+```sql
+-- users DELETE 이전에, 같은 트랜잭션에서. 지우면서 share_code 를 받아 그만큼만 감산한다.
+DELETE FROM course_likes WHERE user_id = %s RETURNING share_code;
+UPDATE shared_courses SET like_count = GREATEST(like_count - 1, 0)
+ WHERE share_code = ANY(%s);
+DELETE FROM users WHERE id = %s;
+```
+
+- `IN (SELECT share_code FROM course_likes WHERE user_id = %s)` 서브쿼리로도 결과는 같지만,
+  `DELETE ... RETURNING` 을 쓰면 (a) 위와 **같은 락 순서**(`course_likes` → `shared_courses`)가 유지되고
+  (b) 읽기와 CASCADE 사이에 끼어든 좋아요가 카운터에만 남는 틈이 없다(끼어든 INSERT 는 탈퇴 커밋 후
+  FK 위반으로 롤백된다).
+- PK 가 `(share_code, user_id)` 라 한 계정이 같은 코스에 두 행을 만들 수 없다 → 코스당 정확히 1 감산.
+- 비용: `ix_course_likes_user` 로 user_id 단독 조회가 인덱스를 탄다(§2-1 설계근거 5).
+
+정렬 분기(무회귀가 걸린 지점):
+
+```python
+_ORDER = {
+    "latest":  "ORDER BY created_at DESC, seq DESC",                    # 기존과 동일 문자열
+    "popular": "ORDER BY like_count DESC, created_at DESC, seq DESC",
+}
+```
+- `sort` 는 **화이트리스트 dict 조회**로만 SQL 에 들어간다(문자열 보간 금지 = SQL 인젝션 표면 0).
+  키에 없으면 라우터 단계에서 이미 422 로 걸러진다.
+- 비로그인 목록은 **기존 쿼리를 그대로** 쓰고 `liked_by_me` 를 상수 false 로 채운다. 로그인 시에만
+  `LEFT JOIN course_likes l ON l.share_code = s.share_code AND l.user_id = %s` 를 태운다 —
+  이렇게 나눠야 "파라미터 없는 기존 호출은 SQL 까지 동일"이 성립한다.
+
+### 2-3. 서비스 (`services/share_service.py` — additive 함수만 추가)
+
+```python
+async def like_share(db, *, share_code: str, user_id: int) -> dict:    # {"liked","like_count"}
+async def unlike_share(db, *, share_code: str, user_id: int) -> dict:
+```
+- 두 함수 모두 `normalize_share_code()` 를 먼저 태운다(기존 상세/삭제와 동일한 404 규칙).
+- `hidden = 1` 이면 404 — 가려진 글에 좋아요가 붙지 않게 한다.
+- **기존 함수는 시그니처를 바꾸지 않는다.** `list_shares` 만 `sort`·`user_id` **기본값 있는** 인자를 받는다.
+
+### 2-4. 라우터 (`api/course_share.py` — 라우트 2개 추가)
+
+```python
+@router.post("/shared/{share_code}/like")
+async def like_shared_course(share_code, db=Depends(get_database), identity=Depends(require_login)): ...
+
+@router.delete("/shared/{share_code}/like")
+async def unlike_shared_course(share_code, db=Depends(get_database), identity=Depends(require_login)): ...
+```
+- `ensure_enabled()` → 계정 쿼터 → 서비스 호출 → 예외는 전부 `to_response(exc, context=...)`.
+- **계정 쿼터**: `check_write_quota(f"user:{identity.user_id}", "like")`. 기존 호출부는 device_id(UUID)를
+  키로 쓰므로 `user:` 접두어로 키 공간을 분리한다(UUID 와 정수 id 가 우연히 겹치지 않게).
+- 경로 충돌 없음: `/shared/{code}`(2세그먼트)와 `/shared/{code}/like`(3세그먼트)는 템플릿이 다르다.
+- **미들웨어 레이트리밋은 수정 불필요** — `resolve_bucket` 이 `POST|DELETE + /api/v1/courses/shared/*`
+  를 이미 `ugc` 로 분류한다(`rate_limit.py` 99~108행). 이 사실을 QA 체크리스트에 넣는다.
+
+### 2-5. 설정 (`config.py` — 부록 R 블록에 2줄 추가)
+
+```python
+self.like_write_per_min: int = int(os.getenv("LIKE_WRITE_PER_MIN", "30"))
+self.like_enabled: bool = os.getenv("LIKE_ENABLED", "true").strip().lower() != "false"
+```
+- `LIKE_ENABLED=false` 면 두 라우트가 **503 FEATURE_DISABLED**, 피드는 `like_count`/`liked_by_me` 를
+  계속 내려준다(값만 고정). 프론트는 이 값을 보고 하트를 숨길 필요가 없다 — 서버가 막는다.
+- `deps.get_community_write_limiter()` 의 dict 에 `"like": settings.like_write_per_min` 추가.
+
+### 2-6. 보존정책 상호작용 — **U-5 결론**
+
+`shared_course_repo.py` 2곳 수정:
+
+```python
+# 변경 전
+_GRACE = "NOT (view_count > 0 AND created_at >= %s)"
+# 변경 후
+_GRACE = "NOT ((view_count > 0 OR like_count > 0) AND created_at >= %s)"
+
+# delete_overflow ORDER BY 변경 전
+ORDER BY (view_count = 0) DESC, created_at ASC, seq ASC
+# 변경 후
+ORDER BY (like_count = 0) DESC, (view_count = 0) DESC, created_at ASC, seq ASC
+```
+
+판단 근거:
+
+1. **실제로 발생 가능한 조합이다.** 하트는 피드 카드(목록)에서 눌리고 `view_count` 는 상세에서만
+   오른다 → `like_count>0 AND view_count=0` 이 정상 동작으로 만들어진다. 그대로 두면 "가장 반응이 좋은
+   코스가 가장 먼저 삭제"된다.
+2. **순서 변경이 주 방어**, 유예 확장이 보조다. 순서만 바꾸면 좋아요 받은 코스도 결국 삭제 대상이 되고
+   (상한을 지키기 위한 진행성은 보장된다), 유예까지 넣으면 "최근 30일 + 반응 있음"은 아예 제외된다 —
+   이는 기존 정책 문장("지금 사람들이 보고 있는 링크를 용량 때문에 끊지 않는다")을 좋아요로 넓힌 것이다.
+3. **`delete_expired` 에는 영향이 0 이다.** `_GRACE` 는 `created_at >= now-30일`, 기간 정리는
+   `created_at < now-180일` 을 요구하므로 두 조건이 동시에 참일 수 없다(기본값 기준). 즉 이 변경으로
+   "영원히 안 지워지는 코스"가 생기지 않는다. **`SHARE_RETENTION_DAYS <= SHARE_RECENT_VIEW_GRACE_DAYS`
+   로 설정을 뒤집으면 이 성질이 깨진다** — 그런 조합을 쓰지 말 것(운영 메모).
+4. 잔여 위험(정직): 전체 5,000건이 전부 "최근 30일 + 반응 있음"이면 용량 정리가 0건이 되어 상한을
+   못 지킨다. **좋아요 이전부터 `view_count` 로 존재하던 성질**이며, ① 기기당 상한 정리는 유예 없이
+   계속 돌고 ② `run_cleanup` 이 "정리 0건인데 상한 초과" 를 감지하면 `logger.warning` 을 남기도록
+   한 줄 추가한다(운영이 `SHARE_MAX_TOTAL`/유예일로 대응할 수 있게).
+
+**정합성 점검 쿼리**(QA·운영용, 코드 아님):
+```sql
+SELECT s.share_code FROM shared_courses s
+  LEFT JOIN (SELECT share_code, COUNT(*) c FROM course_likes GROUP BY share_code) l
+    ON l.share_code = s.share_code
+ WHERE s.like_count <> COALESCE(l.c, 0);   -- 0행이어야 정상
+```
+`verify_likes.py` 는 이 쿼리를 §2 에서 한 번, **행이 사라지는 §7(공유 삭제·계정 탈퇴) 뒤에 한 번 더**
+돌린다. 처음엔 §7 이 "행 수 == 0" 만 봐서 M-1 드리프트를 놓쳤다 — **행을 지우는 경로를 추가하면
+정합성 쿼리를 그 뒤에 다시 돌리는 것**이 이 기능의 회귀 감시 규약이다.
+
+### 2-7. 변경 파일 (7)
+
+| 파일 | 변경 |
+|---|---|
+| `backend/app/db/postgres.py` | `SCHEMA_VERSION 9 → 10`, DDL 4문 추가 |
+| `backend/app/repositories/shared_course_repo.py` | `toggle_like`/`untoggle_like`/`get_like_state` 신설, `list_shares` 확장, `_LIST_COLUMNS` 에 `like_count` 추가, `_GRACE`·`delete_overflow` 정렬 수정 |
+| `backend/app/services/share_service.py` | `like_share`/`unlike_share` 신설, `list_shares`·`get_share` 에 like 필드 배선, `run_cleanup` 경고 1줄 |
+| `backend/app/schemas/community.py` | `SharedCourseItem` 에 `like_count:int=0`·`liked_by_me:bool=False` 추가, `LikeResponse` 신설 |
+| `backend/app/api/course_share.py` | 라우트 2개, `GET /shared` 에 `sort` Query + 선택 신원 |
+| `backend/app/config.py` | `like_write_per_min`·`like_enabled` |
+| `backend/app/deps.py` | write limiter 에 `like` 버킷 |
+| `backend/app/repositories/user_repo.py` | `delete_account` 에 탈퇴 시 `like_count` 감산(보안 M-1) |
+| `backend/.env.example` · `.env.production.example` | `LIKE_ENABLED`·`LIKE_WRITE_PER_MIN` 키 기재(보안 L-3 / QA m-5) |
+| `backend/scripts/verify_likes.py` | **신규** 회귀 스크립트(§8) — §7 에 탈퇴 정합성 재검사 포함 |
+
+---
+
+## 3. [6번] 컨시어지(AI 문답) 제거 — **먼저 처리해야 하는 함정 3건**
+
+조사 결과, PRD §4-6 의 삭제 목록을 그대로 실행하면 **백엔드가 기동하지 않거나 홈 화면이 깨진다.**
+아래 3건을 선행 처리해야 한다.
+
+### 함정 ① `featured_service` 가 `concierge_service.province_targets` 를 쓴다 (**심각**)
+
+```python
+# backend/app/services/featured_service.py:38
+from .concierge_service import province_targets  # 부록 Y: 시도→시군구 상위 N곳(선례 재사용)
+```
+- 부록 Y(지역 허브 A안, 2026-08-11)가 컨시어지의 도(道) 스윕 로직을 재사용했다.
+  `concierge_service.py` 를 지우면 **`/api/v1/places/featured` 가 import 에러로 죽는다 = 홈이 깨진다.**
+- **처리**: `province_targets`(8줄)와 상수 `PROVINCE_SWEEP_MAX = 6` 을 신규 모듈
+  `backend/app/services/region_targets.py` 로 **로직 무변경 복사**하고, `featured_service` 의 import 만
+  바꾼다. 컨시어지 삭제와 **별개 커밋**으로 먼저 넣어 회귀를 분리하는 것을 권장한다.
+
+### 함정 ② 공유 AI 모듈에 컨시어지 코드가 섞여 있다 (파일 삭제 불가, **부분 수정** 대상)
+
+| 파일 | 컨시어지 전용 부분 | 남겨야 하는 부분 |
+|---|---|---|
+| `ai/llm_provider.py` | `extract_concierge_understanding`(2곳: 추상+구현), `concierge_prompts` import, `_concierge_understanding_timeout_sec`, 팩토리의 timeout 주입 | **`extract_tags`(온보딩 본체)** |
+| `ai/summarizer.py` | `answer_concierge`(2곳), `CONCIERGE_SYSTEM_PROMPT`, `CONCIERGE_FESTIVAL_SYSTEM_PROMPT`, `_concierge_*` 필드, 팩토리 주입 | **`summarize`(스팟 3줄 요약)·코스 요약 경로** |
+| `ai/schemas.py` | `RawConciergeExtraction` 클래스 | **`RawLLMExtraction`·`OnboardingResult`·`LLMExtractionError`** |
+- 이 세 파일은 **삭제하지 않고 해당 심볼만 제거**한다. `extract_tags`/`summarize` 본문은 건드리지 않는다.
+
+### 함정 ③ 검증 스크립트의 단언이 깨진다
+
+```python
+# backend/scripts/verify_admin.py:167
+and resolve_bucket("POST", "/api/v1/concierge/ask") == "llm"
+```
+- `LLM_PATHS` 에서 경로를 빼면 이 단언은 `default` 가 되어 **FAIL** 한다.
+  → `"/api/v1/tips/personalized"` 로 교체한다(팁 API 가 그 자리를 대신하므로 검사 의도가 유지된다).
+- `verify_community.py:345` 의 정적 검사는 `if p.exists()` 로 감싸져 있어 파일이 사라져도 **통과한다**(무해).
+  다만 목록에서 concierge 줄을 지우고 `tips_service.py` 를 추가하는 편이 의도에 맞다.
+
+### 3-1. 삭제 목록 (파일 통째)
+
+```
+backend/app/api/concierge.py
+backend/app/services/concierge_service.py     ← ① 선행 처리 후
+backend/app/schemas/concierge.py
+backend/app/ai/concierge_prompts.py
+backend/app/ai/concierge_understanding.py
+backend/scripts/verify_concierge_festival.py
+```
+
+### 3-2. 수정 목록 (잔재 제거)
+
+| 파일 | 변경 |
+|---|---|
+| `backend/app/main.py` | `from .api import (... concierge ...)` 에서 제거, `app.include_router(concierge.router)` 제거 |
+| `backend/app/config.py` | `concierge_timeout_sec`·`concierge_max_input_chars`·`concierge_answer_enabled`·`concierge_spot_limit`·`concierge_festival_fetch_timeout_sec`·`concierge_understanding_timeout_sec` **6종 제거**(118~143행 블록) |
+| `backend/app/middleware/rate_limit.py` | `LLM_PATHS` 에서 `/api/v1/concierge/ask` 제거 + `/api/v1/tips/personalized` 추가. **`BUCKET_LLM` 자체는 유지** |
+| `backend/app/ai/llm_provider.py`·`summarizer.py`·`schemas.py` | 함정 ② 대로 심볼 제거 |
+| `backend/app/services/featured_service.py` | import 를 `region_targets` 로 교체(함정 ①) |
+| `backend/scripts/verify_admin.py`·`verify_community.py` | 함정 ③ |
+| `deploy/nginx.conf` | `location /api/v1/concierge/` 블록(194행) → `location /api/v1/tips/` 로 **교체**(120s 유지 — 같은 LLM 성격) |
+| `backend/.env.example` | 61행 주석의 경로 표기 갱신 |
+| `backend/.env.production.example` | `CONCIERGE_*` 5줄(50·51·133~136) 삭제, 주석 61행 갱신, `TIPS_*` 추가 |
+| `01-interface-contract.md` | 부록 N·N.9~N.12 **폐기 배너**(삭제 아님) — **이미 반영함** |
+
+### 3-3. 완료 판정 (기동 실패를 막는 체크)
+
+```bash
+cd backend
+grep -rn "concierge" app/ | grep -v "\.pyc"     # → 0줄이어야 한다
+py -c "from app.main import app; print(len(app.routes))"   # import 에러 없이 통과
+py scripts/verify_community.py                  # 67/67
+py scripts/verify_admin.py                      # 전 항목 PASS(버킷 단언 교체 후)
+py scripts/verify_featured_limit.py             # 50/50 ← 함정 ① 회귀 감시
+```
+- `/ask` **경로 자체는 프론트(Next.js) 라우트**다. U-3(`/course` 리다이렉트)은 `next.config` 또는
+  `app/ask/page.tsx` 에서 처리하며 **백엔드·nginx 는 관여하지 않는다**(nginx `/` 는 프론트로 프록시).
+
+---
+
+## 4. [4번] 개인화 여행 팁 API — 인터페이스 확정 (프롬프트는 AI팀)
+
+계약 본문은 `01-interface-contract.md` **부록 Z**. 여기서는 코드 경계만 적는다.
+
+### 4-1. 소유 경계
+
+```
+[backend 소유]                              [ai-optimization-engineer 소유]
+api/tips.py            라우트·422·429        ai/tips_generator.py   프롬프트·LLM 호출·JSON 파싱
+services/tips_service.py                     └ 실패 시 예외/None 만 돌려준다
+  ├ 피처 조립(태그·카테고리 분포·혼잡·강수)
+  ├ 캐시(24h) · 타임아웃(20s) · 킬스위치
+  ├ 카테고리 enum 검증 · 길이 절단 · 단정 표현 필터 적용
+  └ 정적 폴백(항상 3~5건 보장)
+content/travel_tips.ko.json  정적 5건 서버 사본
+```
+
+### 4-2. 인터페이스 계약 (ai-optimization-engineer 가 구현할 것)
+
+```python
+# backend/app/ai/tips_generator.py  ← AI팀이 작성
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class TipFeatures:
+    tags: tuple[str, ...]              # registry 영문 코드만 (예: ("family","calm"))
+    category_mix: dict[str, int]       # 최근 저장 코스의 스팟 카테고리 코드 집계
+    congestion_level: str | None       # "low" | "medium" | "high"
+    rain_prob_pct: int | None          # 0~100
+    month: int                         # 1~12 (KST)
+    region_label: str | None           # regions.seed.REGIONS 의 label (서버 상수)
+
+@dataclass(frozen=True)
+class GeneratedTip:
+    category: str                      # 부록 Z.2 의 고정 enum 5종 중 하나
+    title: str
+    body: str
+
+class TipsGenerator(Protocol):
+    async def generate(self, features: TipFeatures, *, timeout_sec: float) -> list[GeneratedTip]:
+        """실패·타임아웃·비정상 JSON 은 예외를 던지거나 빈 리스트를 반환한다.
+        절대 예외를 삼키고 지어낸 값을 돌려주지 않는다 — 폴백 판정은 backend 가 한다."""
+```
+
+**AI팀에게 주는 불변식 4가지**
+1. `TipFeatures` 에 있는 값 외에는 프롬프트에 넣을 수 없다(사용자 자유 텍스트·스팟명 금지).
+2. 출력 카테고리는 5종 enum 밖으로 나갈 수 없다 — 나가면 backend 가 그 팁을 **버린다**.
+3. 지연 상한은 20초(`TIPS_TIMEOUT_SEC`). 초과분은 backend 가 정적 폴백으로 대체한다.
+4. 새 외부 API·유료 키 도입 금지(로컬 Ollama 재사용, 비용 0).
+
+### 4-3. 신규/변경 파일
+
+| 파일 | 성격 |
+|---|---|
+| `backend/app/api/tips.py` | 신규(backend) |
+| `backend/app/services/tips_service.py` | 신규(backend) |
+| `backend/app/schemas/tips.py` | 신규(backend) |
+| `backend/app/content/travel_tips.ko.json` | 신규 — 프론트 정적 5건의 **서버 사본**(id·category 동일) |
+| `backend/app/ai/tips_generator.py` | 신규(**AI팀**) |
+| `backend/app/api/auth_deps.py` | `optional_identity()` **추가**(기존 `require_login` 은 무변경) |
+| `backend/app/main.py` | `app.include_router(tips.router)` |
+| `backend/app/middleware/rate_limit.py` | `LLM_PATHS` 에 경로 추가 |
+| `backend/app/config.py` | `TIPS_*` 5종 |
+
+- `optional_identity`: 쿠키가 있으면 `UserIdentity`, 없거나 무효면 `None`(401 을 던지지 않는다).
+  `community_common.session_display_name` 과 같은 "선택적 신원" 패턴이며, `require_login` 은 손대지 않는다.
+- **정적 5건 서버 사본의 이중화 이유**: 프론트 파일은 *네트워크 실패* 폴백, 서버 사본은 *LLM 실패* 폴백이다.
+  둘의 `id`·`category` 가 어긋나면 화면에서 같은 팁이 두 번 보일 수 있으므로 검증 스크립트가 대조한다.
+
+---
+
+## 5. [3번] 혼잡 지도 삭제 — 백엔드 **무변경** 확인 (호출처 기준)
+
+`/congestion` 화면에서 지도(`mappreview/KoreaSvgMap.tsx`)를 지워도 백엔드는 한 줄도 바뀌지 않는다.
+근거는 "그 컴포넌트가 API 를 직접 부르지 않는다"와 "세 엔드포인트의 호출처가 지도 밖에 다수 있다" 두 가지다.
+`KoreaSvgMap` 은 **props 로 데이터를 받는 순수 표시 컴포넌트**이며(파일 안에 `fetch` 가 없다),
+데이터를 가져오는 쪽은 컨테이너인 `MapPreviewContent.tsx` 의 `fetchNationwideCongestion` 이다 —
+그 컨테이너는 지도 삭제 후에도 `NationwideBoard`(현황판 카드)를 채우기 위해 **같은 호출을 유지**한다.
+나머지 두 엔드포인트도 지도와 무관한 곳에서 쓰인다: `GET /congestion/board` 는 홈·`/congestion` 의
+`CongestionBoard.tsx`, `GET /congestion/forecast` 는 스팟 상세의 `VisitTipCard.tsx`(방문 타이밍 막대 차트)다.
+서버 내부에서도 `congestion_repo` 는 `recommend`·`compare`·`course`·`arrange`·`collections`·`featured`·
+`seasonal`·`outlook(/plan)`·`spot_detail`·`slack_report`·`share_service`(공유 코스 상세의 시점 혼잡도)
+**11개 서비스**가 쓰고 있다. 따라서 이번 삭제로 호출이 사라지는 백엔드 경로는 **0개**이며,
+`api/congestion.py`·`nationwide_congestion_service.py`·`congestion_service.py` 는 손대지 않는다.
+QA 무회귀 항목: `/congestion/board`·`/nationwide`·`/forecast` 200 + 스팟 카드 혼잡 배지 + `visit_tip` +
+`/compare` + `/plan` 응답 동일.
+
+---
+
+## 6. [1번] 마이페이지 허브 — 백엔드 **변경 불필요** 판정
+
+| 마이페이지가 필요로 하는 것 | 기존 수단 | 신규 필요? |
+|---|---|---|
+| 로그인 여부·표시 이름 | `GET /api/v1/auth/me` | 아니오 |
+| 취향 프로필 유무 + 요약 | `GET /api/v1/onboarding/me` → `{profile: null}` 또는 프로필 | **아니오** |
+| 저장한 코스 목록 | `GET /api/v1/courses/mine` | 아니오 |
+| 즐겨찾기·스탬프 | 기존 로컬/기존 API | 아니오 |
+
+- `GET /onboarding/me` 는 이미 로그인 필수이고 없으면 `{"profile": null}` 을 주므로,
+  "취향 알려주기 / 다시 분석하기" 라벨 분기는 **이 응답 하나로 끝난다**. 신규 API 0.
+- 로그인 후 `/mypage` 착지는 **프론트 라우팅**이다(`Header.tsx` 콜백). 서버 리다이렉트가 아니므로
+  백엔드 무관하며, OAuth 콜백(`api/auth.py`)의 리다이렉트 대상도 **바꾸지 않는다** —
+  거기까지 손대면 행동 게이트 로그인(P-B)도 함께 이동해 버린다.
+- 다만 `/mypage` 진입 시 `auth/me` + `onboarding/me` + `courses/mine` 3콜이 동시에 나가므로,
+  프론트가 **순차가 아니라 병렬**로 부르길 권한다(서버 변경은 아님).
+
+---
+
+## 7. API 엔드포인트 목록 (이번 애드온 기준)
+
+| 메서드 | 경로 | 인증 | 상태 | 비고 |
+|---|---|---|---|---|
+| POST | `/api/v1/courses/shared/{code}/like` | **로그인 필수** | **신설** | 멱등 · `{liked,like_count}` |
+| DELETE | `/api/v1/courses/shared/{code}/like` | **로그인 필수** | **신설** | 멱등 |
+| GET | `/api/v1/courses/shared` | 선택(로그인 시 `liked_by_me`) | **확장** | `sort=latest\|popular`(기본 latest) + `like_count`·`liked_by_me` |
+| GET | `/api/v1/courses/shared/{code}` | 선택 | **확장** | `like_count`·`liked_by_me` additive |
+| POST | `/api/v1/tips/personalized` | **선택**(비로그인=정적) | **신설** | 부록 Z · 요청 본문은 `region_code` **하나뿐**이고 잉여 필드는 `extra="forbid"` 로 **422**(보안 L-4) |
+| POST | `/api/v1/concierge/ask` | — | **삭제** | 라우터 미등록 → 404 |
+| POST | `/api/v1/onboarding/analyze` | 로그인 필수 | **무변경** | 6번의 대체 기능 실체 |
+| GET | `/api/v1/onboarding/me` | 로그인 필수 | **무변경** | 마이페이지 타일 판정 |
+| GET | `/api/v1/congestion/board` · `/nationwide` · `/forecast` | 공개 | **무변경** | §5 |
+
+## 8. DB 스키마 요약 (schema_version 9 → 10)
+
+```sql
+shared_courses(share_code PK, seq, device_id, nickname, title, payload, spot_count,
+               created_at, view_count, hidden,
+               like_count INT NOT NULL DEFAULT 0)          -- ★ 신설 컬럼
+   INDEX(hidden, created_at DESC)                          -- 기존(latest 정렬)
+   INDEX(hidden, like_count DESC, created_at DESC, seq DESC) -- ★ 신설(popular 정렬)
+
+course_likes(share_code FK→shared_courses ON DELETE CASCADE,
+             user_id    FK→users          ON DELETE CASCADE,
+             created_at TEXT,
+             PRIMARY KEY(share_code, user_id))             -- ★ 신설 테이블 = 계정당 1표
+   INDEX(user_id)
+```
+- 다른 테이블(`reviews`·`onboarding_profiles`·`ai_courses`·`inquiries`·`users`·`visit_*`)은 **무변경**.
+- 별도 마이그레이션 러너를 도입하지 않는다 — 기존 관례대로 기동 시 멱등 DDL.
+
+## 9. 왜 이번에 구현까지 하지 않았나 (판단 근거)
+
+1. **6번(삭제)은 백엔드만 먼저 반영하면 운영이 깨진다.** `/concierge/ask` 라우터를 지우는 순간
+   아직 살아 있는 프론트 `/ask`·홈 `ConciergeSection` 이 404 를 받는다. 프론트 제거와 **같은 배포 단위**
+   여야 하며, PRD §6 도 "6건을 묶은 하나의 배포"를 최종 결재 대상으로 못박았다.
+2. **함정 ①(`province_targets`)** 은 홈 화면이 걸린 회귀라 구현 시 `verify_featured_limit.py` 재실행이
+   필수인데, 이는 designer 산출물과 무관하게 별도 검증 사이클을 요구한다.
+3. 5번의 화면 계약(하트를 상세에도 다는지 = U-6)이 designer 산출물에서 확정되면 **서버 코드는 그대로**
+   두고 프론트만 붙이면 되도록 이미 설계해 두었다(서버는 항상 값을 준다).
+→ 따라서 2차 게이트는 **설계 확정**으로 닫고, 구현은 designer·AI 산출물이 합류한 뒤 한 번에 진행하는 것이
+   재작업이 가장 적다. 구현 순서 권고는 PRD §9 와 동일: **6 → 1 → 3 → 5 → 4**.
+
+## 10. 검증 계획 (구현 시 실행할 것 — 아직 미실행)
+
+| 스크립트 | 목적 | 기대 |
+|---|---|---|
+| `verify_community.py` | 리뷰·공유 무회귀 | 67/67 |
+| `verify_community_retention.py` | 보존정책 무회귀(+ like 유예 신규) | 35/35 + 신규 |
+| `verify_community_likes.py` **(신규 작성)** | 멱등 토글 · 계정당 1회 · 비로그인 401 · 404(없음/hidden) · `sort` 무회귀 · `liked_by_me` · 카운트 정합 · CASCADE · overflow 우선순위 | 전 항목 PASS |
+| `verify_admin.py` | 버킷 분류(경로 교체 후) | 전 항목 PASS |
+| `verify_featured_limit.py` | 함정 ① 회귀 | 50/50 |
+| `grep -rn "concierge" backend/app` | 잔재 0 | 0줄 |
+
+## 11. 실행 방법 (로컬)
+
+```bash
+# 0) 사전 — PostgreSQL 기동 + backend/.env 에 DATABASE_URL 설정(기존과 동일)
+cd backend
+
+# 1) 검증 (서버 기동 없이, 임시 스키마 + 인메모리 ASGI)
+py scripts/verify_community.py
+py scripts/verify_community_retention.py
+py scripts/verify_community_likes.py        # 구현 후 신규
+
+# 2) 구동
+uvicorn app.main:app --reload --port 8000
+#    기동 로그에 "postgres 준비 완료 schema_version=10" 이 보여야 한다
+#    "concierge" 관련 로그가 한 줄도 없어야 한다
+
+# 3) 확인
+curl -s "http://127.0.0.1:8000/api/v1/courses/shared?limit=3"                 # like_count·liked_by_me 존재
+curl -s "http://127.0.0.1:8000/api/v1/courses/shared?limit=3&sort=popular"    # 순서 변화
+curl -s -X POST "http://127.0.0.1:8000/api/v1/concierge/ask" -d '{}'          # 404 (라우터 없음)
+curl -s -X POST "http://127.0.0.1:8000/api/v1/tips/personalized" \
+     -H 'Content-Type: application/json' -d '{"region_code":"26350"}'         # 비로그인 → static 5건
+```
+
+## 12. QA·보안이 특히 볼 지점 (3차 풀검수 대비)
+
+| # | 지점 | 확인 방법 |
+|---|---|---|
+| 1 | **A-6 재구성 로직 diff 0** | `git diff` 에 `course_payload.py` 가 나오면 안 된다 |
+| 2 | **좋아요 인증 경계** | 쿠키 없이 like → 401, 남의 세션 위조 불가, 응답에 `user_id` 미노출 |
+| 3 | **카운트 정합성** | 동시 토글 후 `like_count` = `COUNT(course_likes)` (§2-6 쿼리) |
+| 4 | **기본 정렬 무회귀** | `sort` 미지정 응답이 변경 전과 동일 순서 |
+| 5 | **보존정책** | 좋아요 있고 조회수 0인 코스가 overflow 에서 먼저 삭제되지 않는지 |
+| 6 | **삭제 잔재** | `grep -rn concierge` 0줄 + 기동 성공 + `/places/featured` 정상(함정 ①) |
+| 7 | **팁 인젝션 표면** | 요청 스키마에 자유 텍스트 필드가 **없는지**, 프롬프트 입력이 enum/수치뿐인지 |
+| 8 | **팁 폴백** | Ollama 를 끈 상태에서도 `/tips/personalized` 가 200 + 5건 |
+
+---
+
+## 13. 구현 결과 (2026-08-20 후속 세션, backend-engineer)
+
+구현 순서는 설계 권고대로 **6(컨시어지 삭제) → 5(좋아요·정렬) → 4(팁 API)** 를 따랐다.
+1·3번은 §5·§6 결론대로 **백엔드를 한 줄도 건드리지 않았다**.
+
+### 13-1. 파일별 변경 요약
+
+| 파일 | 성격 | 내용 |
+|---|---|---|
+| `app/services/region_targets.py` | **신규** | `province_targets`·`PROVINCE_SWEEP_MAX` 를 **로직 무변경**으로 이동(함정 ①) |
+| `app/services/featured_service.py` | 수정 | import 를 `region_targets` 로 교체(1줄) + 주석 1줄 |
+| `app/api/concierge.py` · `services/concierge_service.py` · `schemas/concierge.py` · `ai/concierge_prompts.py` · `ai/concierge_understanding.py` · `scripts/verify_concierge_festival.py` | **삭제** | 6파일 |
+| `app/ai/llm_provider.py` | 수정 | `extract_concierge_understanding`(추상+구현)·`RawConciergeExtraction` import·전용 타임아웃 제거. **`extract_tags` 무변경** |
+| `app/ai/summarizer.py` | 수정 | `answer_concierge`(2곳)·`CONCIERGE_*_PROMPT` 2종·`_postprocess_answer`·`_DATA_LABEL_LEAK_RE`·전용 필드 제거. **`summarize`/코스요약 경로 무변경** |
+| `app/ai/schemas.py` | 수정 | `RawConciergeExtraction` 만 제거(`RawLLMExtraction`·`OnboardingResult`·`LLMExtractionError` 유지) |
+| `app/main.py` | 수정 | concierge 라우터 등록 제거 + tips 라우터 등록 |
+| `app/config.py` | 수정 | `concierge_*` 6종 제거 → `tips_*` 5종 + `like_write_per_min`·`like_enabled` 추가 |
+| `app/middleware/rate_limit.py` | 수정 | `LLM_PATHS` 에서 `/concierge/ask` 제거 · `/tips/personalized` 추가. **`BUCKET_LLM` 유지** |
+| `app/db/postgres.py` | 수정 | `SCHEMA_VERSION 9→10` + DDL 4문(§2-1 그대로) |
+| `app/repositories/shared_course_repo.py` | 수정 | `toggle_like`/`untoggle_like`/`get_like_state` 신설, `list_shares` 확장(`sort`·`user_id` 기본값 인자), `_LIST_COLUMNS` 에 `like_count`, `_GRACE`·`delete_overflow` 정렬 수정 |
+| `app/services/share_service.py` | 수정 | `like_share`/`unlike_share` 신설, `_to_item`·`get_share`·`list_shares` 배선, `run_cleanup` 경고 1줄 |
+| `app/schemas/community.py` | 수정 | `SharedCourseItem` 에 `like_count`·`liked_by_me`(기본값 포함 additive) + `LikeResponse` |
+| `app/api/course_share.py` | 수정 | 좋아요 라우트 2개 + `GET /shared` 에 `sort`·선택 신원 |
+| `app/api/auth_deps.py` | 수정 | `optional_identity()` **추가**(`require_login` 무변경) |
+| `app/deps.py` | 수정 | write limiter 에 `like` 버킷, `get_tips_generator()` 신설 |
+| `app/api/tips.py` · `services/tips_service.py` · `schemas/tips.py` · `ai/tips_generator.py` · `content/travel_tips.ko.json` | **신규** | 부록 Z 구현 |
+| `scripts/verify_likes.py` · `scripts/verify_tips.py` | **신규** | 회귀 스크립트 2종(42 + 42 항목) |
+| `scripts/verify_admin.py` · `verify_community.py` | 수정 | 버킷 단언 경로 교체 · 정적 검사 목록 교체(함정 ③) |
+| `deploy/nginx.conf` · `deploy/DEPLOY.md` · `.env.example` · `.env.production.example` | 수정 | concierge 항목 → tips 로 교체 |
+
+### 13-2. 설계와 달라진 점 (3건, 전부 계약 불변)
+
+1. **팁 생성기(`ai/tips_generator.py`)를 backend 가 함께 구현했다.** §4-2 는 AI팀 소유로 두었지만,
+   프롬프트 본문이 `design-docs/02-ai-strategy.md` §10.2 에 이미 확정돼 있어 그대로 옮겨 배선만
+   했다(프롬프트를 새로 설계하지 않았다). 소유 경계는 유지된다 — 카테고리 allowlist·길이 절단·
+   단정 표현 필터·건수 하한·폴백 판정은 전부 `tips_service`(backend) 에 있다.
+2. **`sort` 검증을 화이트리스트 dict 조회 + `Literal` 타입으로 이중화**했다. 설계는 dict 조회만
+   적었는데, 라우터에 `Literal["latest","popular"]` 를 붙이면 FastAPI 가 422 를 대신 내주므로
+   문자열이 서비스 레이어에 닿기도 전에 걸린다(SQL 인젝션 표면 0 을 두 겹으로).
+3. **로그인 목록 SQL 의 `ORDER BY` 를 문자열 치환이 아니라 별도 dict(`_ORDER_JOINED`)로** 뒀다.
+   JOIN 경로는 컬럼을 `s.` 로 한정해야 하는데, 치환으로 만들면 컬럼이 늘 때 조용히 어긋난다.
+
+### 13-3. 검증 결과 (전부 실행함)
+
+| 스크립트 | 결과 | 비고 |
+|---|---|---|
+| `python -c "import app.main"` | **OK** (routes 22→23) | 컨시어지 삭제 후에도 기동 |
+| `pyflakes app` | **신규 지적 0** | 남은 1건(`api/auth.py:41`)은 **이번 변경 이전부터 존재** |
+| `verify_likes.py` **(신규)** | **42/42 PASS** | 멱등·계정당1표·401/404·정합성·정렬 무회귀·CASCADE·overflow 우선순위·킬스위치·계정 쿼터 |
+| `verify_tips.py` **(신규)** | **42/42 PASS** | 폴백 판정표 6줄 전부·후처리·422·정적 사본 대조·캐시·버킷 |
+| `verify_course_payload.py` | **전건 통과** | A-6 무회귀(`course_payload.py` **git diff 0**) |
+| `verify_featured_limit.py` | **50/50 PASS** | 함정 ① 회귀 감시 |
+| `verify_admin.py` | phase A **32/33** | 버킷 단언 교체 후 통과. 실패 1건은 **베이스라인과 동일**(아래) |
+| `verify_auth.py` | **51 PASS / 2 FAIL** | 2건 모두 **베이스라인과 동일** |
+| `verify_community.py` · `verify_community_retention.py` | §7 에서 중단 | **베이스라인과 동일** |
+| `GET /api/v1/places/featured` | **200** (trending 3 · hidden 3) | `area_cd=41`(도 스윕 = `province_targets`)도 200, 6개 시군구 정확히 스윕 |
+| `POST /api/v1/concierge/ask` | **404** | 라우터 미등록 |
+| `grep -rn concierge backend/app` | 코드 참조 0 | `region_targets.py` 독스트링의 이력 설명 1줄만 남김(의도) |
+
+**베이스라인 대조 방법**: `git archive HEAD` 로 수정 전 트리를 임시 폴더에 풀고 같은 스크립트를
+같은 DB 에 돌려 비교했다. 아래 3건은 **이번 변경 이전부터 실패하던 것**이며 원인은 동일하다 —
+2026-08-18 보안감사 A-6 이후 `rebuild_course_for_store` 가 **실재하는 스팟 id 만** 받아들이는데,
+이 스크립트들이 쓰는 예시 코스가 `{"id": 1}` 같은 **가짜 id** 라 `400 INVALID_COURSE` 가 난다.
+
+| 항목 | 베이스라인 | 이번 변경 후 |
+|---|---|---|
+| `verify_community.py` | `[OK]` 45건 후 §7 에서 중단 | **동일** (45건 후 동일 지점 중단) |
+| `verify_community_retention.py` | 첫 `share()` 에서 assert 실패 | **동일** |
+| `verify_auth.py` | 51 PASS / 2 FAIL | **동일**(같은 2건) |
+| `verify_admin.py` phase A | 32/33 (CORS 기본값 1건 실패) | **동일** |
+
+→ **이번 변경으로 늘어난 실패는 0건이다.** 다만 위 3개 스크립트는 지금 상태로는 공유 경로를
+검증하지 못하므로(가짜 id), 예시 코스를 실재 스팟 id 로 교체하는 별도 수선이 필요하다 —
+`verify_likes.py` 는 그 방식(`spot_repo.by_region("26350")` 에서 실제 id 2개)을 이미 쓴다.
+이 수선은 이번 지시 범위 밖이라 하지 않았다(QA 판단 사항).
+
+### 13-4. 배포 전제 (변하지 않음)
+
+`/concierge/ask` 라우터가 사라졌으므로 **프론트의 `/ask`·홈 컨시어지 섹션 제거와 같은 배포
+단위**여야 한다(§9-1). 백엔드만 먼저 올리면 살아 있는 프론트가 404 를 받는다.
+DB 는 기동 시 멱등 DDL 로 `schema_version=10` 이 적용된다 — 별도 마이그레이션 절차 없음.

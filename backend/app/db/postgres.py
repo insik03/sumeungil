@@ -44,7 +44,7 @@ logger = logging.getLogger("sumeungil.db.postgres")
 
 T = TypeVar("T")
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # --- 스키마 (기동 시 CREATE TABLE IF NOT EXISTS 로 멱등 적용) ----------------------
 #
@@ -279,6 +279,40 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """,
     """
     ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS replied_by TEXT
+    """,
+    # --- schema_version 10 (2026-08-20): 공유 코스 좋아요(부록 R.14) --------------------
+    #
+    # 좋아요는 `shared_courses.payload` **밖에만** 존재한다 — payload 는 2026-08-18 보안감사
+    # A-6(콘텐츠 위조 차단)의 재구성 규칙이 걸린 영역이라 한 글자도 건드리지 않는다.
+    #
+    # PK(share_code, user_id) = **계정당 1회**를 DB가 강제한다. 애플리케이션 로직이 아니라
+    # 제약이므로 동시 요청 2건이 들어와도 두 번 세어지지 않는다.
+    # 양쪽 CASCADE 는 필수다: shared_courses 는 보존정책이 상시 삭제하고(delete_overflow/
+    # delete_expired), users 는 탈퇴로 사라진다 — 없으면 고아 행이 쌓이거나 삭제가 FK 위반으로
+    # 실패한다.
+    """
+    CREATE TABLE IF NOT EXISTS course_likes (
+        share_code  TEXT    NOT NULL REFERENCES shared_courses (share_code) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL REFERENCES users (id)         ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL,
+        PRIMARY KEY (share_code, user_id)
+    )
+    """,
+    # like_count 비정규화는 정렬 때문이다. ORDER BY COUNT(*) 는 매 페이지마다 전체 집계가
+    # 필요하고, 목록 SELECT 에 조인 집계를 넣으면 "payload 미SELECT"로 아낀 비용을 다시 쓴다.
+    """
+    ALTER TABLE shared_courses ADD COLUMN IF NOT EXISTS like_count INTEGER NOT NULL DEFAULT 0
+    """,
+    # 인덱스 선두가 hidden 인 이유는 기존 ix_shared_courses_created 와 같다 — 피드는 항상
+    # WHERE hidden = 0 이므로 선두 컬럼이 맞아야 인덱스가 실제로 쓰인다.
+    """
+    CREATE INDEX IF NOT EXISTS ix_shared_courses_likes
+        ON shared_courses (hidden, like_count DESC, created_at DESC, seq DESC)
+    """,
+    # 탈퇴/관리자 삭제 시의 역방향 조회용(PK 는 share_code 선두라 user_id 단독 조회에 못 쓴다).
+    """
+    CREATE INDEX IF NOT EXISTS ix_course_likes_user
+        ON course_likes (user_id)
     """,
 )
 

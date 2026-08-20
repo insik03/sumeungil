@@ -170,11 +170,14 @@ export default function OnboardingContent() {
   }, []);
 
   const handleConfirmResult = useCallback(() => {
-    // 2026-08-17(대표 지시) — 예전엔 여기서 바로 /recommend로 보냈다(MVP-4, 부록 C: 추천
-    // 화면이 이 결과를 sessionStorage에서 그대로 소비). 이제 홈으로 보내고, 홈이 방금
-    // 만든 추천을 배너로 안내한다(HomeContent.tsx의 hasFreshOnboardingResult 참고) —
-    // sessionStorage는 그대로 두므로 recommend가 여전히 이 결과를 소비할 수 있다.
-    router.push("/");
+    // 2026-08-20(QA M-1, PRD §4-1-③) — "코스 짜러 가기"를 1순위 CTA로 /course에 바로 보낸다.
+    // sessionStorage에 저장된 결과(§B.5-7)는 여전히 유지되므로 이후 화면들이 그대로 소비할 수 있다.
+    router.push("/course");
+  }, [router]);
+
+  const handleGoMypage = useCallback(() => {
+    // PRD §4-1-③ — "마이페이지로"는 2순위 보조 CTA.
+    router.push("/mypage");
   }, [router]);
 
   return (
@@ -228,6 +231,7 @@ export default function OnboardingContent() {
           displayName={loggedIn}
           onEdit={handleEditAfterResult}
           onConfirm={handleConfirmResult}
+          onGoMypage={handleGoMypage}
         />
       )}
 

@@ -75,7 +75,7 @@ class OnboardingAnalyzeRequest(BaseModel):
     스크립트가 쓰는 `free_text` 별칭도 동일하게 수용한다(둘 중 무엇이 와도 동작).
     """
 
-    # max_length 는 `/concierge/ask` 의 question 과 같은 방식(스키마 레벨 422)이다.
+    # max_length 는 스키마 레벨에서 막는다(초과 시 422).
     # 2026-08-18 보안 감사 A-5: AI 레이어가 300자로 "절단"하긴 하지만, 그 전에 수 MB 짜리
     # 문자열이 injection_guard 정규식 스캔과 pydantic 파싱을 통과해야 한다 — 인증이 있는
     # 경로라도 계정 하나로 CPU 를 태울 수 있다. 상한을 300 이 아니라 2000 으로 둔 이유는

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import tipsData from "../content/travel-tips.ko.json";
 import WeatherBoard from "./WeatherBoard";
+import PersonalizedTips from "./tips/PersonalizedTips";
 
 interface Tip {
   id: string;
@@ -35,6 +36,11 @@ interface GuideStep {
  * §37.1(신규, 03-design-spec.md, 2026-07-31) — `/tips` 최상단에 `<WeatherBoard />`(전국 날씨 보드)를
  * 얹었다(확장, 대체 아님) — 기존 정적 팁 카드·가이드는 그대로 두고 실시간성 콘텐츠를 그 위에 새로
  * 추가했다(홈에는 "여행 팁"에 대응하는 별도 섹션이 없어 이 페이지가 유일한 확장 지점이었다).
+ *
+ * §47.9(신규, 08-interface-contract.md 부록 Z, 2026-08-20) — 로그인+온보딩 프로필이 있으면
+ * `<PersonalizedTips />`가 AI 맞춤 팁을 인트로 문단 아래에 additive로 얹는다. 비로그인·
+ * 프로필없음·API 실패·서버 정적 폴백이면 그 컴포넌트가 스스로 null을 반환해 아무것도 안 그리고,
+ * 아래 기존 정적 5건 카테고리 그룹은 무조건 그대로 렌더된다(이 컴포넌트 로직 무변경).
  */
 export default function TipsContent() {
   const data = tipsData as { version: number; tips: Tip[]; guideSteps: GuideStep[] };
@@ -58,6 +64,8 @@ export default function TipsContent() {
         <p className="tips-intro">
           숨은길이 정리한 일반적인 여행 정보예요. 상황에 따라 다를 수 있으니 참고용으로 봐주세요.
         </p>
+
+        <PersonalizedTips />
 
         {Object.entries(grouped).map(([category, categoryTips]) => (
           <div className="tips-group" key={category}>

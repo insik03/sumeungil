@@ -394,7 +394,7 @@ export default function RecommendContent() {
 
 /**
  * §35 — app/recommend/page.tsx의 Suspense fallback. useSearchParams를 쓰는 클라이언트 컴포넌트는
- * Suspense 경계가 필요하다(Next.js App Router 규약, AskContent/CompareContent와 동일 패턴).
+ * Suspense 경계가 필요하다(Next.js App Router 규약, CompareContent와 동일 패턴).
  * 기존 로딩 화면과 같은 스팟 카드 스켈레톤을 그대로 재사용한다(새 마크업 없음).
  */
 export function RecommendLoadingSkeleton() {

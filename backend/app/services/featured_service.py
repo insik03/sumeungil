@@ -35,9 +35,9 @@ from ..schemas.places import (
 )
 from ..spots.region_map import get_tourapi_region
 from . import recommend_service, sampling, spot_detail_service
-from .concierge_service import province_targets  # 부록 Y: 시도→시군구 상위 N곳(선례 재사용)
 from .congestion_service import classify_level
 from .photo_service import Photo
+from .region_targets import province_targets  # 부록 Y: 시도→시군구 상위 N곳(선례 재사용)
 
 logger = logging.getLogger("sumeungil.services.featured")
 
@@ -474,7 +474,7 @@ async def _build_diverse_response(
 # 응답 스키마는 additive 한 필드(area) 하나만 늘었고 기존 필드 의미는 불변이다.
 # ---------------------------------------------------------------------------
 
-# 혼잡도 board 를 실제로 호출할 시군구 수 상한 = concierge 의 도 단위 질문과 **같은 규칙**을
+# 혼잡도 board 를 실제로 호출할 시군구 수 상한 = region_targets 의 도 단위 선정과 **같은 규칙**을
 # 재사용한다(스팟 많은 순 상위 PROVINCE_SWEEP_MAX=6곳, 결정적). 경기 44곳·경북 23곳을 전부
 # 부르면 요청 1건이 원천 호출 수십 건이 되어 쿼터를 태운다(2026-07-29 실사고와 같은 경로).
 # 어느 6곳인지가 결정적이라 캐시가 그대로 듣고, hidden_picks 는 애초에 원천을 안 부르므로

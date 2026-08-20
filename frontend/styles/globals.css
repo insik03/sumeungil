@@ -1252,6 +1252,11 @@ input:focus-visible,
   gap: var(--sp-4) var(--sp-2);
   margin-top: var(--sp-4);
 }
+/* §47.1(신규, 03-design-spec.md, 2026-08-20) — "여행 준비" 섹션(타일 2개)용 칸수 변형.
+   새 디자인 언어가 아니라 기존 그리드의 칸수만 다른 변형(타일 자체는 100% 재사용). */
+.mypage-activity__grid--prep {
+  grid-template-columns: repeat(2, minmax(140px, 220px));
+}
 .mypage-activity__item {
   display: flex;
   flex-direction: column;
@@ -3592,6 +3597,26 @@ input:focus-visible,
   outline-offset: 2px;
 }
 
+/* =========================================================================
+   §47.3(신규, 03-design-spec.md, 2026-08-20) — 코스짜기 상단 의견 입력(컨시어지 축약판).
+   .onboard-card/.onboard-textarea/.onboard-chip/.onboard-axis-group 등 온보딩 시각 언어를
+   그대로 재사용한다(새 디자인 언어 금지, §47.0). 신규 hex 없음.
+   ========================================================================= */
+.course-opinion {
+  margin-top: var(--sp-5);
+  margin-bottom: var(--sp-5);
+}
+.course-opinion__textarea {
+  min-height: 56px;
+  resize: none;
+}
+.course-opinion__loading {
+  padding: var(--sp-4) 0;
+}
+.course-opinion__understood {
+  margin-top: var(--sp-5);
+}
+
 /* 담은 스팟 목록 — 순서를 아직 정하지 않은 상태(backend가 arrange로 정해준다)라 번호를 매기지
    않는다(course-timeline__node의 순번 뱃지와 시각적으로 구분해 "이건 아직 순서가 아니다"를 알림). */
 .course-cart-list {
@@ -4336,6 +4361,18 @@ input:focus-visible,
   font-size: var(--text-sm);
   color: var(--ink-muted);
   line-height: 1.6;
+}
+
+/* §47.9(신규, 08-interface-contract.md 부록 Z, 2026-08-20) — /tips 개인화 팁(PersonalizedTips.tsx).
+   기존 .tips-group/.tips-grid/.tip-card/.tips-category-label을 그대로 재사용하고, 그룹 라벨에
+   아이콘을 얹을 때만 정렬용 최소 스타일을 더한다. 신규 hex 없음. */
+.tips-group--ai .tips-group__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tips-group__ai-notice {
+  margin-top: var(--sp-4);
 }
 
 /* =========================================================================
@@ -5256,151 +5293,6 @@ input:focus-visible,
 }
 
 /* =========================================================================
-   §32(신규) — AI 여행 문답 컨시어지(ConciergeSection.tsx, 홈 ServiceQuickMenu 바로 아래).
-   부록 N 계약. 신규 hex 없음 — 입력 폼은 온보딩 입력(.onboard-*)과 완전히 같은 시각 언어를
-   쓴다(같은 "AI가 텍스트를 읽고 태그를 뽑는다" 개념이라 서로 다른 스타일을 쓰면 사용자가
-   다른 기능으로 오인한다). 답변 카드는 .ai-summary(azure 강조선, "AI 생성 콘텐츠" 시맨틱),
-   에러/빈 상태는 .board-error, 안내문은 .dest-search__notice 레시피를 그대로 재사용한다.
-   ========================================================================= */
-.concierge__lead {
-  margin-top: var(--sp-2);
-  margin-bottom: var(--sp-5);
-  font-size: var(--text-sm);
-  color: var(--ink-muted);
-  font-weight: 600;
-  max-width: 60ch;
-}
-.concierge-card {
-  background: var(--white);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
-  padding: var(--sp-5);
-}
-.concierge__examples {
-  margin-top: var(--sp-4);
-}
-.concierge__submit-row {
-  margin-top: var(--sp-6);
-}
-@media (min-width: 560px) {
-  /* 데스크톱에서는 버튼이 폭 100%로 늘어질 필요가 없다 — btn--block을 이 폭에서만 해제. */
-  .concierge__submit-row .btn--block {
-    width: auto;
-    min-width: 220px;
-  }
-}
-
-/* 로딩(부록 N §N.6·N.8) — cold 11초/warm 4~7초. onboard-loading__spinner와 동일 레시피를
-   더 작은 크기로 재사용해(전면 로딩이 아니라 카드 안에 이어 붙는 인라인 로딩이라 sp-12 풀페이지
-   패딩은 과함) 홈 스크롤 중에도 부담 없이 보이게 했다. */
-.concierge__loading {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  margin-top: var(--sp-5);
-  padding: var(--sp-4);
-  background: var(--n-50);
-  border-radius: var(--r-md);
-}
-.concierge__loading-spinner {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 4px solid var(--n-100);
-  border-top-color: var(--g-500);
-  animation: onboard-spin 1s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .concierge__loading-spinner {
-    animation: none;
-  }
-}
-.concierge__loading-text {
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--ink-muted);
-}
-
-.concierge__result {
-  margin-top: var(--sp-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.concierge__footnote {
-  font-size: var(--text-xs);
-  color: var(--gray-500); /* .login-modal__note와 동일 대비 확보 레시피(4.5:1 이상) */
-  font-weight: 600;
-}
-.concierge__region-badge {
-  align-self: flex-start;
-  margin-top: var(--sp-2);
-  margin-bottom: 0; /* .sample-tag 기본 margin-bottom(sp-5)을 이 컨텍스트에 맞게 무력화 */
-}
-.concierge__understood {
-  margin-top: var(--sp-3);
-}
-.concierge__understood-title {
-  font-size: var(--text-sm);
-  font-weight: 800;
-  color: var(--ink);
-  margin-bottom: var(--sp-3);
-}
-.concierge__notice {
-  margin-top: var(--sp-1);
-}
-.concierge__spots {
-  margin-top: var(--sp-4);
-}
-.concierge__spots-heading {
-  font-size: var(--text-base);
-  font-weight: 800;
-  color: var(--ink);
-  margin-bottom: var(--sp-3);
-}
-.concierge__cta {
-  margin-top: var(--sp-5);
-  align-self: flex-start;
-}
-
-/* =========================================================================
-   §33-3(신규, 2026-07-29) — 홈 컴팩트 AI 문답 진입창(ConciergeSection.tsx). 결과 렌더가
-   `/ask`(AskContent.tsx)로 옮겨가면서 홈에는 한 줄 입력창 + 전송 버튼 + 예시 칩만 남는다.
-   입력 박스는 Hero.tsx의 목적지 검색(.dest-search__box/.dest-search__input)과 완전히 같은
-   레시피를 재사용해 "이 사이트에서 검색창이 어떻게 생겼는지"에 대한 학습을 새로 시키지 않는다.
-   ========================================================================= */
-.concierge-quick {
-  margin-top: var(--sp-2);
-}
-.concierge-quick__box {
-  background: var(--white);
-}
-.concierge-quick__submit {
-  width: var(--touch-min);
-  height: var(--touch-min);
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: none;
-  background: var(--g-500);
-  color: var(--white);
-  transition: background-color 0.15s ease, transform 0.15s ease;
-}
-.concierge-quick__submit:hover:not(:disabled) {
-  background: var(--g-600);
-  transform: translateY(-1px);
-}
-.concierge-quick__submit:disabled {
-  background: var(--gray-300);
-  color: var(--white);
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* =========================================================================
    §36(신규, 03-design-spec.md) — 공용 사진 슬라이더(PhotoCarousel.tsx). 스팟 상세 히어로 +
    축제 상세 공용. 컨테인드 라운드 카드(§24 이후 전역 원칙 — 풀블리드 아님), 신규 hex 없음.
    ========================================================================= */
@@ -6301,6 +6193,7 @@ input:focus-visible,
   }
 }
 .shared-course-card {
+  position: relative;
   display: block;
   background: var(--white);
   border-radius: var(--r-lg);
@@ -6319,6 +6212,7 @@ input:focus-visible,
   color: var(--ink);
   letter-spacing: -0.01em;
   line-height: 1.35;
+  padding-right: 60px; /* 우상단 하트 버튼과 겹치지 않게(제목이 길어져도) */
 }
 .shared-course-card__meta {
   margin-top: var(--sp-2);
@@ -6331,6 +6225,53 @@ input:focus-visible,
   font-size: var(--text-xs);
   color: var(--gray-500); /* 대비 4.5:1 확보 */
   font-weight: 600;
+}
+
+/* =========================================================================
+   §47.5(신규, 03-design-spec.md, 2026-08-20) — 공유 코스 좋아요 하트. 채워진 하트는 그린
+   (--g-500) — 코랄/빨강은 "혼잡 high" 배지 전용이라 좋아요에 쓰면 의미가 충돌한다(§22 결정).
+   카드 전체가 <Link>라 하트는 절대배치 + preventDefault/stopPropagation으로 내비게이션을 막는다.
+   ========================================================================= */
+.shared-course-card__like {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--n-100);
+  background: var(--white);
+  color: var(--gray-400);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.shared-course-card__like:hover {
+  transform: translateY(-1px);
+  border-color: var(--g-300);
+}
+.shared-course-card__like.is-liked {
+  color: var(--g-500);
+  border-color: var(--g-100);
+  background: var(--g-50);
+}
+.shared-course-card__like-note {
+  margin-top: var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+  font-weight: 700;
+}
+
+/* §47.5 — 정렬 세그먼트(최신순/좋아요순). .course-mode-switch(role=tablist)를 그대로 재사용하므로
+   신규 스타일은 인트로 문단과 카드 그리드 사이 여백 정도만 필요하다. */
+.shared-course-sort {
+  margin-top: var(--sp-4);
 }
 
 /* §41 보정(2026-08-01, 오케스트레이터) — 추천 목록 카드는 폭이 좁아(실측 185px) 배지가 한 줄에
@@ -6413,6 +6354,12 @@ input:focus-visible,
 .board-card--clickable:focus-visible {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(61, 90, 108, 0.16);
+}
+/* §47.4(신규, 03-design-spec.md, 2026-08-20) — NationwideBoard 상시 노출 승격에 따른 선택
+   상태 표시. GNB 드롭다운·퀵메뉴가 이미 쓰는 is-active 모디파이어 명명 관례를 그대로 따른다.
+   새 색 없음(기존 border를 브랜드 그린 2px로 교체하는 정도). */
+.board-card--clickable.is-active {
+  border: 2px solid var(--g-500);
 }
 
 /* 부록 D.8(2026-08-01) — 비교 카드 사진. 두 카드가 대칭이어야 하므로 높이를 고정한다. */

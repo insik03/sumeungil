@@ -128,7 +128,41 @@ def delete_account(conn: psycopg.Connection, *, user_id: int) -> bool:
 
     리뷰 등 게시물의 `nickname`은 작성 시점에 텍스트로 복사돼 저장되므로(리뷰 테이블이
     users를 FK로 참조하지 않는다) 계정을 지워도 기존 게시물은 그대로 남는다 — 이는
-    /privacy §4가 이미 설명하는 동작이고 이번 변경과 무관하다."""
+    /privacy §4가 이미 설명하는 동작이고 이번 변경과 무관하다.
+
+    ## 좋아요 카운터 보정 (2026-08-20 보안검수 M-1)
+    `course_likes`는 `users`를 FK CASCADE로 참조하므로 탈퇴하면 그 계정의 좋아요 **행**은
+    사라지지만, 비정규화 컬럼인 `shared_courses.like_count`는 CASCADE가 건드리지 않는다.
+    보정 경로가 없으면 "가입 → 좋아요 → 탈퇴"를 반복해 `sort=popular` 랭킹을 부풀릴 수
+    있고, `delete_overflow`의 유예 조건(`like_count > 0`)이 실제 좋아요 0인 코스를 영구
+    보존해버린다. 그래서 users를 지우기 **전에** 같은 트랜잭션에서 감산한다.
+
+    감산은 `DELETE ... RETURNING` 으로 지운 행의 share_code 를 받아서 한다(보안팀이 제시한
+    `IN (SELECT ... FROM course_likes ...)` 서브쿼리와 결과는 같다). 이렇게 쓰는 이유 두 가지:
+      - `course_likes` -> `shared_courses` 라는 **락 순서**가 toggle_like/untoggle_like
+        (shared_course_repo.py:128 주석)와 같아진다. 순서를 뒤집으면 같은 사용자가 좋아요와
+        탈퇴를 동시에 날렸을 때 교차 데드락이 성립한다.
+      - 읽은 뒤 지우는 게 아니라 지우면서 읽으므로, 읽기와 CASCADE 사이에 끼어든 좋아요가
+        카운터에만 남는 틈이 없다(끼어든 INSERT 는 users 삭제 커밋 후 FK 위반으로 롤백된다).
+    `GREATEST(...,0)` 는 이미 손상된 과거 데이터가 음수로 표시되지 않게 하는 방어선이다
+    (untoggle_like 와 동일 규약). `ix_course_likes_user` 인덱스가 있어 비용은 낮다.
+    """
+    liked_codes = [
+        row["share_code"]
+        for row in conn.execute(
+            "DELETE FROM course_likes WHERE user_id = %s RETURNING share_code", (user_id,)
+        ).fetchall()
+    ]
+    if liked_codes:
+        # PK 가 (share_code, user_id) 라 한 계정이 같은 코스를 두 번 누를 수 없다
+        # = liked_codes 에 중복이 없다 = 코스당 정확히 1 만큼 감산된다.
+        conn.execute(
+            """
+            UPDATE shared_courses SET like_count = GREATEST(like_count - 1, 0)
+             WHERE share_code = ANY(%s)
+            """,
+            (liked_codes,),
+        )
     cur = conn.execute("DELETE FROM users WHERE id = %s", (user_id,))
     return cur.rowcount > 0
 

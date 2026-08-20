@@ -804,3 +804,34 @@ FAIL — 로컬 `.env`의 `CORS_ALLOW_CREDENTIALS=true` 때문이고 코드 회�
 - 시크릿 하드코딩 없음.
 
 ### 판정: **재작업 필요** (C-1 + M-1). 수정 후 `verify_course_payload.py`에 비문자열 케이스 추가하고 재검수.
+
+---
+
+# 2026-08-20 기능확장 6건 구현 검수 (qa-reviewer, 풀검수)
+
+- **대상**: `08-2026-08-20-기능확장-PRD.md` 6건의 백엔드+프론트 구현. 검수 범위 밖(무시): 다른 세션의 Prometheus/Grafana 변경.
+- **검수 환경**: 로컬 PostgreSQL + 로컬 Ollama qwen2.5:7b + Next 프로덕션 빌드/기동 + `git archive HEAD` 베이스라인 대조
+
+## 핵심 결과
+- `course_payload.py` diff 0(A-6 불가침 확인), `/onboarding/analyze` 생존+`/concierge/ask` 404, `/places/featured`(홈) 정상(region_targets 분리 성공, verify_featured_limit 50/50), 좋아요 동시성 자체 재현(20계정 동시 POST 정합, 40회 동시 난타 정합), delete_overflow 우선순위 확인, 로그인 우회 없음(탈퇴 계정도 fail-closed), 팁 폴백 실측(원천 다운 시 200 정적 5건), 팁 프롬프트 인젝션 표면 0, 삭제 잔재 0, 기본 정렬 무회귀, 로그인 리다이렉트가 LoginGateProvider/LoginRequiredGate에 diff 0(경계 안전).
+- 회귀 스크립트 베이스라인 대조: `verify_community`·`verify_community_retention`·`verify_admin` phase B 실패는 **이번 변경 귀책 아님**(HEAD도 동일 실패) — backend-engineer 주장 사실 확인.
+
+## 이슈
+
+### Major
+- **M-1**: 온보딩 완료 후 CTA가 PRD 명시(코스짜기 1순위)와 다르게 여전히 홈으로 이동 — `OnboardingContent.tsx`·`OnboardingResultView.tsx` diff 0으로 미구현.
+- **M-2**: `/ask` 리다이렉트가 307이지만 `Location` 헤더 없이 404 화면 셸을 반환(`app/ask/page.tsx`의 `redirect()`가 정적 프리렌더와 충돌). JS 비활성/크롤러/프리뷰봇에 404가 최종 결과 — `next.config.js` `redirects()`로 308 서버 리다이렉트 권고.
+- **M-3**(귀책 아님, 배포 차단 아님): 공유 생성/보존 회귀 스크립트 3종이 A-6 이후 계속 죽어있음. `verify_likes.py`가 일부 커버하나 예시 코스를 실재 spot id로 교체 권고.
+
+### Minor
+m-1 `KoreaSvgMap.tsx`·`koreaPaths.json` 데드코드 잔존(PRD는 삭제 명시) · m-2 팁 LLM이 입력에 없는 지명을 생성(실측 6건 중 3건, 안전 단정은 아니나 R-7 잔존) · m-3 `fetchPersonalizedTips` 클라이언트 타임아웃 없음 · m-4 로그인게이트 후 좋아요 성공해도 피드 재조회 없어 다른 카드 하트가 비어보임(새로고침시 정상) · m-5 `.env.production.example`에 `LIKE_*` 킬스위치 미기재(보안 L-3와 동일) · m-6 팁 AI블록 로딩 표시 없음 · m-7 verify_admin phase A 1건은 로컬 env 탓(코드결함 아님) · m-8 스키마10 CREATE INDEX가 비-concurrently.
+
+## 최종 판정
+**조건부 통과 — 3차 게이트(QA) 통과, 배포 전 Major 2건(M-1·M-2) 수정 요망.** Critical 0으로 게이트 기준은 충족하나 PRD 명시 요구사항 미달(M-1)과 U-3 절반 미달(M-2)이 있어 수정 후 약식 재확인 권고. 백엔드(좋아요·팁·컨시어지삭제·A-6)는 재작업 없음.
+
+## 핸드오프 노트
+```
+1. Critical 0·백엔드 전건 통과. 배포 전 고칠 것은 프론트 2건 — 온보딩 결과 CTA(M-1), /ask Location 헤더(M-2).
+2. verify_community 계열 실패는 베이스라인 대조로 귀책 아님 확인 — 다만 감시 공백은 여전(M-3).
+3. content-marketer 유의: 미해결 이슈는 클라이언트 보고서에 언급 금지, "AI 맞춤 팁"엔 "실패시 기본팁·AI참고용" 단서 필수.
+```

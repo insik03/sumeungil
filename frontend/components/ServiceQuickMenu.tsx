@@ -44,7 +44,7 @@ const QUICK_MENU_ITEMS: QuickMenuItem[] = [
   // §38(2026-07-31) — 홈에서 덜어낸 두 기능의 전용 페이지 진입점(대표 지시: 홈에 쌓지 말 것).
   { key: "plan", label: "출발일 플래너", href: "/plan" },
   { key: "seasonal", label: "계절 여행", href: "/seasonal" },
-  { key: "board", label: "전국 혼잡 지도", href: "/congestion" },
+  { key: "board", label: "전국 혼잡 현황", href: "/congestion" },
   { key: "stamp", label: "방문 스탬프", href: "/saved" },
   { key: "festival", label: "축제", href: "/festivals" },
   { key: "tips", label: "여행 팁", href: "/tips" },

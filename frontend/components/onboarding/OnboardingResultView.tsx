@@ -9,6 +9,7 @@ interface OnboardingResultViewProps {
   displayName: string | null;
   onEdit: () => void;
   onConfirm: () => void;
+  onGoMypage: () => void;
 }
 
 /**
@@ -25,6 +26,7 @@ export default function OnboardingResultView({
   displayName,
   onEdit,
   onConfirm,
+  onGoMypage,
 }: OnboardingResultViewProps) {
   const visibleAxes = RESULT_AXIS_ORDER.filter((axis) => (result.tags[axis]?.length ?? 0) > 0);
 
@@ -68,8 +70,18 @@ export default function OnboardingResultView({
         ))}
 
         <div className="onboard-result__actions">
+          {/* PRD §4-1-③ — "코스 짜러 가기"(/course)를 1순위 주 CTA로, "마이페이지로"(/mypage)를
+              2순위 보조 CTA로 둔다. 보조 CTA는 /regions에서 확립한 2차 CTA 톤(.btn--outline,
+              "화면당 주요 CTA 하나" 원칙)을 그대로 재사용한다(신규 스타일 없음). */}
           <button type="button" className="btn btn--mint btn--block btn--lg" onClick={onConfirm}>
-            이 취향으로 계속하기
+            코스 짜러 가기
+          </button>
+          <button
+            type="button"
+            className="btn btn--outline btn--block btn--lg"
+            onClick={onGoMypage}
+          >
+            마이페이지로
           </button>
           <button type="button" className="btn btn--ghost-text" onClick={onEdit}>
             다시 입력할게요

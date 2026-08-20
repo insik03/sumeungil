@@ -623,3 +623,71 @@ security-engineer·qa-reviewer 병렬 풀검수(§본문, `design-docs/04-qa-rep
 ### 5. 최종 판정
 
 **조건부 승인.** Critical/High 0건 → 3차 게이트(보안) 통과. 조건: (a) M-1 로그 마스킹 2곳 보완, (b) M-2 기동 경고 추가 + 문서 정정. 미처리 시에도 배포는 막지 않되 `.env`의 `ADMIN_SESSION_SECRET` 실재 여부를 대표가 파일로 직접 확인해야 한다.
+
+---
+
+## 검증 방식 (전부 실제 실행)
+
+읽기만으로 판단하지 않고 라이브 Postgres + `TestClient`로 직접 두드렸다. 워킹트리의 Prometheus 변경 때문에 venv에서 `app.main` import가 깨져(`ModuleNotFoundError: prometheus_fastapi_instrumentator`, 범위 밖) 스크래치패드에 스텁 모듈을 놓고 `PYTHONPATH`로만 주입해 실행했다 — 저장소 파일은 한 글자도 건드리지 않았다.
+
+실행한 것: `verify_likes.py` 42/42 PASS, `verify_tips.py` 42/42 PASS, 그리고 자체 probe 3종(탈퇴 계정 개인화 경로 / like_count 드리프트 / 단정표현 필터 커버리지).
+
+# 2026-08-20 기능확장 6건 구현 검수 (security-engineer)
+
+## 0. 판정
+
+**조건부 승인** — Critical 0건 · High 0건. 3차 게이트(QA+보안) 통과 조건은 충족한다.
+배포 전 조건 2건: ① 개인정보 처리방침 갱신(법률팀 4차와 연동, §4) ② M-1(좋아요 카운트 드리프트) 수정 또는 대표의 리스크 수용 기록.
+
+## 1. 필수 점검 항목 체크리스트
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 인증/인가 — 좋아요 신원 | ✅ | `api/course_share.py:188,210` 둘 다 `Depends(require_login)`. 비로그인·위조 쿠키 모두 401 실측 |
+| 인증/인가 — `optional_identity` 우회 | ✅ | `api/auth_deps.py:47-67`. 서명 검증 + 탈퇴 계정 DB 재확인까지 `require_login`과 동일. 저장소 장애 시 `None`(비로그인)으로 fail-closed |
+| 입력 검증 — SQL Injection (`sort`) | ✅ | 라우터 `Literal["latest","popular"]`(422) + 리포지토리 dict 화이트리스트. 문자열 보간 0 |
+| 입력 검증 — XSS | ✅ | `dangerouslySetInnerHTML` 저장소 전체 0건. LLM 팁은 텍스트 노드 렌더 |
+| 시크릿 하드코딩 | ✅ | 신규 5파일 + diff 전체 grep 0건 |
+| 의존성 | ✅ | 이번 6건이 추가한 의존성 0 |
+| AI — prompt injection | ✅ | 요청 스키마에 자유 텍스트 필드 0, 삽입값은 registry/서버 상수만 |
+| AI — LLM 출력 무검증 실행 | ✅ | 코드·SQL 실행 경로 없음, 출력은 카테고리 allowlist + 길이 절단 |
+| 인프라 — 삭제 잔재로 정보 노출 | ✅ | `/concierge/ask` → 404, 스택트레이스 없음, nginx/env 죽은 참조 0 |
+| A-6 재구성 로직 불가침 | ✅ | `git diff course_payload.py` 변경 0 |
+
+## 2. 검증 상세 (요지)
+
+- **탈퇴 계정 + 유효 서명 쿠키** 재현: feed/상세는 liked_by_me=False로 fail-closed, like는 401, tips는 정적 폴백(generated_by=static-v2) — 인증 우회 없음.
+- **스키마10**: `course_likes` FK `ON DELETE CASCADE` 양방향, PK `(share_code,user_id)`로 1인1표 DB 강제, `ON CONFLICT DO NOTHING`+rowcount라 경쟁 없음. `sort` 인젝션 시도(`?sort=latest; DROP TABLE...`) → 422.
+- **A-6**: `course_payload.py` diff 빈 값. `verify_likes.py` §6 "좋아요 전후 payload 바이트 단위 동일" PASS.
+- **팁 프롬프트**: `TipsRequest`엔 `region_code`(정규식 검증) 단 하나뿐. 스팟명·닉네임·자유텍스트 필드 자체가 없음. 잉여 필드(`text` 주입) 실측 시 LLM 미도달.
+- **단정표현 필터**(`_TIP_UNSAFE_PATTERNS`): "반드시 우산을" 등 일부 차단, "안전이 보장됩니다"/"치료 효과가 있어요" 등 다수 통과(L-1) — 입력이 공격자 제어가 아니라 실위험은 낮음.
+- **레이트리밋**: 좋아요=ugc버킷+계정별 30/분 이중, 팁=llm버킷. 컨시어지 제거 후 BUCKET_LLM(6/분)을 온보딩·팁이 공유하나 팁은 비로그인/무프로필이면 LLM 미호출이라 실사용 압력 낮음(관찰, 조치 불요).
+- **삭제 잔재**: `grep -rni concierge backend/` 코드참조 0(주석 3건만), nginx `/concierge/` → `/tips/`로 교체, `.env*`의 `CONCIERGE_*` 6종 제거.
+
+## 3. 발견된 취약점
+
+| ID | 심각도 | 위치 | 내용 | 담당 |
+|---|---|---|---|---|
+| M-1 | Medium | `repositories/user_repo.py:126-133`(delete_account), `db/postgres.py`(스키마10), `shared_course_repo.py:233,312` | 계정 탈퇴 시 `course_likes`는 CASCADE 삭제되지만 `shared_courses.like_count` 감산 경로가 없어 실측 드리프트 확인(3명 좋아요→2명 탈퇴 후 like_count=3, 실제 행=1). `sort=popular` 랭킹 왜곡(가입→좋아요→탈퇴 반복 악용 가능) + `delete_overflow`가 실제 좋아요 0인 코스를 영구 유예할 수 있음. 수정: `delete_account` 트랜잭션에서 `users` DELETE 전에 `UPDATE shared_courses SET like_count = GREATEST(like_count-1,0) WHERE share_code IN (SELECT share_code FROM course_likes WHERE user_id=%s)` | backend-engineer |
+| L-1 | Low | `services/tips_service.py:53-57` | 단정표현 필터가 동등 표현 다수 통과("안전이 보장됩니다" 등). 입력이 비공격자 제어라 실위험 낮음. 패턴 6~8개 추가 권고 | ai-optimization-engineer |
+| L-2 | Low | `frontend/lib/api.ts:1999-2007`(fetchSharedCoursesFeed) | `credentials:"include"` 누락 — 동일 오리진 배포는 무해하나 로컬개발/분리배포 환경에서 liked_by_me가 항상 false로 보임(fail-closed, 정보노출 아님) | backend-engineer |
+| L-3 | Low | `.env.example`·`.env.production.example` | 좋아요 킬스위치(`LIKE_ENABLED`·`LIKE_WRITE_PER_MIN`)가 코드엔 있으나(503 FEATURE_DISABLED 실측) 템플릿에 미기재 | backend-engineer |
+| L-4 | Low | `schemas/tips.py:24-27` | `TipsRequest`가 잉여 필드를 조용히 무시 — 현재 무해하나 향후 자유텍스트 필드 실수 추가를 스키마가 막지 못함. `extra="forbid"` 권고 | backend-engineer |
+
+관찰(조치 불필요): `_cache_key`에 `user_id` 없음(현재 안전, `TipFeatures` 필드 추가 시 `_cache_key` 동시 갱신 안 하면 팁 교차노출 위험 — verify_tips.py에 단언 추가 권고).
+
+## 4. 개인정보 처리 흐름 (legal-counsel 전달용)
+
+**신규 수집 — 좋아요**: user_id+share_code+created_at, 자체 Postgres 저장, 제3자 제공·국외이전 0, 공유코스 삭제/계정탈퇴/보존기간만료 시 CASCADE 삭제. **법률팀 확인 필요 ①**: `/privacy` §1·§3·§7·§8에 좋아요 항목 누락(실동작은 방침 취지와 부합, 문구만 없음).
+
+**목적 확장 — 팁 개인화**: 온보딩 취향 태그+최근 코스 카테고리 분포(스팟명 미사용)+지역 혼잡도+강수확률 → 로컬 Ollama(국외이전 없음, 신규 외부API/SDK 0). **법률팀 확인 필요 ②(U-8)**: 방침 §3 문구가 "취향 유지·코스 재사용"으로 좁아 팁 개인화를 포섭 못함 — 문구 확장 권고(원 수집 맥락과 합리적 관련성은 인정될 소지 큼, 최종판단은 법률팀).
+
+**컨시어지 삭제**: 자연어 질문 원문이 LLM에 전달되던 경로가 사라짐(개인정보 관점 순감소).
+
+## 5. 핸드오프 노트
+
+```
+[legal-counsel] 처리방침 갱신 2건 — ①좋아요 반응기록 항목 누락 보완 ②§3 목적 문구에 팁 개인화 포함(U-8).
+[qa-reviewer] 회귀 3건 추가 — ①탈퇴 후 like_count 정합성(M-1) ②fetchSharedCoursesFeed credentials 누락(L-2) ③TipFeatures 필드추가시 _cache_key 동시갱신 단언.
+[backend-engineer] M-1(delete_account 감산) · L-3(env 템플릿) · L-4(extra=forbid) — 전부 소규모. A-6·인증경계·SQL바인딩은 이상 없음.
+```

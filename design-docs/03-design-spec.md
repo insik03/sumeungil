@@ -4637,3 +4637,230 @@ export interface FetchCollectionsOptions {
   그대로 두 섹션이 공유한다(§45 로직 무변경).
 
 **검증**: `npx tsc --noEmit` — 0 에러.
+
+---
+
+## §47 — 기능확장 6건: 마이페이지 허브 · 코스짜기 의견입력 · 혼잡지도 삭제 · 좋아요·정렬 (2026-08-20, `08-2026-08-20-기능확장-PRD.md` §7-2)
+
+**성격**: 이번 절은 **설계 문서**다(코드 미변경 — backend-engineer/frontend 구현은 후속). 대상은 PRD 4-1(마이페이지)·4-6(문답 삭제→코스짜기 의견입력)·4-3(혼잡지도 삭제)·4-5(좋아요·정렬) 4건이며, 4-2/4-4는 이 부서 소관이 아니다. 라우트 신설·이동은 없다(P-A). 퀵메뉴 10타일 개수는 그대로다.
+
+### 47.0 디자인 인텔리전스 도구 확인 및 판단
+
+`ui-ux-pro-max`로 "travel course planner mypage hub feed like button" 질의 → **Organic Biophilic(로즈/골드, wellness 톤)**을 추천받았다. **채택하지 않는다.** 이유:
+
+1. 숨은길은 이미 확정된 B안(그린 단일 포인트 컬러, `--g-500`을 CTA·브랜드색으로 통일 — §22 결정, `btn--coral` 클래스명은 남아 있지만 실제 렌더는 그린) 디자인 언어가 4600줄 분량으로 굳어 있다. 이번 PRD 지시서도 "새 디자인 언어 금지, 기존 클래스 재사용 우선"을 명시했다(P-1 B안 고정).
+2. 로즈/골드 팔레트를 부분 도입하면 기존 배지 체계와 충돌한다 — 코랄(빨강 계열)은 이미 "혼잡 high" 배지 전용으로 좁혀져 있어(§22), 새 기능에 유사 색을 쓰면 "혼잡"과 "좋아요/신규" 의미가 뒤섞인다.
+3. 다만 도구의 체크리스트(이모지 아이콘 금지·터치타겟·포커스 가시성·`prefers-reduced-motion`)는 그대로 적용한다 — 아래 47.8 참고.
+
+**결론**: 색상·타이포는 기존 토큰만 쓴다. 신규 hex 없음.
+
+```mermaid
+flowchart TD
+    A[헤더 로그인 버튼] -->|로그인 성공| B[/mypage 허브/]
+    B --> C[여행 준비 섹션]
+    C --> D[AI 취향분석 /onboarding]
+    C --> E[AI 코스짜기 /course]
+    D -->|analyze 저장| F[(onboarding_profiles)]
+    F --> E
+    E --> G[AI 추천 코스 탭<br/>상단 한 줄 의견 입력·선택]
+    G -->|POST onboarding/analyze 재사용| F
+    G --> H[POST courses/recommend]
+    H --> I[코스 결과 · 저장 · 공유]
+    I -->|공유하기| J[/courses 피드/]
+    J --> K[하트 좋아요 · 최신순/좋아요순]
+
+    L[LoginGateProvider 행동게이트<br/>하트·코스담기 등] -->|로그인 후| L2[원래 자리 유지, 이동 없음]
+    M[LoginRequiredGate 페이지게이트<br/>/onboarding·/course·/mypage] -->|로그인 후| M2[그 페이지 그대로, 이동 없음]
+
+    N[/congestion] --> O[NationwideBoard<br/>지역 선택 마퀴]
+    O --> P[선택 지역 패널<br/>랜드마크·숨은명소]
+    O --> Q[CongestionBoard<br/>혼잡 전광판]
+```
+
+### 47.1 마이페이지 "여행 준비" 섹션 (4-1)
+
+**위치**: `MyPageContent.tsx`의 `view === "activity"` 분기, 인사말(`반가워요, {nickname}님`) 블록 바로 아래 · 기존 "나의 활동" `<h2>`/그리드 **위**.
+
+**시각 분리 방법**: 새 색·새 컴포넌트 언어를 만들지 않는다. 이미 사이트 전역에서 카드 구분에 쓰는 `.onboard-card`(흰 배경 카드, 계정관리/고객문의 화면에서 이미 사용 중)로 감싸 "나의 활동"의 배경 없는 평면 그리드와 구분한다. 타일 자체는 `.mypage-activity__item`/`__icon-wrap`/`__icon`/`__label`을 100% 재사용하고, 그리드만 5칸 고정(`repeat(5,1fr)`)이 2개 타일엔 안 맞으므로 신규 모디파이어 `.mypage-activity__grid--prep`(예: `grid-template-columns: repeat(2, minmax(140px, 220px))`)를 추가한다 — 새 디자인 언어가 아니라 기존 그리드의 칸수만 다른 변형이다.
+
+```
+<div className="onboard-card" style={{ marginTop: "var(--sp-6)" }}>
+  <span className="eyebrow-pill eyebrow-pill--coral">여행 준비</span>
+  <h2 className="quick-menu__title" style={{ marginTop: "var(--sp-2)" }}>
+    어디로 떠나볼까요?
+  </h2>
+  <p className="onboard-result__sub" style={{ marginTop: "4px" }}>
+    {/* profile === undefined: 로딩 중이라 문구 숨김
+        profile === null: "아직 취향을 알려주지 않았어요"
+        profile 있음: "취향 분석 완료 · {tags.length}개 키워드" (지어내지 않고 실제 값만) */}
+  </p>
+  <ul className="mypage-activity__grid mypage-activity__grid--prep">
+    <ActivityTile
+      href="/onboarding"
+      label={hasProfile ? "취향 다시 분석하기" : "취향 알려주기"}
+      count={null}
+      icon={<SparkleIcon />}  {/* ServiceQuickMenu.tsx의 "onboarding" 케이스와 동일 별 모양 path 재사용 — 진입점마다 다른 아이콘을 쓰지 않는다 */}
+    />
+    <ActivityTile href="/course" label="AI 코스짜기" count={null} icon={<RouteIcon />} />
+    {/* RouteIcon은 MyPageContent.tsx에 이미 정의돼 있다("코스" 타일과 동일 컴포넌트 재사용) */}
+  </ul>
+</div>
+```
+
+- 프로필 유무 판정: `GET /api/v1/onboarding/me`(이미 존재, `CourseContent.tsx`의 `fetchMyOnboardingProfile` 재사용) 1회 호출. **새 API 0.**
+- 온보딩 완료 후 착지점(4-1-③): `OnboardingContent.tsx` 결과 화면의 CTA 순서를 "코스 짜러 가기(`/course`)" 1순위, "마이페이지로" 2순위로 — 기존에 이미 있는 CTA 버튼들의 **표시 순서만** 바꾸는 것으로 가정한다(정확한 현재 마크업은 backend/frontend 구현 시 `OnboardingContent.tsx` 결과 화면 재확인 필요 — 이번 지시서의 읽을 파일 목록에 없어 직접 조사하지 않았다).
+- GNB에 마이페이지 항목 추가 안 함(PRD 4-1-④ 그대로, 이미 `{닉네임}님` 링크 존재).
+
+### 47.2 로그인 리다이렉트 — 헤더 버튼 경로에만 (4-1)
+
+**변경 지점 단 한 곳**: `Header.tsx` 361행 `<LoginModal ... onLoggedIn={() => {}} />` → `onLoggedIn={() => router.push("/mypage")}`. `Header.tsx`는 데스크톱 로그인 버튼과 모바일 메뉴 로그인 버튼이 **같은 `LoginModal` 인스턴스**를 공유하므로(모바일도 `setLoginOpen(true)`만 호출) 이 한 줄 수정으로 두 진입점이 모두 커버된다.
+
+**절대 건드리지 않는 것**: `LoginGateProvider.tsx`의 `handleLoggedIn`(57~62행, 대기 중인 action을 실행), `LoginRequiredGate`가 쓰는 별도 로그인 흐름. 이 둘은 `Header.tsx`와 물리적으로 다른 `LoginModal` 인스턴스라 코드상 섞일 위험은 낮지만, 구현 시 diff에 이 두 파일이 등장하면 즉시 되돌린다.
+
+**확인된 트레이드오프(QA 공유)**: `/course`·`/onboarding`처럼 `LoginRequiredGate`로 막힌 페이지에서 사용자가 그 페이지 자체의 로그인 버튼이 아니라 **헤더의 로그인 버튼**을 눌러 로그인하면, 지시대로 `/mypage`로 이동한다 — 원래 보려던 페이지에서 벗어난다. 이는 PRD가 "헤더 로그인 버튼 경로에만 적용"이라고 명시적으로 확정한 범위이므로 설계로 흡수하지 않는다(대표 지시 그대로).
+
+### 47.3 `/course` AI 모드 상단 의견 입력 — 컨시어지 축약판 (4-6)
+
+**철학**: `/ask`의 풀 화면(제목+설명+큰 textarea+로딩 스피너+결과 카드 전체)을 옮기지 않는다. 온보딩의 자유텍스트 입력(`text`+`chips`, `POST /onboarding/analyze`)을 **코스 화면에 얹는 얇은 레이어**로 재구성한다. 신규 API·신규 LLM 호출 경로 0.
+
+**배치**: `CourseContent.tsx`의 `mode === "ai"` 블록, `<h2>` 아래·`RegionPicker` 위. 기존 `showOnboardingCta`(프로필 없을 때 뜨는 "취향 알려주기" 배너)를 대체하는 것이 아니라 **보완**한다 — 배너는 "정식 온보딩(축 전체)으로 가기" 경로로 남기고, 새 입력창은 "지금 한 줄만 말하고 바로 반영" 경로다.
+
+```
+<div className="onboard-card course-opinion">
+  <label className="onboard-label" htmlFor="courseOpinion">
+    어떤 여행을 원하세요? {hasProfile && "(선택)"}
+  </label>
+  <textarea
+    id="courseOpinion"
+    className="onboard-textarea course-opinion__textarea"  {/* 신규 모디파이어: min-height 56px(≈2줄), resize:none — 기본 .onboard-textarea(120px, 세로 리사이즈)와 차별화 */}
+    rows={2}
+    maxLength={300}  {/* 서버 절단 기준(§B.1)과 동일 — 지어낸 상한 아님 */}
+    placeholder="예: 아이랑 갈만한 비 오는 날 실내 명소 위주로"
+  />
+  <div className="chip-row" role="group" aria-label="예시">
+    {/* 짧은 예시 문장 3~4개 — /ask의 EXAMPLE_QUESTIONS(삭제 대상)를 그대로 부활시키지 말고
+        "코스짜기" 맥락에 맞게 새로 쓴다. 예: "조용하고 한적한 곳 위주로" / "아이랑 가기 좋은 곳" /
+        "사진 찍기 좋은 곳 위주로". 별도 상수 파일(예: components/course/opinionExamples.ts) 신설 —
+        concierge/constants.ts는 삭제 대상이라 재사용 불가. */}
+  </div>
+  <button type="button" className="btn btn--mint" disabled={!canSubmitOpinion}>
+    이 의견으로 코스 다시 짜기
+  </button>
+  {/* 제출 → POST /onboarding/analyze(text+chips) → 성공 시 그 결과로 profile state 갱신
+      → 기존 fetchCourse effect가 profile 변경을 이미 감지해 자동 재호출(코드 재작성 불필요,
+      CourseContent.tsx 494행 effect의 [profile, ...] 의존성이 이미 이 경로를 지원한다). */}
+</div>
+```
+
+- **로딩 표시**: `analyzeOnboarding`은 로컬 LLM이라 20~30초 걸린다(`OnboardingLoading.tsx`의 실측 문구와 동일 API이므로 동일 소요). 같은 회전 안내 문구·경과 초 표기 패턴을 재사용한다 — `/ask`의 "5~10초" 문구를 그대로 베끼면 실제(20~30초)와 달라 사용자가 조기 이탈한다. **반드시 온보딩 쪽 실측 문구를 따른다.**
+- **"이렇게 이해했어요" 태그 칩**: 컨시어지 삭제로 잃는 UX를 `AskContent.tsx`의 `.onboard-axis-group`/`.onboard-tag-row`/`.onboard-tag` 마크업(157~273행에서 이미 검증된 패턴)으로 축약 재현 — 제출 성공 후 `profile.tags`를 축별로 순회해 칩만 보여주고, `/ask`처럼 answer 문장·스팟 카드·축제 카드는 만들지 않는다(그건 곧바로 아래 코스 타임라인이 대신한다).
+- **기존 프로필이 있는 경우**: 입력은 선택이고 제출 시 upsert로 덮어쓴다(analyze의 기존 동작 그대로, PRD 4-6 명시). 라벨을 "(선택)"으로 표기해 필수가 아님을 알린다.
+
+### 47.4 `/congestion` 지도 제거 후 레이아웃 (4-3)
+
+**조사 결과 정정**: `MapPreviewContent.tsx` 21~27행 주석은 "왼쪽 SVG 지도 + 오른쪽 Tmap 실지도" 2단 구성을 설명하지만, 실제 JSX(§U.4, 235행 주석 "이 자리에 있던 지도는 지웠다")에는 **오른쪽에 지도가 없다** — 랜드마크 사진 패널 + 숨은명소 추천 카드만 있다. 즉 지워야 할 지도는 **`KoreaSvgMap` 하나뿐**(PRD 표와 일치). 오른쪽 패널은 지도가 아니므로 그대로 둔다. 이 낡은 주석은 구현 시 함께 정리 대상으로 backend/frontend에 인계한다(설계 지시는 아님).
+
+**레이아웃 전환**: 2단 그리드(`minmax(420px,1010px) minmax(300px,1fr)`)를 없애고 1단 세로 배치로 바꾼다.
+
+1. 히어로 문구: `eyebrow-pill` 텍스트 "전국 혼잡 지도" → "전국 혼잡 현황". 리드 문단 "시·도를 눌러보세요. **그 지역 실제 지도**와 관광지를 보여드려요." → "시·도를 눌러보세요. 그 지역 혼잡 현황과 관광지를 보여드려요."("실제 지도" 삭제).
+2. **지역 선택**: `NationwideBoard`(마퀴 카드)를 지도가 있던 자리로 승격 — 상시 노출, 선택 여부와 무관하게 항상 보인다(기존엔 `!picked`일 때만 하단 폴백으로 보였다). 선택된 카드에 시각 표시가 필요하므로 `selected` prop을 추가하고, 일치하는 카드에 `is-active`(GNB 드롭다운·퀵메뉴가 이미 쓰는 상태 클래스명과 동일한 명명 관례) 모디파이어를 얹어 테두리/배경으로 구분한다 — 새 색 없음(기존 `.board-card` 위에 `border: 2px solid var(--g-500)` 추가 정도).
+3. **선택 지역 패널**: 기존 `picked` 블록(랜드마크 사진 헤더 + 혼잡도 텍스트 + 숨은명소 추천 카드 + "자세히 보기" CTA)을 그대로 두되 폭을 100%로. 미선택 상태 안내문 "왼쪽 지도에서 시·도를 선택하면…" → "위에서 시·도를 선택하면 그 지역 정보가 여기에 나와요."("왼쪽 지도" 삭제).
+4. **CongestionBoard**: 그대로 최하단에 유지(`marquee` 모드, 선택 지역 기준). 기존에 `!picked`일 때만 등장하던 "예상 혼잡 현황판"(`section--mint` + `NationwideBoard` 중복 렌더) 블록은 **제거** — 2번에서 `NationwideBoard`가 이미 상시 노출되므로 같은 컴포넌트를 두 번 그릴 이유가 없다.
+5. `picked`가 없는 첫 진입(방문 이력 없음) 대응은 backend/frontend 재량: `CongestionBoard`가 지역 prop 없이도 자체 기본 지역(부산, `DEFAULT_SIDO_CODE`)으로 동작하는 폴백을 이미 갖고 있으므로(`CongestionBoard.tsx` 44~60행), 최하단은 항상 무언가를 보여줄 수 있다 — "빈 화면"이 되는 조합은 없다.
+
+**연쇄 라벨 교체**:
+| 파일 | 현재 | 변경 |
+|---|---|---|
+| `Header.tsx` NAV_ITEMS 드롭다운 자식 | "전국 혼잡 지도" | "전국 혼잡 현황" |
+| `ServiceQuickMenu.tsx` `board` 타일 | "전국 혼잡 지도" | "전국 혼잡 현황" |
+| `app/congestion/page.tsx` metadata.title | "전국 예상 혼잡 지도 — 숨은길" | "전국 예상 혼잡 현황 — 숨은길" |
+| `app/congestion/page.tsx` metadata.description | "…예상 혼잡도를 지도 한 장으로 보고…" | "…예상 혼잡도를 한눈에 보고…"("지도 한 장으로" 삭제) |
+
+라우트 `/congestion` 자체는 유지(U-1 확정값). `DeparturePlanner`는 무변경.
+
+### 47.5 공유 코스 좋아요 + 정렬 (4-5)
+
+**정렬 세그먼트**: `CoursesFeedContent.tsx` 인트로 문단과 카드 그리드(`.shared-course-grid`) 사이에 배치. 패턴은 `/course`의 `.course-mode-switch`(`role="tablist"`, `role="tab"`, `aria-selected`)를 **그대로 재사용**한다(검토 결과 채택 — 두 화면 모두 "데이터 보는 방식을 바꾸는 2택 스위치"라는 같은 상호작용이라 새 컴포넌트가 필요 없다).
+
+```
+<div className="course-mode-switch" role="tablist" aria-label="정렬">
+  <button role="tab" aria-selected={sort==="latest"} className={`course-mode-switch__tab${sort==="latest"?" is-active":""}`} onClick={() => setSort("latest")}>최신순</button>
+  <button role="tab" aria-selected={sort==="popular"} className={`course-mode-switch__tab${sort==="popular"?" is-active":""}`} onClick={() => setSort("popular")}>좋아요순</button>
+</div>
+```
+
+전환 시 `items`/`offset`을 리셋하고 `fetchSharedCoursesFeed(limit, 0, signal, sort)`를 다시 부른다(기존 `retryTick` effect 패턴과 동일 구조로 `sort`를 의존성에 추가하는 형태를 가정 — 정확한 재작업 범위는 backend가 확정할 응답 계약을 본 뒤 frontend가 정한다).
+
+**좋아요 하트**: 카드(`<Link className="shared-course-card">`) 내부 우상단에 절대배치. 카드 전체가 상세 페이지로 가는 링크이므로, 하트 버튼 클릭은 `preventDefault()`+`stopPropagation()`으로 내비게이션을 막아야 한다(버튼이 앵커 안에 중첩되는 기존 사이트에 없던 패턴이라 구현 시 반드시 명시).
+
+```
+<button
+  type="button"
+  className="shared-course-card__like"
+  aria-pressed={item.liked_by_me}
+  aria-label={item.liked_by_me ? "좋아요 취소" : "좋아요"}
+  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLike(item); }}
+>
+  <HeartIcon filled={item.liked_by_me} />
+  <span>{item.like_count}</span>
+</button>
+```
+
+- **색상 결정**: 채워진 하트는 **그린(`--g-500`)** — 코랄/빨강 계열은 쓰지 않는다. §22 결정으로 코랄 색상은 이미 "혼잡 high" 배지 전용으로 좁혀져 있어, 좋아요에 빨강 계열을 쓰면 "이 코스가 인기 있다"가 아니라 "이 코스가 혼잡하다"로 오독될 위험이 있다. 사이트에 이미 있는 유일한 액션 컬러(그린)로 통일한다.
+- **터치 타겟**: `--touch-min`(사이트 전역 44px 토큰, `.concierge-quick__submit`이 쓰던 것과 동일 값) 이상으로 원형 버튼 크기를 잡는다. 아이콘은 이모지가 아닌 인라인 SVG(하트 아웃라인/채움 2벌) — 사이트에 기존 하트 아이콘이 없어(즐겨찾기는 북마크 아이콘을 씀, `MyPageContent.tsx`의 `BookmarkIcon`과 별개 개념이므로 재사용하지 않는다) 신규 SVG가 필요하다.
+- **비로그인 클릭**: 새 인증 로직을 만들지 않고 기존 `useLoginGate()`(`LoginGateProvider.tsx`)를 그대로 쓴다 — `requireLogin(() => handleLike(item), "로그인하면 마음에 드는 코스에 좋아요를 남길 수 있어요.")`. 로그인 성공 시 대기 중이던 좋아요 액션이 이어서 실행되므로 별도 재시도 UI가 필요 없다(LoginGateProvider의 기존 설계 그대로 활용).
+- **낙관적 업데이트 + 롤백**: 클릭 즉시 로컬 state의 `liked_by_me`/`like_count`를 반영하고 API를 호출, 실패 시 이전 값으로 되돌린다. 실패를 알리는 방식은 사이트에 토스트 컴포넌트가 없으므로 새로 만들지 않고, `MyPageContent.tsx`의 "계정 삭제 2단계 확인"이 쓰는 **5초 타이머로 상태를 자동 되돌리는 관례**를 참고해 하트 옆에 짧은 인라인 문구("반영 안 됐어요, 다시 눌러주세요")를 3초 정도 노출 후 자동으로 지운다.
+- **접근성**: 하트 = `aria-pressed`(토글 스위치 시맨틱), 정렬 = `role="tablist"`/`aria-selected`(위에서 확정).
+- **공유 코스 상세(`/course/shared/{code}`)의 하트 여부(U-6)**: **이번 범위는 피드에만**(PRD 기본값 채택). 상세 화면까지 넓히면 스코프가 커지고(대표 지시에 없는 확장), 피드에서 이미 좋아요·집계를 완결할 수 있어 급하지 않다. 필요해지면 다음 라운드에서 같은 하트 컴포넌트를 그대로 옮겨 붙이면 된다(설계를 다시 짤 필요 없음).
+
+### 47.6 삭제되는 `.concierge*` CSS 범위 확인 (4-6)
+
+`grep`으로 `globals.css` 전체에서 `concierge` 문자열이 들어간 셀렉터를 모두 확인한 결과, 사용처는 **`AskContent.tsx`와 `ConciergeSection.tsx` 두 파일뿐**이다(다른 컴포넌트의 재사용 없음). 두 파일 모두 삭제 대상이므로 **아래 블록 전체(5258~5401행, §32+§33-3 주석 헤더 포함)를 통째로 삭제해도 안전**하다:
+
+`.concierge__lead`, `.concierge-card`, `.concierge__examples`, `.concierge__submit-row`(+미디어쿼리), `.concierge__loading`/`__loading-spinner`/`__loading-text`, `.concierge__result`, `.concierge__footnote`, `.concierge__region-badge`, `.concierge__understood`/`__understood-title`, `.concierge__notice`, `.concierge__spots`/`__spots-heading`, `.concierge__cta`, `.concierge-quick`/`__box`/`__submit`(+hover/disabled).
+
+**PRD가 우려한 "다른 컴포넌트가 빌려 쓰는 클래스" 케이스는 없었다** — 지시서 예시로 든 `onboard-textarea`는 애초에 `.concierge*` 블록 소속이 아니라 `.onboard-textarea`(2648행, 별도 블록) 자체이고, 이건 `AskContent.tsx`가 **컨시어지 전용이 아닌 온보딩 시각 언어를 빌려 쓴 것**(`className="onboard-textarea concierge__textarea"`처럼 두 클래스를 함께 씀)이라 반대 방향이다. `.onboard-textarea`는 `MyPageContent.tsx`(고객문의)·`OnboardingForm.tsx`·`ReviewSection.tsx`·`AskContent.tsx` 4곳이 쓰므로 **삭제 금지**, `AskContent.tsx`만 없어지면 자연히 3곳이 계속 쓴다.
+
+### 47.7 삭제 대상 화면 요소 정리 (4-6, 재확인)
+
+- `HomeContent.tsx`의 `<ConciergeSection />` 렌더 제거.
+- `Header.tsx` NAV_ITEMS "AI 여행 경로" 드롭다운에서 `{ label: "AI 여행 문답", href: "/ask" }` 항목 제거(자식 3개→2개: "AI 코스 짜기"·"다른 사람 코스").
+- `/ask` 접근 시 처리: U-3 확정값대로 `/course`로 리다이렉트(404 아님) — 라우트 파일 자체는 남기고 리다이렉트만 건다(Next.js `redirect()` 또는 `next.config`의 `redirects`, 구현 방식은 backend/frontend 재량).
+
+### 47.8 접근성 체크리스트 (ui-ux-pro-max 도구 기준 적용분)
+
+- [ ] 이모지 아이콘 금지 — 하트도 인라인 SVG(위 47.5)
+- [ ] 하트·정렬 탭 모두 `cursor: pointer`, hover/focus 150~300ms 트랜지션(기존 `.mypage-activity__item:hover` 등과 동일 속도)
+- [ ] 하트 터치 타겟 `--touch-min`(44px) 이상
+- [ ] `aria-pressed`(하트) / `role="tablist"`+`aria-selected`(정렬) — 스크린리더 상태 인지
+- [ ] 포커스 가시 상태 — 신규 인터랙티브 요소는 `:focus-visible`에 기존 아웃라인 규칙 상속(새 규칙 불필요, 전역 리셋 확인만)
+- [ ] `prefers-reduced-motion` — 이번 절엔 새 스크롤 애니메이션이 없다(마이페이지 타일은 기존 `useQuickMenuEnterAnimation`류를 새로 걸지 않음)
+- [ ] **콘텐츠 `opacity:0` 시작 스크롤 리빌 금지** — 준수. 마이페이지 "여행 준비" 카드·코스 의견 입력·좋아요 하트 전부 기본 상태로 렌더되고 트리거 애니메이션에 의존하지 않는다.
+
+### 47.9 파일 영향 목록 (설계 기준, 실제 diff는 구현 부서 확정)
+
+| 파일 | 변경 성격 |
+|---|---|
+| `frontend/components/MyPageContent.tsx` | "여행 준비" 섹션 추가(47.1) |
+| `frontend/styles/globals.css` | `.mypage-activity__grid--prep` 신규, `.concierge*`(5258~5401행) 삭제, `.course-opinion__textarea`/`.shared-course-card__like` 등 신규, `.board-card`에 `is-active` 모디파이어 추가 |
+| `frontend/components/Header.tsx` | 로그인 콜백 `router.push("/mypage")`(47.2), NAV_ITEMS "전국 혼잡 지도"→"전국 혼잡 현황"·"AI 여행 문답" 제거(47.4/47.7) |
+| `frontend/components/CourseContent.tsx` | AI 모드 상단 의견 입력 블록 추가(47.3) |
+| `frontend/components/mappreview/MapPreviewContent.tsx` | `KoreaSvgMap` 제거, 1단 레이아웃, `NationwideBoard` 상시 노출+선택 표시(47.4) |
+| `frontend/components/mappreview/NationwideBoard.tsx` | `selected` prop + `is-active` 표시 추가 |
+| `frontend/components/ServiceQuickMenu.tsx` | `board` 타일 라벨 교체(47.4) |
+| `frontend/app/congestion/page.tsx` | metadata 문구 교체(47.4) |
+| `frontend/components/CoursesFeedContent.tsx` | 정렬 세그먼트 + 하트 버튼 + 로그인게이트 연동(47.5) |
+| 삭제 | `app/ask/page.tsx`(리다이렉트만 남김), `components/AskContent.tsx`, `components/ConciergeSection.tsx`, `components/concierge/constants.ts` — 이상 backend/frontend 소관, 이 문서는 CSS·클래스 영향만 확인(47.6) |
+
+### 47.10 핸드오프 노트
+
+```
+[다음 부서가 알아야 할 것]
+1. 로그인 리다이렉트는 Header.tsx 361행 한 줄만 바꾸면 된다(데스크톱·모바일 공유 LoginModal
+   인스턴스) — LoginGateProvider·LoginRequiredGate는 절대 건드리지 않는다(47.2).
+2. /congestion에서 KoreaSvgMap만 지우면 된다 — 우측 패널은 이미 지도가 아니다(§U.4에서 선행
+   제거됨, 파일 상단 주석이 낡아 있으니 참고만). NationwideBoard를 상시 노출 + 선택 상태
+   표시로 승격하면 지역 선택 기능 공백이 없다(47.4).
+3. 좋아요 하트는 그린(--g-500) 사용, 코랄/빨강 금지(혼잡 high 배지와 의미 충돌 방지). 카드
+   전체가 Link라 하트 클릭은 preventDefault+stopPropagation 필수(47.5).
+```

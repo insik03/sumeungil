@@ -241,9 +241,9 @@ curl -s "http://localhost/api/v1/festivals?limit=2" | head -c 300; echo
 curl -sI http://localhost/ | head -3
 
 # backend -> ollama (LLM 경로. 첫 호출은 모델 로딩으로 느릴 수 있다)
-curl -s -X POST http://localhost/api/v1/concierge/ask \
+curl -s -X POST http://localhost/api/v1/tips/personalized \
   -H 'Content-Type: application/json' \
-  -d '{"question":"부산에서 한적한 바다 보고 싶어"}' | head -c 400; echo
+  -d '{"region_code":"26350"}' | head -c 400; echo
 ```
 
 ### g-2. 레이트 리밋 동작 확인 (RATE_LIMIT_ENABLED=true 일 때)
@@ -617,7 +617,7 @@ docker stats                            # CPU/메모리 실시간
 | 502 Bad Gateway | 해당 컨테이너가 죽었거나 부팅 중. `docker compose ps` / `logs backend`. backend 는 `PUBLIC_DATA_API_KEY` 없으면 즉시 종료(fail-fast)한다 |
 | backend 가 계속 재시작 | `docker compose logs backend` 에 `[FATAL] 필수 환경변수` 가 있으면 `deploy/.env` 의 `PUBLIC_DATA_API_KEY` 확인 |
 | 프론트가 `localhost:8000` 을 호출 | `NEXT_PUBLIC_API_BASE` 없이 빌드됨 → `.env` 수정 후 `docker compose build frontend --no-cache` |
-| LLM 응답이 항상 폴백/느림 | ARM CPU 추론이 개발 PC 보다 느릴 수 있다. `docker compose logs backend` 에서 타임아웃 확인 후 `.env` 의 `CONCIERGE_TIMEOUT_SEC` / `OLLAMA_TIMEOUT_SEC` 상향, `OLLAMA_KEEP_ALIVE=-1` 유지(모델 언로드 방지) |
+| LLM 응답이 항상 폴백/느림 | ARM CPU 추론이 개발 PC 보다 느릴 수 있다. `docker compose logs backend` 에서 타임아웃 확인 후 `.env` 의 `TIPS_TIMEOUT_SEC` / `OLLAMA_TIMEOUT_SEC` 상향, `OLLAMA_KEEP_ALIVE=-1` 유지(모델 언로드 방지) |
 | Next 빌드 중 OOM | 24GB VM 에서는 드물다. 발생 시 스왑 2GB 추가: `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile` |
 | pip 설치 중 컴파일러 오류 | aarch64 휠이 없는 패키지가 생긴 것. backend/Dockerfile 의 pip 앞에 `RUN apt-get update && apt-get install -y --no-install-recommends build-essential` 추가 |
 | `/docs` 를 공개하고 싶지 않음 | `deploy/nginx.conf` 의 `location /docs`, `location = /openapi.json` 블록을 지우거나 `allow <내IP>; deny all;` 추가 후 `docker compose restart nginx` |

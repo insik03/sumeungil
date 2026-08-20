@@ -164,7 +164,7 @@ def phase_a() -> int:
           resolve_bucket("GET", "/api/v1/admin/reviews") == BUCKET_DEFAULT)
     check("레이트리밋: 기존 버킷 판정 무회귀",
           resolve_bucket("POST", "/api/v1/reviews") == "ugc"
-          and resolve_bucket("POST", "/api/v1/concierge/ask") == "llm"
+          and resolve_bucket("POST", "/api/v1/tips/personalized") == "llm"
           and resolve_bucket("GET", "/health") is None)
 
     rc = summary("phase A")
