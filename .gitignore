@@ -4,6 +4,14 @@
 !.env.example
 !.env.production.example
 *.pem
+# SSH 개인키 — 확장자가 .pem 이 아닌 것도 잡는다(2026-08-20, naver_deploy_key 누락 발견).
+# 대응하는 *.pub 공개키는 비밀이 아니라 커밋해도 무해하지만, 쌍으로 헷갈리지 않게 같이 무시한다.
+*_deploy_key
+*_deploy_key.pub
+id_rsa
+id_ed25519
+id_rsa.pub
+id_ed25519.pub
 
 # 빌드/의존성
 node_modules/
