@@ -2,3 +2,7 @@
 # 키 목록은 ../backend/.env.production.example 를 참고한다.
 .env
 .env.*
+
+# 그라파나(aitestbed.kr)가 /prom/ 을 조회할 때 쓰는 Basic Auth 비밀번호 해시(2026-08-18).
+# DEPLOY.md 절차대로 서버에서 직접 생성한다 — 시크릿이므로 커밋 금지.
+prom.htpasswd

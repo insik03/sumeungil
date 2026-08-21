@@ -1,0 +1,16 @@
+# 숨은길 백엔드 지표 수집 설정 (2026-08-18, 그라파나 aitestbed.kr 연동용).
+#
+# 이 파일은 prometheus 컨테이너 안에서만 읽힌다 — 도커 내부 네트워크의
+# backend:8000/metrics 를 30초마다 긁어간다. 인터넷에 노출되는 값이 아니다
+# (docker-compose.yml의 prometheus 서비스는 expose만 하고 ports는 안 연다 —
+# nginx의 /prom/ 이 Basic Auth 뒤에서 이 데이터를 대신 내보낸다).
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: sumeungil-backend
+    static_configs:
+      - targets: ["backend:8000"]
+    metrics_path: /metrics

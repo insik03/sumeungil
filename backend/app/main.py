@@ -15,6 +15,7 @@ from datetime import timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from .api import (
     admin,
@@ -388,6 +389,22 @@ if settings.slack_webhook_url:
     )
 else:
     logger.info("슬랙 5xx 알림 미등록(SLACK_WEBHOOK_URL 미설정) — 로컬 개발 기본값")
+
+# --- 운영 지표 (Prometheus, 2026-08-18) -----------------------------------------------
+# 대표가 aitestbed.kr(그라파나 관측 인스턴스)를 받아온 걸 계기로 도입. Postgres를 직접
+# 인터넷에 열지 않기로 하고(대표 선택), 대신 이 표준적인 방식을 골랐다.
+#
+# **가장 바깥에 등록한다** — 5xx 슬랙 알림 미들웨어보다도 나중에(=바깥에) 등록해야, 그
+# 미들웨어를 포함해 실제로 클라이언트가 받는 최종 상태코드·소요시간이 지표에 잡힌다.
+# 안쪽에 두면 레이트리밋 429나 CORS 프리플라이트 같은 것들이 지표에서 빠진다.
+#
+# **/metrics는 인터넷에 노출하지 않는다.** nginx의 어떤 location도 이 경로를 backend로
+# 프록시하지 않는다(deploy/nginx.conf에 명시적 404 블록도 별도로 둔다 — 나중에 누가
+# `location /api/`를 넓히더라도 안전하게). 오직 같은 도커 네트워크 안의 prometheus
+# 컨테이너만 `http://backend:8000/metrics`로 직접 긁어간다(deploy/prometheus.yml).
+# 그라파나(aitestbed.kr)는 prometheus를 nginx의 `/prom/`(Basic Auth) 뒤에서 조회한다 —
+# DB나 앱 내부를 직접 노출하지 않고도 응답시간·에러율·요청수 같은 운영 지표를 볼 수 있다.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 app.include_router(health.router)
 app.include_router(congestion.router)

@@ -827,3 +827,76 @@ docker compose logs backend --tail 60 | grep 관리자
 #  실패: ADMIN_PASSWORD_HASH 형식이 올바르지 않습니다 → 위 $$ 문제
 #  미설정: 관리자 기능 비활성 → 라우터 미등록(404)
 ```
+
+## 그라파나(aitestbed.kr) 운영 지표 연동 (2026-08-18)
+
+대표가 "모두의 AI" 프로그램에서 받아온 외부 Grafana 인스턴스(grafana.aitestbed.kr)에
+숨은길 운영 지표(요청수·응답시간·에러율)를 연결하기 위한 설정. **Postgres는 인터넷에
+열지 않는다**(대표 선택) — 대신 표준적인 FastAPI `/metrics` → Prometheus → Grafana
+경로를 쓴다. 상세 설계 이유는 `backend/app/main.py`의 `# --- 운영 지표` 주석,
+`deploy/nginx.conf`의 `/prom/` 블록 주석 참고.
+
+**docker-compose.yml에 이미 반영됨** — `prometheus` 서비스가 `backend:8000/metrics`를
+30초마다 긁어 90일치 보관한다(호스트 포트 미노출, postgres와 동일 원칙). 새로 배포하면
+자동으로 뜬다. 아래는 그걸 **외부(Grafana)에서 조회 가능하게 여는** 1회성 수동 절차다.
+
+### j-1. Basic Auth 비밀번호 파일 생성 (서버에서, 최초 1회)
+
+Prometheus 자체엔 인증이 없어 nginx의 `/prom/` 앞단에 Basic Auth를 건다.
+
+```bash
+cd ~/sumeungil/deploy
+echo "grafana:$(openssl passwd -apr1 '여기에_새로_생성한_비밀번호')" > prom.htpasswd
+chmod 600 prom.htpasswd
+docker compose up -d --force-recreate nginx   # 새 마운트 파일 반영 (reload로는 안 됨)
+```
+
+비밀번호는 직접 정하거나 아래로 무작위 생성:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"
+```
+
+**이 비밀번호는 `prom.htpasswd`에 해시로만 남고 평문은 어디에도 저장되지 않는다** —
+아래 (j-2)에서 Grafana에 붙여넣을 때 한 번 더 필요하니 잠깐 따로 적어둘 것.
+
+### j-2. Grafana 쪽 설정 (grafana.aitestbed.kr, 브라우저에서)
+
+1. 왼쪽 메뉴 **Connections → Data sources → Add data source → Prometheus**
+2. URL: `https://sumeungil.co.kr/prom/`
+3. **Auth** 섹션에서 **Basic Auth** 켜기
+   - User: `grafana`
+   - Password: (j-1)에서 만든 평문 비밀번호
+4. **Save & test** — "Successfully queried the Prometheus API" 가 뜨면 성공
+
+이후 대시보드를 새로 만들거나(`+ → New dashboard → Add visualization → 방금 만든 데이터소스`),
+Prometheus용 커뮤니티 대시보드(FastAPI/Starlette 표준 지표 기반)를 import해서 써도 된다.
+`http_requests_total`(경로·상태코드별 요청수), `http_request_duration_seconds`(응답시간
+히스토그램) 가 기본 제공 지표다.
+
+### j-3. 검증
+
+```bash
+# 도커 내부망에서 backend가 지표를 실제로 내는지
+docker compose exec backend curl -s http://localhost:8000/metrics | head -5
+
+# prometheus가 backend를 정상 스크랩 중인지 (상태가 1이어야 함)
+docker compose exec prometheus wget -qO- 'http://localhost:9090/api/v1/query?query=up' 
+
+# 외부에서 /metrics가 막혀 있는지 (반드시 404 — 열려 있으면 사고)
+curl -s -o /dev/null -w "%{http_code}\n" https://sumeungil.co.kr/metrics
+
+# 외부에서 /prom/이 인증 없이는 401인지
+curl -s -o /dev/null -w "%{http_code}\n" https://sumeungil.co.kr/prom/api/v1/query?query=up
+```
+
+### j-4. 비밀번호를 교체하려면
+
+`prom.htpasswd`를 다시 만들고 nginx만 재기동하면 된다(다른 컨테이너는 무관):
+
+```bash
+cd ~/sumeungil/deploy
+echo "grafana:$(openssl passwd -apr1 '새_비밀번호')" > prom.htpasswd
+docker compose up -d --force-recreate nginx
+```
+Grafana 쪽 데이터소스 설정에서도 새 비밀번호로 다시 저장해야 한다.

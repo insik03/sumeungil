@@ -11,3 +11,7 @@ pydantic==2.10.4
 # 기존 asyncio.to_thread 패턴 그대로 감싸 쓴다(라우터/서비스 코드 모양 불변). binary는
 # 순수 파이썬 빌드 없이 바로 설치되는 휠(ARM 배포 VM 포함), pool은 커넥션 풀 지원.
 psycopg[binary,pool]==3.2.3
+# 2026-08-18: 그라파나(외부 관측 인스턴스, aitestbed.kr)에서 운영 지표를 보기 위해 도입.
+# /metrics 는 nginx가 공개 인터넷으로 프록시하지 않는다(내부 도커 네트워크의 prometheus
+# 컨테이너만 긁어간다) — deploy/nginx.conf·deploy/prometheus.yml 참고.
+prometheus-fastapi-instrumentator==8.1.0
