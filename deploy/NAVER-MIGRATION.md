@@ -133,3 +133,51 @@ nginx 원복" 순서는 불가피하다. 이번엔 다운 구간이 수 분이�
 앱의 실제 타임아웃(`OLLAMA_TIMEOUT_SEC=30`, `TIPS_TIMEOUT_SEC=20` 등)을 감안하면
 CPU 전용 2코어에서는 **3B가 사실상 상한**이다. `qwen2.5:3b`는 디스크에 남겨뒀지만
 `OLLAMA_MODEL`은 바꾸지 않았다(언어 혼입 문제 때문에 전환은 사람 판단 필요).
+
+---
+
+## 후속 — 시크릿 관리 업그레이드 (sops+age, 2026-08-22)
+
+3차/4차 보안 감사 이후 대표 지시로 도입. **문제**: `.env` 가 서버 디스크에 평문
+파일로 그대로 있었다 — VM 디스크 이미지/스냅샷이 유출되거나 백업 파일이 잘못
+전달되면 시크릿 28개가 통째로 평문으로 새는 구조였다.
+
+**한 것**: `/root/sumeungil/deploy/.env` 를 age 키로 암호화해 같은 위치에
+`.env.enc` 로 보관한다(`sops --input-type dotenv --output-type dotenv`). 복호화
+왕복을 SHA256 비교로 검증 완료(원본 `.env` 와 100% 일치).
+
+**한계(솔직하게)**: 이번 1단계는 **백업/버전관리용 암호화**다. 지금 살아있는
+컨테이너가 실제로 읽는 파일은 여전히 평문 `.env` 그대로다(docker-compose
+`env_file:` 을 건드리지 않았다 — 배포 파이프라인 자체를 바꾸는 건 운영 중인
+서비스가 걸린 위험한 변경이라 이번엔 손대지 않았다). 즉 이 단계는 "VM이 살아있는
+채로 원격 침투당하는 상황"은 막지 못하고, "디스크 스냅샷 유출·백업 파일 오전달·
+`.env` 실수 삭제" 시나리오를 막는다. 컨테이너가 부팅 시점에 `.env.enc` 를
+복호화해서 뜨는 구조로 바꾸는 건 별도 작업(배포 스크립트 변경 + 재기동 테스트
+필요)으로 남겨둔다.
+
+**키 위치**: `/root/.config/sops/age/keys.txt` (권한 600, root 전용). **이 파일을
+잃으면 `.env.enc` 는 영구히 복호화 불가능하다** — 지금은 평문 `.env` 가 살아있어
+당장 문제는 없지만, 장기적으로 이 키의 오프서버 백업이 필요하다. 대표가 직접
+(오케스트레이터를 거치지 않고) 아래 명령으로 로컬에 받아 비밀번호 관리자 등
+안전한 곳에 보관할 것을 권고:
+
+```bash
+scp -i naver_deploy_key root@223.130.161.214:/root/.config/sops/age/keys.txt ./naver-sops-age-key.txt
+# 받은 뒤 이 파일을 안전한 곳(비밀번호 관리자 등)에 옮기고 로컬에서는 삭제할 것
+```
+
+**앞으로 시크릿을 바꿀 때**(로테이션):
+```bash
+ssh root@223.130.161.214
+cd /root/sumeungil/deploy
+export SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt
+sops --input-type dotenv --output-type dotenv .env.enc   # $EDITOR 로 열려서 고치면 저장 시 자동 재암호화
+# 실제 운영 반영은 지금처럼 .env 를 직접 고치거나, 위에서 고친 뒤:
+sops --input-type dotenv --output-type dotenv -d .env.enc > .env
+docker compose up -d <해당 서비스>   # env_file 재적용은 recreate 필요(restart 는 안 됨)
+```
+
+`.env.enc` 는 `deploy/.gitignore` 의 기존 `.env.*` 패턴에 걸려 커밋되지 않는다
+(의도적 — 암호문이라 안전하지만, "시크릿 파일은 git에 안 둔다"는 기존 원칙을
+그대로 유지). git으로 버전관리하고 싶으면(암호문이므로 원칙적으론 안전) 대표
+결정 후 예외 처리할 것.
