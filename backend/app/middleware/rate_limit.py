@@ -22,10 +22,20 @@
 `X-Forwarded-For` 는 클라이언트가 위조할 수 있다. nginx 뒤에 있을 때만 신뢰해야 하므로
 `RATE_LIMIT_TRUST_PROXY` 로 분리했다. 배포 시 backend 컨테이너 포트를 호스트에 공개하지 않아
 (compose 에서 ports 미기재) nginx 를 우회한 직접 접근 자체가 불가능하다.
+
+**단일 방어선이었던 문제(4차 보안 감사 DAST, 2026-08-19)**: 위 전제(포트 미공개)가 유일한
+방어선이라, nginx 설정 실수나 배포 구조 변경 하나로 이 방어 전체가 조용히 무너질 수 있었다
+(실제로 로컬에서 backend에 직접 붙어 매 요청마다 다른 X-Forwarded-For 값을 실어 보내면
+레이트리밋·관리자 로그인 브루트포스 방어가 전부 무제한 통과되는 걸 실증함). 그래서
+`trust_proxy=True` 여도 **소켓으로 실제 연결한 peer(`request.client.host`)가 사설 대역일
+때만** X-Forwarded-For 를 신뢰하도록 이중화했다 — nginx→backend 는 docker 내부망(사설
+대역)이라 정상 동작은 그대로이고, backend 포트가 실수로 호스트에 노출돼도 인터넷의 공인 IP
+에서 오는 요청은 X-Forwarded-For 를 무시하고 소켓 IP를 그대로 쓴다.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 from collections import deque
 from dataclasses import dataclass
@@ -194,6 +204,21 @@ class SlidingWindowLimiter:
         logger.warning("rate_limit 키 상한 도달 — 오래된 카운터를 정리했습니다(max_keys=%d)", self._max_keys)
 
 
+def _is_trusted_proxy_peer(host: str | None) -> bool:
+    """소켓으로 실제 연결한 peer 가 신뢰할 수 있는 사설 대역(docker 내부망)인지.
+
+    nginx 는 backend 와 같은 docker 네트워크(사설 대역)로 붙는다. 이 검사가 실패하면
+    (=peer 가 공인 IP) X-Forwarded-For 를 신뢰하지 않는다 — backend 포트가 실수로
+    호스트에 노출되는 등 nginx 를 우회한 직접 접근 상황에서의 이중 방어선이다.
+    """
+    if not host:
+        return False
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
+
+
 def extract_client_ip(request: Any, trust_proxy: bool = True) -> str:
     """클라이언트 식별자.
 
@@ -201,17 +226,20 @@ def extract_client_ip(request: Any, trust_proxy: bool = True) -> str:
     `X-Forwarded-For` 의 **첫 값**(원 클라이언트)을 쓴다. 프록시 없이 직접 노출된 경우를 대비해
     헤더가 없으면 `request.client.host` 로 폴백한다.
 
+    `trust_proxy=True` 여도 소켓 peer 가 사설 대역이 아니면 헤더를 무시한다(위 모듈
+    docstring "신뢰 경계" 참고) — nginx 를 실제로 거쳐온 요청만 X-Forwarded-For 를 신뢰한다.
+
     `request` 는 `.headers`(Mapping)·`.client`(host 속성 보유 or None) 만 요구한다 —
     테스트에서 가짜 객체로 대체할 수 있게 Starlette Request 타입을 강제하지 않는다.
     """
-    if trust_proxy:
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", None) if client is not None else None
+    if trust_proxy and _is_trusted_proxy_peer(host):
         xff = request.headers.get("x-forwarded-for") if request.headers else None
         if xff:
             first = xff.split(",")[0].strip()
             if first:
                 return first
-    client = getattr(request, "client", None)
-    host = getattr(client, "host", None) if client is not None else None
     return host or "unknown"
 
 
