@@ -333,6 +333,7 @@ app.add_middleware(
     VisitLogMiddleware,
     db=get_database(),
     trust_proxy=settings.rate_limit_trust_proxy,
+    trusted_networks=settings.rate_limit_trusted_proxy_networks or None,
 )
 
 if settings.rate_limit_enabled:
@@ -343,6 +344,7 @@ if settings.rate_limit_enabled:
         window_sec=settings.rate_limit_window_sec,
         trust_proxy=settings.rate_limit_trust_proxy,
         max_keys=settings.rate_limit_max_keys,
+        trusted_networks=settings.rate_limit_trusted_proxy_networks or None,
     )
 else:
     logger.info("rate limit 미등록(RATE_LIMIT_ENABLED=false) — 로컬 개발 기본값")

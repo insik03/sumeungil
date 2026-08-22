@@ -192,6 +192,20 @@ class Settings:
         )
         # 위조 IP 로 카운터 키를 무한 생성하는 메모리 공격 방지 상한.
         self.rate_limit_max_keys: int = int(os.getenv("RATE_LIMIT_MAX_KEYS", "20000"))
+        # 2026-08-22(보안 검증 M-1) — X-Forwarded-For 를 신뢰할 소켓 peer 대역을 RFC1918
+        # 전체보다 더 좁히고 싶을 때(예: NAVER VPC의 다른 인스턴스가 ACG 실수로 backend
+        # 포트에 닿는 상황까지 막고 싶을 때) 콤마 구분 CIDR 목록으로 지정한다.
+        # 빈 값(기본)이면 rate_limit.py 의 내장 기본값(RFC1918 + IPv6 ULA)을 그대로 쓴다.
+        # 실제 docker 네트워크 대역 확인: `docker network inspect sumeungil-repo_sumeungil
+        # --format '{{(index .IPAM.Config 0).Subnet}}'`
+        from .middleware.rate_limit import parse_trusted_proxy_cidrs
+
+        raw_trusted_cidrs = os.getenv("RATE_LIMIT_TRUSTED_PROXY_CIDRS", "").strip()
+        self.rate_limit_trusted_proxy_networks = (
+            parse_trusted_proxy_cidrs(raw_trusted_cidrs.split(","))
+            if raw_trusted_cidrs
+            else ()
+        )
 
         # --- 부록 R: 리뷰 · 코스 공유 (2026-08-01 신설, 2026-08-17 PostgreSQL로 전환) ---
         # 원래는 표준 라이브러리 sqlite3 파일 1개였다(신규 의존성 0, 데모 스코프 전제).

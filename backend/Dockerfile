@@ -49,4 +49,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 #     (2) 레이트 리밋 실효 한도가 워커 수만큼 곱해지며,
 #     (3) Ollama 동시 추론이 겹쳐 4 OCPU 가 즉시 포화된다.
 #   멀티워커가 필요해지면 먼저 캐시/카운터를 Redis 로 옮겨야 한다(deps.py 교체 지점 주석 참고).
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# --no-proxy-headers: uvicorn 자신도 기본값(proxy_headers=True, forwarded_allow_ips=
+# "127.0.0.1")으로 X-Forwarded-For 를 읽어 request.client.host 를 덮어쓴다. 이게 켜져
+# 있으면 앱 코드(rate_limit.py 의 extract_client_ip)가 "request.client.host = 진짜 소켓
+# peer" 라고 믿는 전제가 loopback 접속에서 깨진다 — 즉 uvicorn 계층에서 이미 XFF 값으로
+# 치환된 걸 앱이 다시 신뢰 판정하게 된다(보안 검증 2026-08-22, H-1). X-Forwarded-For 해석은
+# 앱 코드 하나가만 하도록 우리가 직접 끈다.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-proxy-headers"]

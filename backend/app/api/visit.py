@@ -66,7 +66,11 @@ async def record_visit(
 
     try:
         now = now_kst()
-        ip = extract_client_ip(request, trust_proxy=settings.rate_limit_trust_proxy)
+        ip = extract_client_ip(
+            request,
+            trust_proxy=settings.rate_limit_trust_proxy,
+            trusted_networks=settings.rate_limit_trusted_proxy_networks or None,
+        )
         ip_hash = visit_ip_hash(ip)
         if not ip_hash:
             # 2026-08-18 보안 감사 A-3: 가명화 키가 없으면 미들웨어와 **똑같이** 집계를

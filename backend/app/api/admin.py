@@ -90,7 +90,11 @@ def _require_session(request: Request) -> AdminAuth:
 
 def _client_ip(request: Request) -> str:
     """레이트리밋 미들웨어와 **같은 규칙**으로 클라이언트 IP 를 뽑는다(nginx 뒤 XFF 첫 값)."""
-    return extract_client_ip(request, trust_proxy=settings.rate_limit_trust_proxy)
+    return extract_client_ip(
+        request,
+        trust_proxy=settings.rate_limit_trust_proxy,
+        trusted_networks=settings.rate_limit_trusted_proxy_networks or None,
+    )
 
 
 def _expires_iso(exp_epoch: int) -> str:

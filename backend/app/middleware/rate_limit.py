@@ -31,6 +31,19 @@
 때만** X-Forwarded-For 를 신뢰하도록 이중화했다 — nginx→backend 는 docker 내부망(사설
 대역)이라 정상 동작은 그대로이고, backend 포트가 실수로 호스트에 노출돼도 인터넷의 공인 IP
 에서 오는 요청은 X-Forwarded-For 를 무시하고 소켓 IP를 그대로 쓴다.
+
+**이중화 자체의 구멍 2건(보안 검증 2026-08-22)과 수정**:
+1. `ipaddress.*.is_private` 는 loopback(127.0.0.0/8, ::1)·link-local·문서용 대역
+   (192.0.2.0/24 등)까지 "사설"로 취급한다. loopback 이 신뢰되면 **uvicorn 자신의
+   기본 동작**(`proxy_headers=True`, `forwarded_allow_ips="127.0.0.1"`)이 loopback 접속의
+   `request.client.host` 를 이미 X-Forwarded-For 값으로 치환해 버려, 우리 코드가 보는
+   시점엔 "소켓 peer"가 이미 공격자 값이다(4차 감사가 실제로 재현한 "로컬에서 backend에
+   직접 붙기" 방식이 그대로 우회됨). 그래서 ① Dockerfile CMD 에 `--no-proxy-headers` 를
+   추가해 uvicorn 계층의 치환 자체를 껐고, ② 아래 `_is_trusted_proxy_peer` 는
+   `is_private` 대신 **RFC1918(10/8, 172.16/12, 192.168/16) + IPv6 ULA(fc00::/7)** 만
+   명시적으로 신뢰한다 — loopback·link-local·문서용 대역은 이제 신뢰 대상이 아니다.
+2. 같은 이유로 "모든 사설 대역"은 docker 내부망보다 넓다(다른 컨테이너·향후 같은 VPC의
+   다른 호스트도 포함). 위 RFC1918 한정이 이 신뢰 표면도 함께 좁힌다.
 """
 
 from __future__ import annotations
@@ -204,37 +217,83 @@ class SlidingWindowLimiter:
         logger.warning("rate_limit 키 상한 도달 — 오래된 카운터를 정리했습니다(max_keys=%d)", self._max_keys)
 
 
-def _is_trusted_proxy_peer(host: str | None) -> bool:
-    """소켓으로 실제 연결한 peer 가 신뢰할 수 있는 사설 대역(docker 내부망)인지.
+# RFC1918(IPv4 사설 대역) + IPv6 ULA(fc00::/7) 만 명시적으로 신뢰한다. 표준 라이브러리
+# `ipaddress.*.is_private` 를 안 쓰는 이유: loopback·link-local·문서용 대역(TEST-NET
+# 등)까지 "사설"로 취급해서 지나치게 넓다(보안 검증 2026-08-22, H-1/M-1 참고 — 위 모듈
+# docstring "신뢰 경계" 절 참고).
+_TRUSTED_PROXY_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("fc00::/7"),
+)
 
-    nginx 는 backend 와 같은 docker 네트워크(사설 대역)로 붙는다. 이 검사가 실패하면
-    (=peer 가 공인 IP) X-Forwarded-For 를 신뢰하지 않는다 — backend 포트가 실수로
-    호스트에 노출되는 등 nginx 를 우회한 직접 접근 상황에서의 이중 방어선이다.
+
+def parse_trusted_proxy_cidrs(
+    cidrs: Iterable[str],
+) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """설정에서 받은 CIDR 문자열 목록을 파싱한다. 잘못된 항목은 건너뛰고 로그만 남긴다
+    (배포 재시작을 실수 하나로 막지 않기 위해 — 무회귀 원칙).
+    """
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for raw in cidrs:
+        try:
+            networks.append(ipaddress.ip_network(raw.strip()))
+        except ValueError:
+            logger.warning("RATE_LIMIT_TRUSTED_PROXY_CIDRS 항목을 무시합니다(파싱 실패): %r", raw)
+    return tuple(networks)
+
+
+def _is_trusted_proxy_peer(
+    host: str | None,
+    trusted_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] | None = None,
+) -> bool:
+    """소켓으로 실제 연결한 peer 가 신뢰할 수 있는 대역(docker 내부망)인지.
+
+    nginx 는 backend 와 같은 docker 네트워크(RFC1918 사설 대역)로 붙는다. 이 검사가
+    실패하면(=peer 가 공인 IP 이거나 loopback/link-local 등 그 외 대역) X-Forwarded-For 를
+    신뢰하지 않는다 — backend 포트가 실수로 호스트에 노출되는 등 nginx 를 우회한 직접
+    접근 상황에서의 이중 방어선이다. loopback 을 의도적으로 제외한다 — uvicorn 자신도
+    loopback 접속에서 X-Forwarded-For 를 신뢰하므로(Dockerfile CMD 의 `--no-proxy-headers`
+    참고) 여기서도 신뢰하면 이중화 의미가 없어진다.
+
+    `trusted_networks` 를 지정하면(운영에서 실제 docker 네트워크 대역으로 좁힌 경우,
+    `RATE_LIMIT_TRUSTED_PROXY_CIDRS` 참고) 그 목록만 쓴다 — 기본은 RFC1918 + IPv6 ULA.
     """
     if not host:
         return False
     try:
-        return ipaddress.ip_address(host).is_private
+        addr = ipaddress.ip_address(host)
     except ValueError:
         return False
+    mapped = getattr(addr, "ipv4_mapped", None)
+    if mapped is not None:
+        addr = mapped
+    networks = trusted_networks if trusted_networks else _TRUSTED_PROXY_NETWORKS
+    return any(addr.version == net.version and addr in net for net in networks)
 
 
-def extract_client_ip(request: Any, trust_proxy: bool = True) -> str:
+def extract_client_ip(
+    request: Any,
+    trust_proxy: bool = True,
+    trusted_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] | None = None,
+) -> str:
     """클라이언트 식별자.
 
     nginx 리버스 프록시 뒤에서는 `request.client.host` 가 항상 nginx 컨테이너 IP 라 쓸모없다 —
     `X-Forwarded-For` 의 **첫 값**(원 클라이언트)을 쓴다. 프록시 없이 직접 노출된 경우를 대비해
     헤더가 없으면 `request.client.host` 로 폴백한다.
 
-    `trust_proxy=True` 여도 소켓 peer 가 사설 대역이 아니면 헤더를 무시한다(위 모듈
+    `trust_proxy=True` 여도 소켓 peer 가 신뢰 대역이 아니면 헤더를 무시한다(위 모듈
     docstring "신뢰 경계" 참고) — nginx 를 실제로 거쳐온 요청만 X-Forwarded-For 를 신뢰한다.
+    `trusted_networks` 미지정 시 기본값(RFC1918 + IPv6 ULA)을 쓴다.
 
     `request` 는 `.headers`(Mapping)·`.client`(host 속성 보유 or None) 만 요구한다 —
     테스트에서 가짜 객체로 대체할 수 있게 Starlette Request 타입을 강제하지 않는다.
     """
     client = getattr(request, "client", None)
     host = getattr(client, "host", None) if client is not None else None
-    if trust_proxy and _is_trusted_proxy_peer(host):
+    if trust_proxy and _is_trusted_proxy_peer(host, trusted_networks):
         xff = request.headers.get("x-forwarded-for") if request.headers else None
         if xff:
             first = xff.split(",")[0].strip()
@@ -303,10 +362,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         window_sec: int = 60,
         trust_proxy: bool = True,
         max_keys: int = 20_000,
+        trusted_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] | None = None,
     ) -> None:
         super().__init__(app)
         self.enabled = enabled
         self.trust_proxy = trust_proxy
+        self.trusted_networks = trusted_networks
         self.limiter = SlidingWindowLimiter(limits, window_sec=window_sec, max_keys=max_keys)
         if enabled:
             logger.info(
@@ -334,7 +395,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if bucket is None:
             return await call_next(request)
 
-        client_key = extract_client_ip(request, trust_proxy=self.trust_proxy)
+        client_key = extract_client_ip(
+            request, trust_proxy=self.trust_proxy, trusted_networks=self.trusted_networks
+        )
         decision = self.limiter.check(client_key, bucket)
         if not decision.allowed:
             # 로그에 IP 는 남기되 쿼리스트링·바디는 남기지 않는다(시크릿/개인정보 누출 방지).
@@ -374,6 +437,7 @@ __all__: Iterable[str] = (
     "SlidingWindowLimiter",
     "build_limits_from_settings",
     "extract_client_ip",
+    "parse_trusted_proxy_cidrs",
     "rate_limited_response",
     "resolve_bucket",
     "scope_path",

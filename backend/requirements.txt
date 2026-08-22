@@ -10,11 +10,13 @@ httpx==0.28.1
 # 2026-08-22: pip-audit found python-dotenv==1.0.1 has PYSEC-2026-2270, fixed in 1.2.2.
 python-dotenv==1.2.2
 pydantic==2.10.4
-# 2026-08-17: SQLite -> PostgreSQL 전환(대표 지시, db/postgres.py). psycopg3 sync API를
-# 기존 asyncio.to_thread 패턴 그대로 감싸 쓴다(라우터/서비스 코드 모양 불변). binary는
-# 순수 파이썬 빌드 없이 바로 설치되는 휠(ARM 배포 VM 포함), pool은 커넥션 풀 지원.
+# 2026-08-17: SQLite -> PostgreSQL migration (CEO's call, see db/postgres.py). psycopg3's
+# sync API is wrapped in the existing asyncio.to_thread pattern (router/service code shape
+# unchanged). "binary" avoids a source build (works on the ARM deploy VM too), "pool" adds
+# connection pooling.
 psycopg[binary,pool]==3.2.3
-# 2026-08-18: 그라파나(외부 관측 인스턴스, aitestbed.kr)에서 운영 지표를 보기 위해 도입.
-# /metrics 는 nginx가 공개 인터넷으로 프록시하지 않는다(내부 도커 네트워크의 prometheus
-# 컨테이너만 긁어간다) — deploy/nginx.conf·deploy/prometheus.yml 참고.
+# 2026-08-18: added for Grafana (external observability instance, aitestbed.kr) to view
+# runtime metrics. /metrics is never proxied to the public internet by nginx (only the
+# prometheus container on the internal docker network scrapes it) -- see deploy/nginx.conf
+# and deploy/prometheus.yml.
 prometheus-fastapi-instrumentator==8.1.0

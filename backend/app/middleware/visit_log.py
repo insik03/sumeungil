@@ -155,10 +155,11 @@ class VisitLogMiddleware(BaseHTTPMiddleware):
     쓰인다"고 오해를 부른다(실제로 main.py 주석이 그 오해를 그대로 적고 있었다).
     """
 
-    def __init__(self, app, *, db, trust_proxy: bool = True) -> None:
+    def __init__(self, app, *, db, trust_proxy: bool = True, trusted_networks=None) -> None:
         super().__init__(app)
         self._db = db
         self._trust_proxy = trust_proxy
+        self._trusted_networks = trusted_networks
 
     def _ip_hash(self, ip: str | None) -> str:
         return visit_ip_hash(ip)
@@ -177,7 +178,9 @@ class VisitLogMiddleware(BaseHTTPMiddleware):
 
         try:
             now = now_kst()
-            ip = extract_client_ip(request, trust_proxy=self._trust_proxy)
+            ip = extract_client_ip(
+                request, trust_proxy=self._trust_proxy, trusted_networks=self._trusted_networks
+            )
             ip_hash = self._ip_hash(ip)
             if not ip_hash:
                 # 가명화 키 미설정 → 집계 자체를 건너뛴다(fail-closed, 경고는 1회만).
