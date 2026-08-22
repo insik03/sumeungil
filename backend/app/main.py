@@ -46,6 +46,7 @@ from .deps import (
     get_database,
     get_user_auth,
 )
+from .middleware.anomaly_alert import AnomalyAlertMiddleware
 from .middleware.error_alert import ErrorAlertMiddleware
 from .middleware.rate_limit import RateLimitMiddleware, build_limits_from_settings
 from .middleware.visit_log import VisitLogMiddleware
@@ -389,6 +390,19 @@ if settings.slack_webhook_url:
     )
 else:
     logger.info("슬랙 5xx 알림 미등록(SLACK_WEBHOOK_URL 미설정) — 로컬 개발 기본값")
+
+# --- 이상행동(브루트포스 정황) 슬랙 알림 (2026-08-22, 대표 지시) -------------------
+# 4차 보안 감사(DAST)가 발견한 XFF 스푸핑 우회는 rate_limit.py 에서 패치했지만, 그
+# 시도 자체가 실제로 벌어지는지는 감시가 없었다. IP 별이 아니라 서비스 전체 집계로
+# 401/429 를 세므로, 매 요청마다 IP 를 바꾸는 공격에도(스푸핑이든 실제 봇넷이든) 반응한다.
+# ErrorAlertMiddleware 와 같은 웹훅을 쓰므로 등록 조건도 동일하다.
+if settings.slack_webhook_url:
+    app.add_middleware(
+        AnomalyAlertMiddleware,
+        webhook_url=settings.slack_webhook_url,
+        env=settings.app_env,
+    )
+    logger.info("슬랙 이상행동(401/429 몰림) 알림 등록 완료")
 
 # --- 운영 지표 (Prometheus, 2026-08-18) -----------------------------------------------
 # 대표가 aitestbed.kr(그라파나 관측 인스턴스)를 받아온 걸 계기로 도입. Postgres를 직접
