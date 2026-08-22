@@ -7,11 +7,16 @@ export const metadata: Metadata = {
   description: "다른 여행자가 공유한 코스를 확인해요.",
 };
 
-export default function SharedCoursePage({ params }: { params: { code: string } }) {
+export default async function SharedCoursePage({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}) {
+  const { code } = await params;
   return (
     <div className="page">
       <main>
-        <SharedCourseDetailContent code={params.code} />
+        <SharedCourseDetailContent code={code} />
       </main>
       <Footer />
     </div>
