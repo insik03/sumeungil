@@ -180,7 +180,10 @@ async def _daily_summary_loop() -> None:
         await asyncio.sleep(max(60, (target - now).total_seconds()))
         try:
             text = await slack_report.build_daily_summary(
-                get_database(), get_cache(), get_congestion_repository()
+                get_database(),
+                get_cache(),
+                get_congestion_repository(),
+                prometheus_base_url=settings.prometheus_base_url,
             )
             sent = await slack_notify.post(text, webhook_url=settings.slack_webhook_url)
             logger.info("슬랙 아침 요약 발송 %s", "완료" if sent else "실패(무시)")

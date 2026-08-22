@@ -382,6 +382,14 @@ class Settings:
         # 서명 검증 없이 이 엔드포인트를 열면 누구나 우리 운영 수치를 조회할 수 있다.
         self.slack_signing_secret: str = os.getenv("SLACK_SIGNING_SECRET", "").strip()
 
+        # 2026-08-22(대표 지시) — 아침 요약에 Prometheus 운영 지표(응답시간·에러율) 한 줄을
+        # 추가하기 위한 조회 대상. 같은 docker 네트워크 안의 prometheus 컨테이너를 직접
+        # 쿼리한다(nginx의 /prom/ Basic Auth 는 그라파나 등 **외부** 조회용이라 여긴 우회 —
+        # 내부망이라 인증이 필요 없다). 비어 있으면(로컬 개발 기본) 이 부분만 조용히 생략된다.
+        self.prometheus_base_url: str = os.getenv(
+            "PROMETHEUS_BASE_URL", "http://prometheus:9090"
+        ).strip()
+
     @property
     def sqlite_file(self) -> Path:
         """상대 경로는 **BACKEND_DIR 기준**으로 푼다(프로세스 cwd 에 의존하지 않게).

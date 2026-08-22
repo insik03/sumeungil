@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+import httpx
 import psycopg
 
 from ..api.health import _build_health
@@ -37,6 +38,61 @@ from ..util.time import now_kst
 logger = logging.getLogger("sumeungil.services.slack_report")
 
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
+
+# 2026-08-22(대표 지시) — 아침 요약에 넣을 Prometheus 지표 4종. 전부 24h 윈도우(=대략
+# "어제")로 계산한다. status 라벨은 개별 코드(200/404 등)가 아니라 "2xx"/"5xx" 처럼
+# 그룹으로 나온다(prometheus-fastapi-instrumentator 실측 확인, 2026-08-22).
+_PROM_QUERIES: dict[str, str] = {
+    "avg_sec": (
+        "sum(rate(http_request_duration_seconds_sum[24h]))"
+        " / sum(rate(http_request_duration_seconds_count[24h]))"
+    ),
+    "p95_sec": (
+        "histogram_quantile(0.95,"
+        " sum(rate(http_request_duration_seconds_bucket[24h])) by (le))"
+    ),
+    "err_ratio": (
+        'sum(rate(http_requests_total{status="5xx"}[24h]))'
+        " / sum(rate(http_requests_total[24h]))"
+    ),
+    "total": "sum(increase(http_requests_total[24h]))",
+}
+_PROM_TIMEOUT_SEC = 5.0
+
+
+async def _prometheus_line(base_url: str) -> str | None:
+    """24시간 요청수·평균/p95 응답시간·5xx 비율 한 줄. 조회 실패·트래픽 0이면 None
+    (요약 문구에서 그 줄만 조용히 빠진다 — 이 조회 하나 때문에 아침 요약 전체가
+    깨지면 안 된다. slack_notify.post 와 같은 원칙).
+    """
+    if not base_url:
+        return None
+    values: dict[str, float | None] = {}
+    try:
+        async with httpx.AsyncClient(timeout=_PROM_TIMEOUT_SEC) as client:
+            for key, query in _PROM_QUERIES.items():
+                resp = await client.get(f"{base_url}/api/v1/query", params={"query": query})
+                resp.raise_for_status()
+                result = resp.json().get("data", {}).get("result", [])
+                values[key] = float(result[0]["value"][1]) if result else None
+    except Exception:  # noqa: BLE001
+        logger.warning("Prometheus 지표 조회 실패 — 요약에서 이 줄만 생략", exc_info=True)
+        return None
+
+    total = values.get("total")
+    if not total:  # None 또는 0 — 트래픽이 없으면 평균·p95도 의미가 없다
+        return None
+
+    avg_ms = (values.get("avg_sec") or 0.0) * 1000
+    p95_ms = (values.get("p95_sec") or 0.0) * 1000
+    # err_ratio 가 None 인 건 5xx 표본이 아예 없었다는 뜻(PromQL 벡터 나눗셈이 빈 결과를
+    # 낸다) — "확인 불가"가 아니라 "0%"로 취급하는 게 맞는다.
+    err_pct = (values.get("err_ratio") or 0.0) * 100
+
+    return (
+        f"· 지표(최근 24h): 요청 {int(total)}건 · 평균 {avg_ms:.0f}ms · p95 {p95_ms:.0f}ms"
+        f" · 5xx {err_pct:.1f}%"
+    )
 
 
 def _stamp() -> str:
@@ -56,12 +112,14 @@ async def _health_line(cache: Cache, repo: CongestionRepository) -> tuple[str, s
 
 
 async def build_daily_summary(
-    db: Database, cache: Cache, repo: CongestionRepository
+    db: Database, cache: Cache, repo: CongestionRepository, prometheus_base_url: str = ""
 ) -> str:
-    """아침 브리핑. **어제 실적 + 지금 처리 대기 + 서버 상태**로 구성한다.
+    """아침 브리핑. **어제 실적 + 지금 처리 대기 + 서버 상태 + 운영 지표**로 구성한다.
 
     '오늘' 수치는 아침에 보면 거의 0이라 넣지 않는다 — 아침에 알고 싶은 건 어제 무슨 일이
     있었고, 지금 내가 처리할 게 뭐가 남았는지다.
+
+    `prometheus_base_url` 을 비워두면(로컬 개발 기본) 지표 줄만 조용히 빠진다.
     """
     now = now_kst()
     today = now.strftime("%Y-%m-%d")
@@ -106,6 +164,11 @@ async def build_daily_summary(
         )
 
     lines.append(f"{icon} 서버 {status} — {detail}")
+
+    metrics_line = await _prometheus_line(prometheus_base_url)
+    if metrics_line:
+        lines.append(metrics_line)
+
     return "\n".join(lines)
 
 
