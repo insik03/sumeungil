@@ -847,8 +847,34 @@ Prometheus 자체엔 인증이 없어 nginx의 `/prom/` 앞단에 Basic Auth를 
 ```bash
 cd ~/sumeungil/deploy
 echo "grafana:$(openssl passwd -apr1 '여기에_새로_생성한_비밀번호')" > prom.htpasswd
-chmod 600 prom.htpasswd
+chmod 644 prom.htpasswd   # 600 이면 안 된다 — 아래 함정 참고
 docker compose up -d --force-recreate nginx   # 새 마운트 파일 반영 (reload로는 안 됨)
+```
+
+**!!! 함정 2건 (2026-08-23 실측으로 발견 — 최초 설정 이후 아무도 실제 인증 성공까지
+왕복해보지 않아 몇 주간 방치돼 있었다) !!!**
+
+1. **`chmod 600`이 아니라 `644`여야 한다.** nginx **워커** 프로세스는 root 가 아니라
+   `nginx` 유저로 돈다(master 만 root). `600`(소유자=root 전용)이면 워커가 파일을 못 열어
+   에러로그에 `open() "/etc/nginx/prom.htpasswd" failed (13: Permission denied)` 가 찍히고
+   **모든** 요청이 500 이 된다(인증 성공 여부와 무관하게). 해시만 든 파일이라 644 로 열어도
+   안전하다(htpasswd 관례).
+2. **호스트에 `prom.htpasswd` 파일을 만들기 전에 먼저 `docker compose up`을 한 적이 있으면**,
+   docker가 존재하지 않는 바인드마운트 소스를 **빈 디렉터리로 자동 생성**한다(이 저장소에
+   이미 문서화된 "Docker bind-mount + inode 함정"과 같은 계열). 그 상태에서 나중에
+   `prom.htpasswd` 파일을 만들어도 컨테이너 안에서는 여전히 디렉터리로 보인다 — 반드시
+   `ls -la prom.htpasswd`로 **파일인지**(디렉터리면 `d`로 시작) 먼저 확인하고, 디렉터리면
+   `rmdir prom.htpasswd`로 지운 뒤 위 절차를 다시 밟을 것.
+
+**검증(반드시 3가지 다 확인 — 401 하나만 보고 "됐다"고 판단하지 말 것, 인증 없는 요청은
+htpasswd 파일을 열어보지도 않고 401을 주기 때문에 파일이 고장나 있어도 똑같이 401이 나온다)**:
+```bash
+# 인증 없음 -> 401 (이것만으론 파일이 정상인지 확인 안 됨)
+curl -s -o /dev/null -w "%{http_code}\n" https://sumeungil.co.kr/prom/api/v1/query?query=up
+# 틀린 비번 -> 401 (파일을 실제로 열어서 비교했다는 증거)
+curl -s -o /dev/null -w "%{http_code}\n" -u grafana:wrongpass https://sumeungil.co.kr/prom/api/v1/query?query=up
+# 진짜 비번 -> 200 + JSON (끝까지 왕복 성공)
+curl -s -u grafana:<실제_비밀번호> https://sumeungil.co.kr/prom/api/v1/query?query=up
 ```
 
 비밀번호는 직접 정하거나 아래로 무작위 생성:
