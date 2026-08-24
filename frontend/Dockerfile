@@ -16,13 +16,13 @@
 # ###########################################################################
 
 # ---------- 1) deps: 의존성만 설치(락파일 기준, 재현 가능) ----------
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ---------- 2) build: next build ----------
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 # 빌드타임 주입값. 값이 없으면 lib/api.ts 의 폴백(http://localhost:8000)이 구워져
@@ -44,7 +44,7 @@ COPY . .
 RUN npm run build
 
 # ---------- 3) runner: 프로덕션 의존성 + 빌드 산출물만 ----------
-FROM node:20-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
