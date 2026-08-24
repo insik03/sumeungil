@@ -83,11 +83,11 @@ async def main() -> None:
     failures = 0
     _orig_client = httpx.AsyncClient
 
-    # `_PROM_QUERIES` 는 avg_sec/p95_sec/err_ratio/total 딱 4개 쿼리를 보낸다(각각 이미
-    # Prometheus 쪽에서 sum/count 나눗셈까지 끝난 단일 값을 돌려준다 — 원시 sum·count를
-    # 따로 받아오는 게 아니다). needle 은 4개 쿼리 문자열에서 서로 안 겹치는 부분으로 골랐다:
+    # `fetch_operational_metrics`는 avg_sec/p95_sec/err_ratio/total(각각 이미 Prometheus
+    # 쪽에서 sum/count 나눗셈까지 끝난 단일 값) + up{job="sumeungil-backend"} 까지 5개 쿼리를
+    # 보낸다. needle 은 서로 안 겹치는 부분으로 골랐다:
     #   avg_sec="_count[24h]))" / p95_sec="histogram_quantile" / err_ratio='status="5xx"'
-    #   / total="increase("
+    #   / total="increase(" / up='job="sumeungil-backend"'
 
     # --- 1: 정상 케이스 ---
     _patch_client(
@@ -96,6 +96,7 @@ async def main() -> None:
             "histogram_quantile": _vector_result("0.15"),  # p95_sec = 150ms
             'status="5xx"': _vector_result("0.02"),  # err_ratio = 2%
             "increase(": _vector_result("1200"),  # total
+            'job="sumeungil-backend"': _vector_result("1"),  # up
         }
     )
     line1 = await slack_report._prometheus_line("http://fake-prometheus:9090")
@@ -116,6 +117,7 @@ async def main() -> None:
             "histogram_quantile": _vector_result("0.05"),
             'status="5xx"': _EMPTY,  # 5xx 자체가 없어 빈 결과
             "increase(": _vector_result("500"),
+            'job="sumeungil-backend"': _vector_result("1"),
         }
     )
     line2 = await slack_report._prometheus_line("http://fake-prometheus:9090")
@@ -130,6 +132,7 @@ async def main() -> None:
             "histogram_quantile": _EMPTY,
             'status="5xx"': _EMPTY,
             "increase(": _EMPTY,
+            'job="sumeungil-backend"': _vector_result("1"),
         }
     )
     line3 = await slack_report._prometheus_line("http://fake-prometheus:9090")

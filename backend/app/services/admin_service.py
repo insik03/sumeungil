@@ -32,12 +32,14 @@ from ..schemas.admin import (
     AdminModerationResponse,
     AdminReviewItem,
     AdminReviewListResponse,
+    AdminServerStatusResponse,
     AdminStatsResponse,
     AdminUserItem,
     AdminUserListResponse,
 )
 from ..security.admin_auth import AdminAuth
 from ..util.time import now_kst, to_iso_kst
+from .metrics_service import fetch_operational_metrics
 from . import community_errors as errors
 
 logger = logging.getLogger("sumeungil.services.admin")
@@ -188,6 +190,34 @@ async def stats(db: Database) -> AdminStatsResponse:
         **counts,
         review_hide_report_threshold=settings.review_hide_report_threshold,
         generated_at=to_iso_kst(now),
+    )
+
+
+async def server_status() -> AdminServerStatusResponse:
+    """관리자 콘솔 "서버 상태" 탭(2026-08-23, 대표 지시 "그라파나랑 운영대시보드랑
+    붙여야 한다"). DB 조회가 없다 — Prometheus만 본다. 쿼리 자체는 slack_report의
+    아침 요약과 같은 공용 함수(metrics_service)를 쓴다.
+    """
+    values = await fetch_operational_metrics(settings.prometheus_base_url)
+    now = to_iso_kst(now_kst())
+    if values is None:
+        return AdminServerStatusResponse(
+            reachable=False, grafana_url=settings.grafana_url, generated_at=now
+        )
+
+    total = values.get("total")
+    up = values.get("up")
+    return AdminServerStatusResponse(
+        reachable=True,
+        backend_up=(up == 1.0) if up is not None else None,
+        requests_24h=int(total) if total is not None else None,
+        avg_response_ms=(values.get("avg_sec") or 0.0) * 1000 if total else None,
+        p95_response_ms=(values.get("p95_sec") or 0.0) * 1000 if total else None,
+        # err_ratio가 None인 건 5xx 표본이 아예 없었다는 뜻(PromQL 벡터 나눗셈이 빈
+        # 결과를 낸다) — slack_report._prometheus_line과 같은 원칙으로 0%로 취급한다.
+        error_rate_pct=(values.get("err_ratio") or 0.0) * 100 if total else None,
+        grafana_url=settings.grafana_url,
+        generated_at=now,
     )
 
 

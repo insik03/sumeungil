@@ -389,6 +389,13 @@ class Settings:
         self.prometheus_base_url: str = os.getenv(
             "PROMETHEUS_BASE_URL", "http://prometheus:9090"
         ).strip()
+        # 2026-08-23(대표 지시 "그라파나랑 운영대시보드랑 붙여야 한다") — 관리자 콘솔
+        # "서버 상태" 탭의 "그라파나에서 자세히 보기" 링크용. 그라파나 자체를 임베드하지
+        # 않는 이유는 deploy/SLACK-ALERTS.md·NAVER-MIGRATION.md 참고 — 외부 인스턴스라
+        # iframe 임베드 시 그쪽 X-Frame-Options/인증 설정에 종속되고, 우리가 못 고친다.
+        # 핵심 지표는 이 백엔드가 직접 Prometheus에서 읽어 콘솔 안에 표시하고, 상세 조회는
+        # 링크로만 연결한다.
+        self.grafana_url: str = os.getenv("GRAFANA_URL", "https://grafana.aitestbed.kr").strip()
 
     @property
     def sqlite_file(self) -> Path:

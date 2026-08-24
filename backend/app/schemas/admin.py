@@ -182,6 +182,21 @@ class AdminStatsResponse(BaseModel):
     generated_at: str
 
 
+class AdminServerStatusResponse(BaseModel):
+    """관리자 콘솔 "서버 상태" 탭(2026-08-23, 대표 지시). Prometheus에서 직접 읽은
+    운영 지표 — 개인정보·시크릿 없음(요청수·응답시간·에러율만).
+    """
+
+    reachable: bool
+    backend_up: bool | None = None
+    requests_24h: int | None = None
+    avg_response_ms: float | None = None
+    p95_response_ms: float | None = None
+    error_rate_pct: float | None = None
+    grafana_url: str
+    generated_at: str
+
+
 class AdminTrafficDay(BaseModel):
     day: str
     visitors: int = 0

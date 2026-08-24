@@ -123,6 +123,18 @@ export interface AdminUserList {
   offset: number;
 }
 
+/** 서버 상태(2026-08-23) — DB 없이 Prometheus만 본다. reachable=false면 나머지는 전부 null. */
+export interface AdminServerStatus {
+  reachable: boolean;
+  backend_up: boolean | null;
+  requests_24h: number | null;
+  avg_response_ms: number | null;
+  p95_response_ms: number | null;
+  error_rate_pct: number | null;
+  grafana_url: string;
+  generated_at: string;
+}
+
 /**
  * 숨김이 "신고 누적 자동"인지 "운영자가 직접"인지 판정한다.
  *
@@ -340,6 +352,14 @@ export async function fetchAdminUsers(params?: {
     `/users${q ? `?${q}` : ""}`,
     { method: "GET" },
     "회원 목록을 불러오지 못했습니다.",
+  );
+}
+
+export async function fetchAdminServerStatus(): Promise<AdminServerStatus> {
+  return adminFetch<AdminServerStatus>(
+    "/server-status",
+    { method: "GET" },
+    "서버 상태를 불러오지 못했습니다.",
   );
 }
 

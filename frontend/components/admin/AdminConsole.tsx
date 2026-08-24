@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../../lib/api";
+import AdminServerStatusTab from "./AdminServerStatus";
 import AdminTrafficTab from "./AdminTraffic";
 import {
   AdminCourseItem,
@@ -68,9 +69,9 @@ export default function AdminConsole({
   expiresAt: string;
   onSessionLost: () => void;
 }) {
-  const [tab, setTab] = useState<"reviews" | "courses" | "inquiries" | "users" | "traffic">(
-    "reviews",
-  );
+  const [tab, setTab] = useState<
+    "reviews" | "courses" | "inquiries" | "users" | "traffic" | "server"
+  >("reviews");
   const [stats, setStats] = useState<AdminStats | null>(null);
 
   const [reviewStatus, setReviewStatus] = useState<ReviewStatusFilter>("reported");
@@ -411,9 +412,16 @@ export default function AdminConsole({
         >
           트래픽
         </button>
+        <button
+          type="button"
+          className={`admin-tab ${tab === "server" ? "is-active" : ""}`}
+          onClick={() => setTab("server")}
+        >
+          서버 상태
+        </button>
 
         <span className="admin-tabs__filters">
-          {tab === "traffic" || tab === "users" ? null : tab === "inquiries" ? (
+          {tab === "traffic" || tab === "users" || tab === "server" ? null : tab === "inquiries" ? (
             <select
               className="admin-select"
               value={inquiryStatus}
@@ -466,6 +474,8 @@ export default function AdminConsole({
       <section className="admin-list">
         {tab === "traffic" ? (
           <AdminTrafficTab onSessionLost={onSessionLost} />
+        ) : tab === "server" ? (
+          <AdminServerStatusTab onSessionLost={onSessionLost} />
         ) : listError ? (
           <div className="admin-empty">
             <p>목록을 불러오지 못했어요.</p>

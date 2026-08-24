@@ -46,6 +46,7 @@ from ..schemas.admin import (
     AdminModerationResponse,
     AdminOkResponse,
     AdminReviewListResponse,
+    AdminServerStatusResponse,
     AdminSessionResponse,
     AdminStatsResponse,
     AdminUserListResponse,
@@ -439,3 +440,18 @@ async def admin_stats(request: Request, db: Database = Depends(get_database)):
         return await admin_service.stats(db)
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="admin/stats")
+
+
+@router.get("/server-status", response_model=AdminServerStatusResponse)
+async def admin_server_status(request: Request):
+    """서버 상태(2026-08-23, 대표 지시 "그라파나랑 운영대시보드랑 붙여야 한다").
+
+    DB를 안 본다 — Prometheus만 조회하므로 `db` 의존성이 없다. 조회 실패해도
+    500이 아니라 `reachable=false`로 정상 응답한다(프론트가 "확인 불가"를
+    보여줄 수 있게).
+    """
+    try:
+        _require_session(request)
+        return await admin_service.server_status()
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="admin/server-status")

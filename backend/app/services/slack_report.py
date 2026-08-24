@@ -25,7 +25,6 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-import httpx
 import psycopg
 
 from ..api.health import _build_health
@@ -34,49 +33,20 @@ from ..db.postgres import Database
 from ..repositories import admin_repo, visit_repo
 from ..repositories.congestion_repo import CongestionRepository
 from ..util.time import now_kst
+from .metrics_service import fetch_operational_metrics
 
 logger = logging.getLogger("sumeungil.services.slack_report")
 
 _WEEKDAY_KO = ("월", "화", "수", "목", "금", "토", "일")
 
-# 2026-08-22(대표 지시) — 아침 요약에 넣을 Prometheus 지표 4종. 전부 24h 윈도우(=대략
-# "어제")로 계산한다. status 라벨은 개별 코드(200/404 등)가 아니라 "2xx"/"5xx" 처럼
-# 그룹으로 나온다(prometheus-fastapi-instrumentator 실측 확인, 2026-08-22).
-_PROM_QUERIES: dict[str, str] = {
-    "avg_sec": (
-        "sum(rate(http_request_duration_seconds_sum[24h]))"
-        " / sum(rate(http_request_duration_seconds_count[24h]))"
-    ),
-    "p95_sec": (
-        "histogram_quantile(0.95,"
-        " sum(rate(http_request_duration_seconds_bucket[24h])) by (le))"
-    ),
-    "err_ratio": (
-        'sum(rate(http_requests_total{status="5xx"}[24h]))'
-        " / sum(rate(http_requests_total[24h]))"
-    ),
-    "total": "sum(increase(http_requests_total[24h]))",
-}
-_PROM_TIMEOUT_SEC = 5.0
-
 
 async def _prometheus_line(base_url: str) -> str | None:
     """24시간 요청수·평균/p95 응답시간·5xx 비율 한 줄. 조회 실패·트래픽 0이면 None
     (요약 문구에서 그 줄만 조용히 빠진다 — 이 조회 하나 때문에 아침 요약 전체가
-    깨지면 안 된다. slack_notify.post 와 같은 원칙).
+    깨지면 안 된다. slack_notify.post 와 같은 원칙). 쿼리 자체는 metrics_service 공용.
     """
-    if not base_url:
-        return None
-    values: dict[str, float | None] = {}
-    try:
-        async with httpx.AsyncClient(timeout=_PROM_TIMEOUT_SEC) as client:
-            for key, query in _PROM_QUERIES.items():
-                resp = await client.get(f"{base_url}/api/v1/query", params={"query": query})
-                resp.raise_for_status()
-                result = resp.json().get("data", {}).get("result", [])
-                values[key] = float(result[0]["value"][1]) if result else None
-    except Exception:  # noqa: BLE001
-        logger.warning("Prometheus 지표 조회 실패 — 요약에서 이 줄만 생략", exc_info=True)
+    values = await fetch_operational_metrics(base_url)
+    if values is None:
         return None
 
     total = values.get("total")
