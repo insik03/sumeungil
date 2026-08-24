@@ -61,6 +61,10 @@ services:
         # 넣으면 안 된다(브라우저는 도커 네트워크를 모른다).
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
         NEXT_PUBLIC_TMAP_APP_KEY: ${NEXT_PUBLIC_TMAP_APP_KEY}
+        # 2026-08-24: 추천 화면 지도(SpotMap.tsx)를 네이버 지도로 교체 — Tmap appKey가
+        # IP 화이트리스트라 브라우저에서 영구히 막혀 있던 문제 회피(도메인 화이트리스트라
+        # 이 문제가 없다). CourseMap.tsx(AI 코스짜기 경로선)는 그대로 Tmap 유지.
+        NEXT_PUBLIC_NAVER_MAP_CLIENT_ID: ${NEXT_PUBLIC_NAVER_MAP_CLIENT_ID}
     container_name: sumeungil-frontend
     restart: unless-stopped
     expose:

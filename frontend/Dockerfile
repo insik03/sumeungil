@@ -28,11 +28,15 @@ WORKDIR /app
 # 빌드타임 주입값. 값이 없으면 lib/api.ts 의 폴백(http://localhost:8000)이 구워져
 # 배포 후 브라우저가 자기 자신을 호출하게 되므로 반드시 넘겨야 한다.
 ARG NEXT_PUBLIC_API_BASE
-# Tmap JS SDK 용 브라우저 공개키(부록 E.3). 설계상 클라이언트에 노출되는 키이며
-# 서버 시크릿이 아니다 — 반드시 Tmap 콘솔에서 도메인 제한을 걸어둘 것.
+# Tmap JS SDK 용 브라우저 공개키(부록 E.3, AI 코스짜기 경로선 CourseMap.tsx 전용).
+# 서버 시크릿이 아니다 — 이 키는 IP 화이트리스트(서버 IP만 허용)라 서버측 호출에만 쓴다.
 ARG NEXT_PUBLIC_TMAP_APP_KEY
+# 2026-08-24: 추천 화면 지도(SpotMap.tsx)용 네이버 지도 Client ID. Tmap과 달리
+# 도메인(Web 서비스 URL) 화이트리스트라 브라우저에서 정상 동작한다 — 서버 시크릿 아님.
+ARG NEXT_PUBLIC_NAVER_MAP_CLIENT_ID
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
     NEXT_PUBLIC_TMAP_APP_KEY=$NEXT_PUBLIC_TMAP_APP_KEY \
+    NEXT_PUBLIC_NAVER_MAP_CLIENT_ID=$NEXT_PUBLIC_NAVER_MAP_CLIENT_ID \
     NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
