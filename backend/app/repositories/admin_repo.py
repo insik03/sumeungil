@@ -194,6 +194,37 @@ def set_inquiry_reply(
     return int(cur.rowcount)
 
 
+# --- 회원 (2026-08-23, 대표 지시 "닉네임 정도는 보고 싶은데") -------------------------
+#
+# email·google_sub·kakao_sub 는 **절대 SELECT 하지 않는다** — 이 목록은 "몇 명 가입했고
+# 닉네임이 뭔지" 정도의 가벼운 운영 현황용이지, 회원 개인정보 열람 기능이 아니다.
+# display_name 은 부록(app/api/auth.py `_sanitize_display_name`)에서 다듬어지고 본인이
+# `/mypage`에서 바꿀 수도 있어 사실상 닉네임과 같다.
+
+
+def list_users(conn: psycopg.Connection, *, limit: int, offset: int) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT display_name AS nickname, created_at, last_login_at,
+               CASE
+                   WHEN google_sub IS NOT NULL THEN 'google'
+                   WHEN kakao_sub  IS NOT NULL THEN 'kakao'
+                   ELSE 'unknown'
+               END AS provider
+          FROM users
+         ORDER BY created_at DESC, id DESC
+         LIMIT %s OFFSET %s
+        """,
+        (limit, offset),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def count_users(conn: psycopg.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()
+    return int(row["c"]) if row else 0
+
+
 # --- 통계 ---------------------------------------------------------------------
 
 
@@ -227,6 +258,10 @@ def stats(conn: psycopg.Connection, *, today_prefix: str) -> dict[str, int]:
         "courses_hidden": one("SELECT COUNT(*) AS c FROM shared_courses WHERE hidden = 1"),
         "inquiries_total": one("SELECT COUNT(*) AS c FROM inquiries"),
         "inquiries_new": one("SELECT COUNT(*) AS c FROM inquiries WHERE status = 'new'"),
+        "users_total": one("SELECT COUNT(*) AS c FROM users"),
+        "users_today": one(
+            "SELECT COUNT(*) AS c FROM users WHERE created_at >= %s", (today_prefix,)
+        ),
     }
 
 

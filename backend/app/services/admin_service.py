@@ -33,6 +33,8 @@ from ..schemas.admin import (
     AdminReviewItem,
     AdminReviewListResponse,
     AdminStatsResponse,
+    AdminUserItem,
+    AdminUserListResponse,
 )
 from ..security.admin_auth import AdminAuth
 from ..util.time import now_kst, to_iso_kst
@@ -152,6 +154,23 @@ async def list_inquiries(
     rows, total = await db.aread(_tx)
     return AdminInquiryListResponse(
         items=[_inquiry_item(r) for r in rows], total=total, limit=limit, offset=offset
+    )
+
+
+async def list_users(db: Database, *, limit: int, offset: int) -> AdminUserListResponse:
+    """회원 목록(2026-08-23, 대표 지시). email·외부 provider ID는 repo 단계에서부터
+    아예 SELECT 하지 않는다 — "몇 명 가입했고 닉네임이 뭔지" 가벼운 현황용이다."""
+    limit = _clamp(limit, 1, admin_repo.MAX_LIMIT)
+    offset = max(0, offset)
+
+    def _tx(conn: psycopg.Connection):
+        rows = admin_repo.list_users(conn, limit=limit, offset=offset)
+        total = admin_repo.count_users(conn)
+        return rows, total
+
+    rows, total = await db.aread(_tx)
+    return AdminUserListResponse(
+        items=[AdminUserItem(**r) for r in rows], total=total, limit=limit, offset=offset
     )
 
 

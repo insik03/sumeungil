@@ -129,6 +129,26 @@ class AdminInquiryListResponse(BaseModel):
     offset: int = 0
 
 
+class AdminUserItem(BaseModel):
+    """회원 1명(관리자 콘솔용, 2026-08-23 대표 지시 "닉네임 정도는 보고 싶은데").
+
+    email·google_sub·kakao_sub 는 절대 담지 않는다 — 이 화면은 "몇 명 가입했고
+    닉네임이 뭔지" 보는 용도지, 회원 개인정보 열람 기능이 아니다.
+    """
+
+    nickname: str
+    created_at: str
+    last_login_at: str
+    provider: Literal["google", "kakao", "unknown"]
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserItem] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 0
+    offset: int = 0
+
+
 class AdminInquiryReplyRequest(BaseModel):
     """`min_length`를 두지 않은 이유는 AdminLoginRequest.password와 같다 — `reply` 필드가
     Pydantic 필수(min_length>=1)면 **본문이 비었다는 이유만으로 인증 검사보다 먼저 422가
@@ -150,6 +170,8 @@ class AdminStatsResponse(BaseModel):
     inquiries_total: int = 0
     # 아직 답변하지 않은 문의 수 — 신고 대기(reports_pending)와 같은 자리에서 "처리할 일"로 쓴다.
     inquiries_new: int = 0
+    users_total: int = 0
+    users_today: int = 0
     # 신고가 몇 건 쌓이면 자동 숨김되는지(REVIEW_HIDE_REPORT_THRESHOLD, 기본 3).
     # 관리자 화면이 "자동 숨김"과 "운영자가 숨김"을 구분하는 데 쓴다:
     #   hidden && report_count >= 이 값  →  자동 숨김 (임계 도달로만 hidden 이 되고,

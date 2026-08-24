@@ -48,6 +48,7 @@ from ..schemas.admin import (
     AdminReviewListResponse,
     AdminSessionResponse,
     AdminStatsResponse,
+    AdminUserListResponse,
     CourseStatusFilter,
     InquiryStatusFilter,
     ReviewSortOption,
@@ -394,6 +395,24 @@ async def admin_reply_inquiry(
         )
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="admin/inquiries/reply")
+
+
+# --- 회원 (2026-08-23, 대표 지시 "닉네임 정도는 보고 싶은데") -------------------------
+
+
+@router.get("/users", response_model=AdminUserListResponse)
+async def admin_list_users(
+    request: Request,
+    limit: int = Query(default=admin_repo.DEFAULT_LIMIT, ge=1, le=admin_repo.MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    db: Database = Depends(get_database),
+):
+    """닉네임·가입일·마지막 로그인·로그인수단만. email·외부 provider ID는 응답에 없다."""
+    try:
+        _require_session(request)
+        return await admin_service.list_users(db, limit=limit, offset=offset)
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="admin/users/list")
 
 
 # --- 대시보드 ------------------------------------------------------------------

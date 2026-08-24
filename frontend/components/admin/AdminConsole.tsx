@@ -8,6 +8,7 @@ import {
   AdminInquiryItem,
   AdminReviewItem,
   AdminStats,
+  AdminUserItem,
   CourseStatusFilter,
   InquiryStatusFilter,
   ReviewSortOption,
@@ -19,6 +20,7 @@ import {
   fetchAdminInquiries,
   fetchAdminReviews,
   fetchAdminStats,
+  fetchAdminUsers,
   isAutoHidden,
   replyInquiry,
   setCourseHidden,
@@ -66,7 +68,9 @@ export default function AdminConsole({
   expiresAt: string;
   onSessionLost: () => void;
 }) {
-  const [tab, setTab] = useState<"reviews" | "courses" | "inquiries" | "traffic">("reviews");
+  const [tab, setTab] = useState<"reviews" | "courses" | "inquiries" | "users" | "traffic">(
+    "reviews",
+  );
   const [stats, setStats] = useState<AdminStats | null>(null);
 
   const [reviewStatus, setReviewStatus] = useState<ReviewStatusFilter>("reported");
@@ -81,6 +85,9 @@ export default function AdminConsole({
   const [inquiryStatus, setInquiryStatus] = useState<InquiryStatusFilter>("new");
   const [inquiries, setInquiries] = useState<AdminInquiryItem[] | null>(null);
   const [inquiryTotal, setInquiryTotal] = useState(0);
+
+  const [users, setUsers] = useState<AdminUserItem[] | null>(null);
+  const [userTotal, setUserTotal] = useState(0);
 
   const [listError, setListError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -152,6 +159,18 @@ export default function AdminConsole({
     }
   }, [inquiryStatus, guard]);
 
+  const loadUsers = useCallback(async () => {
+    setListError(false);
+    setUsers(null);
+    try {
+      const res = await fetchAdminUsers({ limit: PAGE_SIZE });
+      setUsers(res.items);
+      setUserTotal(res.total);
+    } catch (e) {
+      if (!guard(e)) setListError(true);
+    }
+  }, [guard]);
+
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
@@ -164,6 +183,9 @@ export default function AdminConsole({
   useEffect(() => {
     if (tab === "inquiries") void loadInquiries();
   }, [tab, loadInquiries]);
+  useEffect(() => {
+    if (tab === "users") void loadUsers();
+  }, [tab, loadUsers]);
 
   async function toggleReview(item: AdminReviewItem) {
     setBusyId(`r${item.id}`);
@@ -259,6 +281,7 @@ export default function AdminConsole({
     if (tab === "reviews") void loadReviews();
     else if (tab === "courses") void loadCourses();
     else if (tab === "inquiries") void loadInquiries();
+    else if (tab === "users") void loadUsers();
   }
 
   async function doLogout() {
@@ -308,6 +331,14 @@ export default function AdminConsole({
             <span className="admin-stat">
               오늘 등록 <b>{stats.reviews_today}</b>
             </span>
+            <button
+              type="button"
+              className="admin-stat admin-stat--pill"
+              onClick={() => setTab("users")}
+            >
+              회원 <b>{stats.users_total}</b>
+              {stats.users_today > 0 ? ` · 오늘 +${stats.users_today}` : ""}
+            </button>
             <span className="admin-stat">
               후기 <b>{stats.reviews_total}</b> · 숨김 <b>{stats.reviews_hidden}</b>
             </span>
@@ -368,6 +399,13 @@ export default function AdminConsole({
         </button>
         <button
           type="button"
+          className={`admin-tab ${tab === "users" ? "is-active" : ""}`}
+          onClick={() => setTab("users")}
+        >
+          회원
+        </button>
+        <button
+          type="button"
           className={`admin-tab ${tab === "traffic" ? "is-active" : ""}`}
           onClick={() => setTab("traffic")}
         >
@@ -375,7 +413,7 @@ export default function AdminConsole({
         </button>
 
         <span className="admin-tabs__filters">
-          {tab === "traffic" ? null : tab === "inquiries" ? (
+          {tab === "traffic" || tab === "users" ? null : tab === "inquiries" ? (
             <select
               className="admin-select"
               value={inquiryStatus}
@@ -497,29 +535,44 @@ export default function AdminConsole({
               <p className="admin-list__count">{courses.length}건 표시 · 전체 {courseTotal}건</p>
             </>
           )
-        ) : inquiries === null ? (
+        ) : tab === "inquiries" ? (
+          inquiries === null ? (
+            <AdminSkeleton />
+          ) : inquiries.length === 0 ? (
+            <div className="admin-empty">
+              <p>
+                {inquiryStatus === "new"
+                  ? "아직 답변할 문의가 없어요."
+                  : inquiryStatus === "resolved"
+                    ? "답변한 문의가 없어요."
+                    : "아직 들어온 문의가 없어요."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {inquiries.map((i) => (
+                <InquiryRow
+                  key={i.id}
+                  item={i}
+                  busy={busyId === `i${i.id}`}
+                  onReply={(reply) => submitReply(i, reply)}
+                />
+              ))}
+              <p className="admin-list__count">{inquiries.length}건 표시 · 전체 {inquiryTotal}건</p>
+            </>
+          )
+        ) : users === null ? (
           <AdminSkeleton />
-        ) : inquiries.length === 0 ? (
+        ) : users.length === 0 ? (
           <div className="admin-empty">
-            <p>
-              {inquiryStatus === "new"
-                ? "아직 답변할 문의가 없어요."
-                : inquiryStatus === "resolved"
-                  ? "답변한 문의가 없어요."
-                  : "아직 들어온 문의가 없어요."}
-            </p>
+            <p>아직 가입한 회원이 없어요.</p>
           </div>
         ) : (
           <>
-            {inquiries.map((i) => (
-              <InquiryRow
-                key={i.id}
-                item={i}
-                busy={busyId === `i${i.id}`}
-                onReply={(reply) => submitReply(i, reply)}
-              />
+            {users.map((u, idx) => (
+              <UserRow key={`${u.nickname}-${u.created_at}-${idx}`} item={u} />
             ))}
-            <p className="admin-list__count">{inquiries.length}건 표시 · 전체 {inquiryTotal}건</p>
+            <p className="admin-list__count">{users.length}명 표시 · 전체 {userTotal}명</p>
           </>
         )}
       </section>
@@ -717,6 +770,25 @@ function InquiryRow({
           </button>
         </div>
       </div>
+    </article>
+  );
+}
+
+/** 회원 1명. 조회 전용 — 숨기기/삭제 같은 조작 버튼이 없다(계정 관리 기능이 아니다). */
+function UserRow({ item }: { item: AdminUserItem }) {
+  return (
+    <article className="admin-row">
+      <div className="admin-row__head">
+        <span className="admin-row__name">{item.nickname}</span>
+        <span className="admin-row__badges">
+          <span className="admin-badge">
+            {item.provider === "google" ? "구글" : item.provider === "kakao" ? "카카오" : "-"}
+          </span>
+        </span>
+      </div>
+      <p className="admin-row__sub">
+        가입 {fmtDateTime(item.created_at)} · 마지막 로그인 {fmtDateTime(item.last_login_at)}
+      </p>
     </article>
   );
 }

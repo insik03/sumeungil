@@ -79,6 +79,8 @@ export interface AdminStats {
   courses_hidden: number;
   inquiries_total: number;
   inquiries_new: number;
+  users_total: number;
+  users_today: number;
   /**
    * 신고 몇 건이면 자동 숨김되는지. 서버 설정값(`REVIEW_HIDE_REPORT_THRESHOLD`, 기본 3)이다.
    * **화면에 3을 박지 말고 반드시 이 값을 쓸 것** — env 로 바뀌면 박아둔 숫자는 조용히 틀려진다.
@@ -101,6 +103,21 @@ export interface AdminInquiryItem {
 
 export interface AdminInquiryList {
   items: AdminInquiryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** email·외부 provider ID는 서버가 애초에 담지 않는다(app/schemas/admin.py AdminUserItem). */
+export interface AdminUserItem {
+  nickname: string;
+  created_at: string;
+  last_login_at: string;
+  provider: "google" | "kakao" | "unknown";
+}
+
+export interface AdminUserList {
+  items: AdminUserItem[];
   total: number;
   limit: number;
   offset: number;
@@ -308,6 +325,21 @@ export async function fetchAdminInquiries(params?: {
     `/inquiries${q ? `?${q}` : ""}`,
     { method: "GET" },
     "문의 목록을 불러오지 못했습니다.",
+  );
+}
+
+export async function fetchAdminUsers(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<AdminUserList> {
+  const qs = new URLSearchParams();
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  const q = qs.toString();
+  return adminFetch<AdminUserList>(
+    `/users${q ? `?${q}` : ""}`,
+    { method: "GET" },
+    "회원 목록을 불러오지 못했습니다.",
   );
 }
 
