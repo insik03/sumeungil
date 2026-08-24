@@ -36,7 +36,9 @@ const NAV_ITEMS: NavItem[] = [
     href: "/recommend",
     children: [
       { label: "맞춤 추천", href: "/recommend" },
-      { label: "AI 취향분석", href: "/onboarding" },
+      // 2026-08-24(대표 지시) — "여행지 추천" 드롭다운에서 "AI 취향분석"(/onboarding) 항목 제거.
+      // §47.7과 같은 패턴: 라우트 자체(/onboarding)는 그대로 두고(코스짜기 의견입력에서 재사용
+      // 중) 이 메뉴 진입점만 뺀다.
       { label: "지역별 여행", href: "/regions" },
       { label: "테마별 여행", href: "/themes" },
       { label: "계절 여행", href: "/seasonal" },

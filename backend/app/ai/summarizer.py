@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -28,6 +29,14 @@ from . import injection_guard
 logger = logging.getLogger("sumeungil.ai.summarizer")
 
 MAX_SUMMARY_LINES = 3
+
+# 2026-08-24(대표 지적 "코스 짜는 시간이 너무 오래 걸린다" 실측 조사로 발견): 로컬 Ollama는
+# CPU 전용·2코어 VM에서 도는 단일 인스턴스라 진짜 동시성이 없다 — 코스 요청이 겹치면
+# (같은 사용자가 재시도하거나 여러 요청이 겹치면) 여러 채팅 호출이 자원을 나눠 쓰다가
+# 전부 타임아웃으로 죽는 걸 실측(로그에 4건 동시 실패 확인). 앱 프로세스 레벨에서
+# 한 번에 1건만 Ollama에 보내도록 줄을 세운다 — 응답 속도 자체는 안 빨라지지만
+# "여러 개가 동시에 다 실패"하는 최악의 경우를 없애 개별 요청의 성공률을 되찾는다.
+_OLLAMA_CONCURRENCY = asyncio.Semaphore(1)
 # 요약 결과 한 줄이 과도하게 길어지는 것을 방지(정형 표시용 상한). 초과분은 잘라낸다.
 _MAX_LINE_CHARS = 120
 # 모델이 붙일 수 있는 머리 기호(불릿/번호)를 제거해 평문 3줄로 정규화한다.
@@ -286,8 +295,9 @@ class OllamaSummarizer(Summarizer):
             # 온보딩 태그추출과 동일한 Ollama JSON 모드. tools 등 다른 기능 파라미터는 주지 않는다.
             payload["format"] = "json"
         try:
-            async with httpx.AsyncClient(timeout=timeout_sec) as client:
-                resp = await client.post(f"{self._base_url}/api/chat", json=payload)
+            async with _OLLAMA_CONCURRENCY:
+                async with httpx.AsyncClient(timeout=timeout_sec) as client:
+                    resp = await client.post(f"{self._base_url}/api/chat", json=payload)
         except httpx.HTTPError as exc:
             logger.info("%s Ollama 호출 실패(요약 생략): %s", tag, exc)
             return None

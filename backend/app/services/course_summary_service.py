@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 
 from ..ai import injection_guard
 from ..ai.summarizer import Summarizer
@@ -123,19 +124,34 @@ async def build_course_ai_pack(
 
     title: str | None = None
     summary: str | None = None
+    pack_started = time.monotonic()
     try:
         title, summary = await summarizer.summarize_course_pack(course_text)
     except Exception as exc:  # noqa: BLE001 — 생성 실패가 코스 응답을 막지 않는다
         logger.info("코스 제목·요약 생략(요약기 오류): %s", exc)
         title, summary = None, None
+    pack_elapsed = time.monotonic() - pack_started
 
-    if not summary:
-        # JSON 모드가 흔들린 경우에만 평문 요약 1회 폴백(정상 경로에서는 호출 1회 유지).
+    # 2026-08-24(대표 지적 "코스 짜는 시간이 너무 오래 걸린다" 실측 조사로 발견):
+    # pack 호출이 타임아웃까지 꽉 채우고 실패했다는 건 로컬 LLM(CPU 전용, 무GPU) 서버가
+    # 이미 느리거나 다른 요청과 자원을 다투고 있다는 뜻 — 같은 상황에서 평문 폴백을 또
+    # 최대 타임아웃만큼 기다리면 최악의 경우 한 코스당 요약만으로 40초(20+20)가 든다
+    # (실측 로그: 14:06:06 요청 시작 → 14:06:46 응답, 사용자 체감 그대로 재현됨).
+    # pack 이 타임아웃 근처까지 걸렸으면 "형식이 안 맞아서 실패"가 아니라 "서버가 못 따라옴"
+    # 쪽이 훨씬 그럴듯하므로, 그때는 폴백을 생략해 실패를 빨리 인정한다(ai_summary:null,
+    # 코스 자체는 정상 응답 — 기존 정직 규칙 그대로). pack 이 빠르게 실패했을 때만
+    # (형식 문제일 가능성이 높을 때만) 평문 폴백을 시도한다.
+    fallback_worth_trying = not summary and pack_elapsed < settings.course_summary_timeout_sec * 0.7
+    if fallback_worth_trying:
         try:
             summary = await summarizer.summarize_course(course_text)
         except Exception as exc:  # noqa: BLE001
             logger.info("코스 ai_summary 생략(폴백 요약기 오류): %s", exc)
             summary = None
+    elif not summary:
+        logger.info(
+            "코스 ai_summary 폴백 생략(1차 호출 %.1fs 소요 — 타임아웃성으로 판단)", pack_elapsed
+        )
 
     if summary:
         try:

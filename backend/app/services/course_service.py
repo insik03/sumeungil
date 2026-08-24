@@ -124,8 +124,11 @@ async def _leg_between(a, b, cache: Cache) -> CourseLeg:
     if cached is not None:
         return CourseLeg(**cached)
 
-    walk = await tmap_client.fetch_pedestrian_route(sx, sy, ex, ey)
-    car = await tmap_client.fetch_car_route(sx, sy, ex, ey)
+    # 도보/차 경로는 서로 독립적인 호출이라 동시에 보낸다(순차 대비 최대 2배 단축).
+    walk, car = await asyncio.gather(
+        tmap_client.fetch_pedestrian_route(sx, sy, ex, ey),
+        tmap_client.fetch_car_route(sx, sy, ex, ey),
+    )
 
     # path 는 보행자 경로선 우선(숨은길 도보 컨셉), 없으면 자동차 경로선.
     path = None
@@ -216,9 +219,16 @@ async def build_course_response(
         card = recommend_service._to_card(sc)
         course_spots.append(CourseSpot(**card.model_dump(), slot_label=label))
 
-    legs: list[CourseLeg] = []
-    for i in range(len(chosen) - 1):
-        legs.append(await _leg_between(chosen[i][1].spot, chosen[i + 1][1].spot, cache))
+    # 구간(leg)끼리도 서로 독립적이라 전부 동시에 보낸다(스팟 5곳=4구간 기준 순차 대비
+    # 최대 4배 단축 — 대표 실사용 "코스 짜는 시간이 너무 오래 걸린다" 지적으로 발견·수정).
+    legs: list[CourseLeg] = list(
+        await asyncio.gather(
+            *(
+                _leg_between(chosen[i][1].spot, chosen[i + 1][1].spot, cache)
+                for i in range(len(chosen) - 1)
+            )
+        )
+    )
 
     region = RecommendRegion(region_code=region_code, region_name=_region_name(region_code))
     # 부록 I.11/I.12: arrange 와 **같은 함수**로 코스 제목·요약(LLM 1회) + 스텝 사진/발췌(캐시 재사용).
