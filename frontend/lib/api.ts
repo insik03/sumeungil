@@ -823,9 +823,10 @@ export interface CourseLegMode {
 }
 
 /**
- * 구간 이동 정보. Tmap 실패 구간은 walk/car/path가 전부 null — "이동 정보 없음"으로 표시하고
- * 지어내지 않는다. path 좌표는 WGS84 [lng, lat] 순서(GeoJSON 관례)다 — Tmapv2.LatLng은
- * (lat, lng) 순서를 받으므로 지도에 그릴 때 반드시 뒤집는다(coord[1], coord[0]).
+ * 구간 이동 정보. Tmap(백엔드 경로탐색 API) 실패 구간은 walk/car/path가 전부 null —
+ * "이동 정보 없음"으로 표시하고 지어내지 않는다. path 좌표는 WGS84 [lng, lat] 순서
+ * (GeoJSON 관례)다 — naver.maps.LatLng은 (lat, lng) 순서를 받으므로 지도에 그릴 때
+ * 반드시 뒤집는다(coord[1], coord[0]).
  */
 export interface CourseLeg {
   walk: CourseLegMode | null;

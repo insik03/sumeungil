@@ -5,167 +5,108 @@ import { CourseLeg, CourseSpot } from "../../lib/api";
 import { CATEGORY_META } from "../recommend/constants";
 
 /**
- * Tmap JS API v2 SDK는 타입 선언이 없다 — SpotMap.tsx와 동일하게 window.Tmapv2를 최소 any로
- * 선언해 SDK 표면만 통과시키고, any는 이 파일 밖으로 새어나가지 않게 한다.
- * SpotMap.tsx는 지시서상 수정 대상이 아니라서(읽기 전용) 아래 SDK 로딩 shim은
- * SpotMap.tsx의 loadTmapSdk/loadRealSdkViaWriteShim 패턴을 그대로 참고해 이 파일 안에서 재구현했다
- * (모듈 스코프 로딩 promise를 공용 유틸로 뽑으면 SpotMap.tsx도 같이 고쳐야 해서 이번 스코프에서는 분리 유지).
+ * 2026-08-24(대표 지시) — Tmap에서 네이버 지도로 교체.
+ *
+ * SpotMap.tsx와 같은 이유: Tmap appKey가 IP 화이트리스트(서버 IP만 허용)라
+ * 실제 사용자 브라우저에서는 지도가 영구히 안 뜨는 구조적 문제였다(대표 실측 재확인:
+ * SpotMap.tsx 교체 후에도 /course는 여전히 안 뜬다고 보고 — 이 파일이 SpotMap.tsx와
+ * 별개로 자체 Tmap 로더를 갖고 있어서 그때 같이 안 바뀐 것).
+ *
+ * 경로선(legs[].path)은 백엔드가 Tmap 경로탐색 API로 이미 좌표 배열을 만들어 보내주므로
+ * 그 좌표를 그리는 것뿐이다 — 어떤 지도 SDK로 그리든 상관없다. 네이버 지도의
+ * naver.maps.Polyline으로 동일하게 그린다.
+ *
+ * 네이버 지도 SDK는 Tmap과 달리 부트스트랩이 document.write를 안 쓴다 — 일반
+ * <script src> 로드 후 onload 시점에 이미 window.naver.maps 가 전부 채워져 있다.
  */
 declare global {
   interface Window {
-    Tmapv2: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    naver: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   }
 }
 
-const TMAP_SDK_ID = "tmap-sdk-script";
-const TMAP_SDK_BASE = "https://apis.openapi.sk.com/tmap/jsv2?version=1&appKey=";
-const TMAP_READY_TIMEOUT_MS = 12000;
+const NAVER_SDK_ID = "naver-map-sdk-script";
+const NAVER_SDK_BASE = "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=";
+const NAVER_READY_TIMEOUT_MS = 12000;
 
-function tmapClassesReady(): boolean {
-  const T = typeof window !== "undefined" ? window.Tmapv2 : undefined;
-  return !!T && typeof T.Map === "function" && typeof T.LatLng === "function";
-}
-
-function loadRealSdkViaWriteShim(bootstrapSrc: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const capturedSrcs: string[] = [];
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    const originalWrite = document.write;
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    const originalWriteln = document.writeln;
-
-    const capture = (markup: string) => {
-      const re = /<script[^>]+src=['"]([^'"]+)['"]/gi;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(markup)) !== null) capturedSrcs.push(m[1]);
-    };
-    document.write = capture as typeof document.write;
-    document.writeln = capture as typeof document.writeln;
-
-    const restore = () => {
-      document.write = originalWrite;
-      document.writeln = originalWriteln;
-    };
-
-    const appendedScripts: HTMLScriptElement[] = [];
-    let settled = false;
-    let bootstrapWatchdog = 0;
-
-    const fail = (msg: string) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(bootstrapWatchdog);
-      restore();
-      appendedScripts.forEach((s) => {
-        try {
-          s.remove();
-        } catch {
-          /* noop */
-        }
-      });
-      reject(new Error(msg));
-    };
-    const succeed = () => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(bootstrapWatchdog);
-      restore();
-      resolve();
-    };
-
-    const waitForReady = () => {
-      const start = Date.now();
-      const tick = () => {
-        if (settled) return;
-        if (tmapClassesReady()) {
-          succeed();
-        } else if (Date.now() - start > TMAP_READY_TIMEOUT_MS) {
-          fail("tmap sdk classes not ready (timeout)");
-        } else {
-          window.setTimeout(tick, 100);
-        }
-      };
-      tick();
-    };
-
-    const appendCaptured = (idx: number) => {
-      if (settled) return;
-      if (idx >= capturedSrcs.length) {
-        waitForReady();
-        return;
-      }
-      const real = document.createElement("script");
-      real.src = capturedSrcs[idx];
-      real.async = false;
-      real.onload = () => appendCaptured(idx + 1);
-      real.onerror = () => fail("tmap real sdk load error");
-      appendedScripts.push(real);
-      document.head.appendChild(real);
-    };
-
-    const bootstrap = document.createElement("script");
-    bootstrap.id = TMAP_SDK_ID;
-    bootstrap.src = bootstrapSrc;
-    bootstrap.async = true;
-    bootstrap.onload = () => {
-      if (settled) return;
-      window.clearTimeout(bootstrapWatchdog);
-      restore();
-      if (capturedSrcs.length === 0) {
-        if (tmapClassesReady()) succeed();
-        else fail("tmap bootstrap injected no sdk script");
-        return;
-      }
-      appendCaptured(0);
-    };
-    bootstrap.onerror = () => fail("tmap sdk bootstrap load error");
-    bootstrapWatchdog = window.setTimeout(
-      () => fail("tmap sdk bootstrap load timeout"),
-      TMAP_READY_TIMEOUT_MS
-    );
-    appendedScripts.push(bootstrap);
-    document.head.appendChild(bootstrap);
-  });
+function naverMapsReady(): boolean {
+  const n = typeof window !== "undefined" ? window.naver : undefined;
+  return !!n && !!n.maps && typeof n.maps.Map === "function" && typeof n.maps.LatLng === "function";
 }
 
 const KOREA_FALLBACK_CENTER = { lat: 36.5, lng: 127.8 };
 
 type SdkStatus = "loading" | "ready" | "error";
 
+/**
+ * 모듈 스코프 로딩 Promise. SpotMap.tsx의 것과는 별개 변수지만, 둘 다 같은
+ * script id(NAVER_SDK_ID)를 쓰므로 어느 쪽이 먼저 로드해도 다른 쪽은 기존 <script>를
+ * 감지해 재사용한다(중복 주입 없음).
+ */
 let sdkLoadPromise: Promise<void> | null = null;
 
-function loadTmapSdk(): Promise<void> {
+function loadNaverMapsSdk(): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("no window"));
   }
-  if (tmapClassesReady()) {
+  if (naverMapsReady()) {
     return Promise.resolve();
   }
   if (sdkLoadPromise) {
     return sdkLoadPromise;
   }
 
-  const appKey = process.env.NEXT_PUBLIC_TMAP_APP_KEY;
-  if (!appKey) {
-    return Promise.reject(new Error("NEXT_PUBLIC_TMAP_APP_KEY가 설정되지 않았습니다."));
+  const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
+  if (!clientId) {
+    return Promise.reject(new Error("NEXT_PUBLIC_NAVER_MAP_CLIENT_ID가 설정되지 않았습니다."));
   }
 
-  const bootstrapSrc = `${TMAP_SDK_BASE}${encodeURIComponent(appKey)}`;
-
-  sdkLoadPromise = (async () => {
-    const existing = document.getElementById(TMAP_SDK_ID);
+  sdkLoadPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById(NAVER_SDK_ID);
     if (existing) {
       const start = Date.now();
-      while (!tmapClassesReady()) {
-        if (Date.now() - start > TMAP_READY_TIMEOUT_MS) {
-          throw new Error("tmap sdk classes not ready (timeout, shared)");
+      const poll = () => {
+        if (naverMapsReady()) {
+          resolve();
+          return;
         }
-        await new Promise((r) => window.setTimeout(r, 100));
-      }
+        if (Date.now() - start > NAVER_READY_TIMEOUT_MS) {
+          reject(new Error("naver maps sdk not ready (timeout, shared)"));
+          return;
+        }
+        window.setTimeout(poll, 100);
+      };
+      poll();
       return;
     }
-    await loadRealSdkViaWriteShim(bootstrapSrc);
-  })().catch((err) => {
+
+    const script = document.createElement("script");
+    script.id = NAVER_SDK_ID;
+    script.src = `${NAVER_SDK_BASE}${encodeURIComponent(clientId)}`;
+    script.async = true;
+    let settled = false;
+    const watchdog = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      script.remove();
+      reject(new Error("naver maps sdk load timeout"));
+    }, NAVER_READY_TIMEOUT_MS);
+    script.onload = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(watchdog);
+      if (naverMapsReady()) resolve();
+      else reject(new Error("naver maps sdk loaded but classes not ready"));
+    };
+    script.onerror = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(watchdog);
+      script.remove();
+      reject(new Error("naver maps sdk load error"));
+    };
+    document.head.appendChild(script);
+  }).catch((err) => {
     sdkLoadPromise = null;
     throw err;
   });
@@ -293,7 +234,7 @@ export default function CourseMap({ spots, legs, regionLabel }: CourseMapProps) 
 
   useEffect(() => {
     let cancelled = false;
-    loadTmapSdk()
+    loadNaverMapsSdk()
       .then(() => {
         if (!cancelled) setSdkStatus("ready");
       })
@@ -308,11 +249,9 @@ export default function CourseMap({ spots, legs, regionLabel }: CourseMapProps) 
   useEffect(() => {
     if (sdkStatus !== "ready" || !mapDivRef.current || mapRef.current) return;
     try {
-      const { Tmapv2 } = window;
-      mapRef.current = new Tmapv2.Map(mapDivRef.current, {
-        center: new Tmapv2.LatLng(KOREA_FALLBACK_CENTER.lat, KOREA_FALLBACK_CENTER.lng),
-        width: "100%",
-        height: "100%",
+      const { naver } = window;
+      mapRef.current = new naver.maps.Map(mapDivRef.current, {
+        center: new naver.maps.LatLng(KOREA_FALLBACK_CENTER.lat, KOREA_FALLBACK_CENTER.lng),
         zoom: 12,
       });
     } catch {
@@ -323,7 +262,7 @@ export default function CourseMap({ spots, legs, regionLabel }: CourseMapProps) 
   // 스팟/구간이 바뀔 때마다 마커+경로선을 다시 그리고 bounds에 재fit한다.
   useEffect(() => {
     if (sdkStatus !== "ready" || !mapRef.current) return;
-    const { Tmapv2 } = window;
+    const { naver } = window;
     const map = mapRef.current;
 
     markersRef.current.forEach((m) => {
@@ -344,7 +283,7 @@ export default function CourseMap({ spots, legs, regionLabel }: CourseMapProps) 
     polylinesRef.current = [];
     if (infoWindowRef.current) {
       try {
-        infoWindowRef.current.setMap(null);
+        infoWindowRef.current.close();
       } catch {
         /* noop */
       }
@@ -358,46 +297,48 @@ export default function CourseMap({ spots, legs, regionLabel }: CourseMapProps) 
     if (validEntries.length === 0) return;
 
     try {
-      const bounds = new Tmapv2.LatLngBounds();
+      const bounds = new naver.maps.LatLngBounds();
 
       validEntries.forEach(({ spot, order }) => {
-        const position = new Tmapv2.LatLng(spot.location.lat, spot.location.lng);
+        const position = new naver.maps.LatLng(spot.location.lat, spot.location.lng);
         bounds.extend(position);
 
         const level = spot.congestion?.level ?? "unknown";
-        const marker = new Tmapv2.Marker({
+        const marker = new naver.maps.Marker({
           position,
-          icon: buildOrderMarkerIconUrl(order, level),
-          iconSize: new Tmapv2.Size(34, 34),
+          icon: {
+            url: buildOrderMarkerIconUrl(order, level),
+            size: new naver.maps.Size(34, 34),
+            scaledSize: new naver.maps.Size(34, 34),
+            anchor: new naver.maps.Point(17, 17),
+          },
           map,
         });
 
-        marker.addListener("click", () => {
+        naver.maps.Event.addListener(marker, "click", () => {
           if (infoWindowRef.current) {
             try {
-              infoWindowRef.current.setMap(null);
+              infoWindowRef.current.close();
             } catch {
               /* noop */
             }
           }
-          infoWindowRef.current = new Tmapv2.InfoWindow({
-            position,
+          infoWindowRef.current = new naver.maps.InfoWindow({
             content: buildPopupContent(spot, order),
-            type: 2,
-            map,
           });
+          infoWindowRef.current.open(map, marker);
         });
 
         markersRef.current.push(marker);
       });
 
-      // legs[].path 좌표는 [lng, lat](WGS84) — Tmapv2.LatLng은 (lat, lng) 순서라 뒤집어서 넣는다.
-      // path가 null인 구간(Tmap 실패)은 그리지 않는다(지어내지 않음, 타임라인의 "이동 정보 없음"과 일관).
+      // legs[].path 좌표는 [lng, lat](WGS84) — naver.maps.LatLng은 (lat, lng) 순서라 뒤집어서 넣는다.
+      // path가 null인 구간(Tmap 경로탐색 실패)은 그리지 않는다(지어내지 않음, 타임라인의 "이동 정보 없음"과 일관).
       legs.forEach((leg) => {
         if (!leg.path || leg.path.length < 2) return;
-        const linePath = leg.path.map((coord) => new Tmapv2.LatLng(coord[1], coord[0]));
-        linePath.forEach((p: unknown) => bounds.extend(p));
-        const polyline = new Tmapv2.Polyline({
+        const linePath = leg.path.map((coord) => new naver.maps.LatLng(coord[1], coord[0]));
+        linePath.forEach((p: unknown) => bounds.extend(p as never));
+        const polyline = new naver.maps.Polyline({
           path: linePath,
           strokeColor: "#2b82ee",
           strokeWeight: 5,
@@ -408,7 +349,7 @@ export default function CourseMap({ spots, legs, regionLabel }: CourseMapProps) 
       });
 
       if (validEntries.length === 1) {
-        map.setCenter(new Tmapv2.LatLng(validEntries[0].spot.location.lat, validEntries[0].spot.location.lng));
+        map.setCenter(new naver.maps.LatLng(validEntries[0].spot.location.lat, validEntries[0].spot.location.lng));
         map.setZoom(15);
       } else {
         map.fitBounds(bounds);

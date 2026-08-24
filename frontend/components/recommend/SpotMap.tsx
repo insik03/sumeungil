@@ -12,9 +12,11 @@ import { CATEGORY_META } from "./constants";
  * curl하면 200, 다른 IP에서 하면 403 ACCESS_DENIED — 실측 확인). 네이버 지도는
  * **도메인(Web 서비스 URL) 화이트리스트**라 이 문제가 구조적으로 없다.
  *
- * AI 코스짜기 지도(`course/CourseMap.tsx`)는 그대로 Tmap — 백엔드가 실제 Tmap
- * 경로탐색 API로 코스를 만들기 때문에 그 경로선을 그리려면 Tmap이 계속 필요하다.
- * 여기(추천 화면, 마커 표시 전용)는 Tmap 고유 기능에 안 걸려 있어서 교체 범위가 작다.
+ * AI 코스짜기 지도(`course/CourseMap.tsx`)도 같은 이유로 네이버 지도로 교체했다(최초엔
+ * 여기만 바꾸고 그쪽을 "경로탐색 API 때문에 Tmap 유지"로 남겨뒀었는데, 그건 착각이었다 —
+ * 경로탐색(백엔드가 Tmap API로 좌표 배열을 만드는 것)과 그 좌표를 브라우저에서 그리는 것은
+ * 별개라 지도 SDK를 자유롭게 바꿀 수 있었다. 대표가 코스 화면에서도 지도가 안 뜬다고
+ * 재확인해줘서 뒤늦게 같이 고쳤다.
  *
  * 네이버 지도 SDK는 Tmap과 달리 부트스트랩이 document.write를 안 쓴다 — 일반
  * <script src> 로드 후 onload 시점에 이미 window.naver.maps 가 전부 채워져 있다.
