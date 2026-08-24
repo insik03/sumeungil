@@ -15,7 +15,18 @@ venv/
 
 # 로컬 개발용 SQLite (부록 R) — 사용자 데이터. 절대 커밋 금지.
 # 배포본은 컨테이너 볼륨(sumeungil-data)에 있고, 이 경로는 개발 PC 전용이다.
-data/
+#
+# !!! 함정(2026-08-24 실측 발견) !!! 예전엔 이 규칙이 그냥 `data/`였는데, 그 패턴은
+# "어디에 있든 이름이 data인 디렉터리"에 전부 매칭돼서 app/spots/data/(스팟 시드
+# 12.7MB 등 런타임 필수 애플리케이션 데이터, SQLite와 무관)까지 통째로 git에서
+# 빠뜨리고 있었다. AWS 시절엔 rsync/tar+scp로 배포해서 git 추적 여부와 무관하게
+# 로컬 파일이 전부 서버로 그대로 복사돼 문제가 안 드러났는데, NAVER 이전 후
+# git clone 배포로 바뀌면서 이 파일이 서버에 아예 없는 상태가 됐다 — 추천 API가
+# 전 지역에서 계속 빈 배열을 반환하고 있었다(실측: region_counts에 21,019개
+# 스팟이 있는데 실제 응답은 0건). `/data/`(맨 앞 슬래시)로 좁혀서 backend/data/
+# (SQLite가 실제로 있는 경로, config.py의 SQLITE_PATH 기본값과 일치)만 정확히
+# 가리키게 한다 — app/spots/data/ 같은 다른 data/ 디렉터리는 더 이상 안 걸린다.
+/data/
 *.db
 *.db-wal
 *.db-shm
