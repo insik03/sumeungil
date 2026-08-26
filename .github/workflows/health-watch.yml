@@ -52,6 +52,12 @@ jobs:
 
           state="down"
           detail=""
+          # cause/action: 대표가 "왜 그런지·어떻게 됐고·내가 뭘 해야하는지" 알림에 그대로
+          # 실리길 원해서(2026-08-24 지시) 원인별로 미리 사람이 읽을 설명을 붙여둔다.
+          # action=none  → 외부 원인, 보통 자동 복구, 대표가 할 일 없음
+          # action=check → 우리 쪽 문제일 가능성, 반복되면 개발팀(오케스트레이터) 확인 필요
+          cause=""
+          action="check"
           if [ "$code" = "200" ]; then
             st=$(jq -r '.status // "unknown"' /tmp/health.json 2>/dev/null || echo "unknown")
             if [ "$st" = "ok" ]; then
@@ -59,26 +65,49 @@ jobs:
               detail="정상"
             else
               state="degraded"
+              upstream=$(jq -r '.checks.upstream_kto // "unknown"' /tmp/health.json 2>/dev/null || echo "unknown")
+              cache_st=$(jq -r '.checks.cache // "unknown"' /tmp/health.json 2>/dev/null || echo "unknown")
               detail=$(jq -r '"status=\(.status) · 설정=\(.checks.config) · 공공데이터=\(.checks.upstream_kto) · 캐시=\(.checks.cache)"' \
                        /tmp/health.json 2>/dev/null || echo "status=$st")
+              if [ "$upstream" = "fail" ] && [ "$cache_st" != "fail" ]; then
+                cause="원인: 한국관광공사 공공데이터 API(관광지 혼잡도 원천)가 일시적으로 응답하지 않습니다. 저희가 붙여 쓰는 무료 외부 공공 API라 가끔 흔들리고, 보통 몇 분 안에 저쪽에서 자동으로 복구됩니다."
+                action="none"
+              elif [ "$cache_st" = "fail" ]; then
+                cause="원인: 서버 내부 캐시 오류입니다. 외부 요인이 아니라 우리 서버 쪽 문제일 가능성이 높습니다."
+                action="check"
+              else
+                cause="원인: 설정 점검(config) 이상입니다 — 배포 직후라면 배포 문제일 수 있습니다."
+                action="check"
+              fi
             fi
           elif [ "$code" = "000" ]; then
             detail="응답 없음 — 연결 실패 또는 10초 타임아웃 (서버·nginx 다운 또는 DNS 문제)"
+            cause="원인: 서버 자체가 응답하지 않습니다(프로세스 다운·nginx 다운·DNS 문제 중 하나일 가능성). 외부 원인이 아니라 우리 서버 쪽 문제입니다."
+            action="check"
           else
             detail="HTTP $code 응답 — 서버는 살아 있으나 헬스체크가 정상 응답하지 않음"
+            cause="원인: 서버 프로세스는 떠 있지만 정상 응답을 못 하고 있습니다."
+            action="check"
           fi
 
           # **stdout 에도 반드시 남긴다.** 요약($GITHUB_STEP_SUMMARY)은 파일이라
           # `gh run view --log` 에 안 나온다. 사후에 "그때 뭐가 fail 이었나"를 CLI 로
-          # 확인하려면 stdout 에 있어야 한다(2026-08-18 실제로 이것 때문에 헤맴).
+          # 확인하려면 stdout 에 있어야 한다(2026-08-18 실제로 이것 때문에 헤맴). 복구 알림도
+          # 이 줄을 그대로 읽어("직전 실행 상세 조회" 스텝) "뭐가 문제였는지"를 함께 보낸다.
           echo "판정: 상태=$state / $detail"
           echo "원본 응답: $(cat /tmp/health.json 2>/dev/null | head -c 400)"
 
           echo "상태=$state / $detail" >> "$GITHUB_STEP_SUMMARY"
           echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "action=$action" >> "$GITHUB_OUTPUT"
           {
             echo "detail<<__EOD__"
             echo "$detail"
+            echo "__EOD__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "cause<<__EOD__"
+            echo "$cause"
             echo "__EOD__"
           } >> "$GITHUB_OUTPUT"
 
@@ -90,10 +119,26 @@ jobs:
         run: |
           set -uo pipefail
           # 이번 실행은 아직 completed 가 아니므로 목록의 첫 항목이 '직전 실행'이다.
-          prev=$(gh api "repos/${REPO}/actions/workflows/health-watch.yml/runs?status=completed&per_page=1" \
-                   --jq '.workflow_runs[0].conclusion' 2>/dev/null || echo "")
-          echo "직전 실행 결과: ${prev:-none}" >> "$GITHUB_STEP_SUMMARY"
+          prev_json=$(gh api "repos/${REPO}/actions/workflows/health-watch.yml/runs?status=completed&per_page=1" \
+                   --jq '.workflow_runs[0] | {conclusion: .conclusion, id: .id}' 2>/dev/null || echo '{}')
+          prev=$(echo "$prev_json" | jq -r '.conclusion // "none"')
+          prev_id=$(echo "$prev_json" | jq -r '.id // ""')
+          echo "직전 실행 결과: ${prev:-none} (run ${prev_id:-?})" >> "$GITHUB_STEP_SUMMARY"
           echo "conclusion=${prev:-none}" >> "$GITHUB_OUTPUT"
+          echo "run_id=${prev_id}" >> "$GITHUB_OUTPUT"
+
+          # 복구 알림에 "뭐가 문제였는지" 같이 실으려고, 직전(장애) 실행의 판정 로그 한 줄을
+          # 미리 가져와 둔다(대표 지시 2026-08-24: "어떻게 해결됐고 뭐가 문제였는지도 알려줘야").
+          # 실패해도(로그 조회 자체가 불안정할 수 있음) 복구 알림은 이 줄 없이도 보낸다.
+          prev_cause=""
+          if [ -n "$prev_id" ]; then
+            prev_cause=$(gh run view "$prev_id" --log 2>/dev/null | grep -m1 '판정: ' | sed 's/^.*판정: //') || true
+          fi
+          {
+            echo "prev_cause<<__EOD__"
+            echo "$prev_cause"
+            echo "__EOD__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: 이상 알림 (정상 → 이상 전환 시에만)
         if: steps.check.outputs.state != 'ok' && steps.prev.outputs.conclusion != 'failure'
@@ -101,6 +146,8 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           STATE: ${{ steps.check.outputs.state }}
           DETAIL: ${{ steps.check.outputs.detail }}
+          CAUSE: ${{ steps.check.outputs.cause }}
+          ACTION: ${{ steps.check.outputs.action }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -113,9 +160,15 @@ jobs:
           else
             icon="🟠"; label="서버 성능 저하(degraded)"
           fi
+          # 2026-08-24 대표 지시: "왜 그런지·내가 해결해야 하면 그것도" 알림에 그대로 싣는다.
+          if [ "$ACTION" = "none" ]; then
+            action_line="→ 대표님이 하실 일은 없습니다. 자동으로 복구되면 다시 알려드립니다."
+          else
+            action_line="→ 우리 쪽 문제일 가능성이 있어 제가 확인하겠습니다. 오래 지속되면 알려주세요."
+          fi
           when=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
-          text=$(printf '%s *%s* — sumeungil.co.kr\n%s\n확인 시각: %s KST\n<%s|점검 로그 보기>\n\n복구되면 이 채널에 다시 알립니다.' \
-            "$icon" "$label" "$DETAIL" "$when" "$RUN_URL")
+          text=$(printf '%s *%s* — sumeungil.co.kr\n%s\n%s\n%s\n확인 시각: %s KST\n<%s|점검 로그 보기>\n\n복구되면 이 채널에 다시 알립니다.' \
+            "$icon" "$label" "$DETAIL" "$CAUSE" "$action_line" "$when" "$RUN_URL")
           payload=$(jq -nc --arg t "$text" '{text: $t, unfurl_links: false}')
           curl -sS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
 
@@ -123,11 +176,19 @@ jobs:
         if: steps.check.outputs.state == 'ok' && steps.prev.outputs.conclusion == 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PREV_CAUSE: ${{ steps.prev.outputs.prev_cause }}
         run: |
           set -euo pipefail
           if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then exit 0; fi
           when=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
-          text=$(printf '🟢 *서버 복구됨* — sumeungil.co.kr\n헬스체크가 다시 정상(ok)입니다.\n확인 시각: %s KST' "$when")
+          # 2026-08-24 대표 지시: 복구 알림에도 "뭐가 문제였는지" 같이 싣는다. 직전 장애 실행의
+          # 판정 로그를 못 가져왔으면(조회 실패 등) 그 줄만 빼고 보낸다 — 복구 사실 자체는 확실하다.
+          if [ -n "$PREV_CAUSE" ]; then
+            text=$(printf '🟢 *서버 복구됨* — sumeungil.co.kr\n직전 문제: %s\n지금은 정상(ok)입니다.\n확인 시각: %s KST' \
+              "$PREV_CAUSE" "$when")
+          else
+            text=$(printf '🟢 *서버 복구됨* — sumeungil.co.kr\n헬스체크가 다시 정상(ok)입니다.\n확인 시각: %s KST' "$when")
+          fi
           payload=$(jq -nc --arg t "$text" '{text: $t, unfurl_links: false}')
           curl -sS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
 
