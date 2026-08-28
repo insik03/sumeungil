@@ -1,0 +1,189 @@
+.demo {
+  --paper: #f3f7f4;
+  --mist: #dfeae4;
+  --ink: #122d2b;
+  --ink-soft: #45615e;
+  --river: #a8dce4;
+  --signal: #ef6a58;
+  --line: rgba(18, 45, 43, 0.18);
+  width: 100%;
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+.skipLink { position: fixed; top: -60px; left: 20px; z-index: 100; padding: 12px 18px; background: var(--ink); color: white; }
+.skipLink:focus { top: 12px; }
+
+.compareBar {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 10px;
+  color: white;
+  background: rgba(18,45,43,.92);
+  box-shadow: 0 16px 40px rgba(18,45,43,.22);
+  backdrop-filter: blur(12px);
+}
+.compareBar span { padding: 0 10px; font-size: 11px; color: rgba(255,255,255,.62); }
+.compareBar a { padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+.compareBar .compareActive { color: var(--ink); background: var(--paper); }
+
+.hero { position: relative; min-height: calc(100dvh - 60px); padding: 28px clamp(20px, 5vw, 76px) 64px; }
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .38;
+  background-image: radial-gradient(rgba(18,45,43,.24) .6px, transparent .6px);
+  background-size: 8px 8px;
+  mask-image: linear-gradient(to bottom, #000, transparent 72%);
+}
+.topline { position: relative; display: flex; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; letter-spacing: .08em; }
+.topline span { font-variant-numeric: tabular-nums; }
+.heroGrid { position: relative; display: grid; grid-template-columns: minmax(0, .92fr) minmax(420px, 1.08fr); gap: clamp(40px, 7vw, 110px); align-items: center; max-width: 1480px; min-height: calc(100dvh - 150px); margin: auto; }
+.heroCopy { padding: 72px 0 34px; }
+.kicker { margin-bottom: 18px; color: var(--signal); font-size: 12px; font-weight: 900; letter-spacing: .11em; }
+.hero h1 { max-width: 760px; font-size: clamp(46px, 5.7vw, 92px); line-height: .98; letter-spacing: -.075em; text-wrap: balance; }
+.hero h1 em { color: transparent; font-family: "Nanum Myeongjo", "Noto Serif KR", serif; font-weight: 400; font-style: italic; letter-spacing: -.09em; -webkit-text-stroke: 1.5px var(--ink); }
+.lead { max-width: 590px; margin-top: 34px; color: var(--ink-soft); font-size: clamp(15px, 1.35vw, 19px); line-height: 1.8; text-wrap: pretty; }
+.promptBox { max-width: 650px; margin-top: 44px; padding: 18px 20px 16px; border: 1px solid var(--ink); border-radius: 3px 20px 3px 3px; background: rgba(255,255,255,.58); box-shadow: 8px 8px 0 var(--mist); }
+.promptLabel { display: block; margin-bottom: 9px; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+.promptBox > p { font-size: 16px; font-weight: 700; }
+.promptActions { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--line); font-size: 11px; }
+.promptActions > span { color: var(--ink-soft); }
+.promptActions a { color: var(--signal); font-weight: 900; }
+.promptActions b { display: inline-block; transition: transform .2s ease; }
+.promptActions a:hover b { transform: translate(3px,-3px); }
+.moods { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.moods button { min-height: 40px; padding: 0 15px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-soft); background: transparent; font-size: 12px; transition: .2s ease; }
+.moods button:hover { border-color: var(--ink); color: var(--ink); transform: translateY(-2px); }
+.moods .moodActive { border-color: var(--ink); color: white; background: var(--ink); }
+
+.routeStage { position: relative; min-height: 660px; isolation: isolate; }
+.routeStage::before { content: ""; position: absolute; width: 470px; height: 470px; top: 82px; left: 50%; transform: translateX(-50%); border-radius: 50%; background: var(--river); opacity: .55; }
+.routeStage::after { content: ""; position: absolute; inset: 7% 2% 2% 4%; z-index: -2; border: 1px solid var(--line); border-radius: 46% 54% 38% 62% / 50% 42% 58% 50%; transform: rotate(-8deg); }
+.routeLine { position: absolute; inset: 24px 5% 0; width: 90%; height: 92%; overflow: visible; z-index: 4; }
+.routeLine path { fill: none; stroke: var(--signal); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 8 10; animation: pathMove 14s linear infinite; }
+.hotspot { position: absolute; top: 40px; right: 7%; z-index: 6; width: 154px; padding: 14px; border: 1px solid var(--ink); background: var(--paper); transform: rotate(3deg); box-shadow: 5px 5px 0 var(--signal); }
+.hotspot span, .hotspot small { display: block; color: var(--ink-soft); font-size: 10px; }
+.hotspot strong { display: block; margin: 5px 0 2px; font-size: 19px; }
+.artOne, .artTwo { position: absolute; overflow: hidden; border-radius: 50%; background: #b8ead4; box-shadow: 0 22px 60px rgba(18,45,43,.16); }
+.artOne { top: 122px; left: 4%; width: min(28vw, 310px); aspect-ratio: 1; transform: rotate(-3deg); }
+.artTwo { right: 0; bottom: 83px; width: min(19vw, 205px); aspect-ratio: 1; transform: rotate(4deg); }
+.artOne img, .artTwo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.routePin { position: absolute; z-index: 8; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; }
+.routePin i { display: grid; place-items: center; width: 29px; height: 29px; border: 2px solid var(--paper); border-radius: 50%; color: white; background: var(--signal); box-shadow: 0 0 0 1px var(--signal); font-style: normal; }
+.pinOne { top: 31%; left: 43%; }
+.pinTwo { top: 55%; left: 61%; }
+.pinThree { bottom: 15%; left: 25%; }
+.routeCaption { position: absolute; left: 8%; bottom: 18px; z-index: 6; padding-left: 16px; border-left: 2px solid var(--signal); font-size: 16px; line-height: 1.55; }
+.routeCaption b { font-weight: 900; }
+
+.proof { position: relative; display: grid; grid-template-columns: .75fr 1.25fr; gap: 8vw; padding: 96px clamp(20px, 7vw, 110px) 112px; color: white; background: var(--ink); isolation: isolate; }
+.proofIntro { position: relative; z-index: 1; }
+.proofIntro h2 { max-width: 520px; font-size: clamp(32px, 4vw, 62px); line-height: 1.08; letter-spacing: -.055em; }
+.proof dl { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3,1fr); gap: 0; align-self: end; margin: 0; border-top: 1px solid rgba(255,255,255,.25); }
+.proof dl > div { min-height: 190px; padding: 24px 22px 12px; border-right: 1px solid rgba(255,255,255,.16); }
+.proof dt { color: rgba(255,255,255,.62); font-size: 11px; }
+.proof dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 9px; margin: 48px 0 0; font-variant-numeric: tabular-nums; }
+.proof dd strong { font-size: clamp(30px, 3.3vw, 50px); letter-spacing: -.06em; }
+.proof dd span { color: var(--signal); }
+.proof dd small { flex-basis: 100%; color: rgba(255,255,255,.6); font-size: 10px; }
+
+.itinerary { padding: 110px clamp(20px, 7vw, 110px) 132px; background: #f9fbf9; }
+.sectionHeading { display: flex; justify-content: space-between; align-items: end; gap: 32px; max-width: 1500px; margin: auto; padding-bottom: 30px; border-bottom: 1px solid var(--line); }
+.sectionHeading h2 { font-size: clamp(31px, 4vw, 62px); line-height: 1.1; letter-spacing: -.055em; }
+.sectionHeading > a { flex: none; padding-bottom: 8px; border-bottom: 1px solid var(--ink); font-size: 12px; font-weight: 800; }
+.routeCards { display: grid; grid-template-columns: 1.1fr .9fr 1fr; gap: clamp(18px,3vw,44px); max-width: 1500px; margin: 48px auto 0; padding: 0; list-style: none; }
+.routeCards li { position: relative; }
+.routeCards li:nth-child(2) { margin-top: 82px; }
+.routeMeta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.routeMeta i { color: var(--signal); font-style: normal; font-weight: 900; }
+.routeArt { position: relative; overflow: hidden; aspect-ratio: 1.15; background: var(--mist); }
+.routeArt img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+.routeCards li:hover .routeArt img { transform: scale(1.035) rotate(.7deg); }
+.routeCardBody { padding-top: 18px; }
+.routeCardBody > div { display: flex; justify-content: space-between; color: var(--ink-soft); font-size: 10px; }
+.routeCardBody > div b { color: #247a65; }
+.routeCardBody h3 { margin-top: 12px; font-size: clamp(24px, 2.5vw, 38px); letter-spacing: -.045em; }
+.routeCardBody p { margin-top: 6px; color: var(--ink-soft); font-size: 13px; }
+
+.closing { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 48px; padding: 100px clamp(20px, 7vw, 110px) 108px; background: var(--river); isolation: isolate; }
+.closing > div:not(.sectionBg) { position: relative; z-index: 1; }
+.closing p { margin-bottom: 16px; color: var(--ink-soft); font-size: 12px; }
+.closing h2 { font-size: clamp(34px, 5vw, 74px); line-height: 1.04; letter-spacing: -.06em; }
+.closingActions { display: flex; flex-direction: column; gap: 9px; min-width: 260px; }
+.closingActions a { display: flex; justify-content: center; align-items: center; min-height: 52px; border: 1px solid var(--ink); font-size: 12px; font-weight: 900; transition: .2s ease; }
+.closingActions a:first-child { color: white; background: var(--ink); }
+.closingActions a:hover { transform: translateY(-3px); box-shadow: 5px 5px 0 rgba(18,45,43,.17); }
+
+/* 대표 지시(2026-08-28) — "통계/마무리 섹션도 관광지 사진 배경으로". 실사진을 낮은 불투명도로
+   깔고 그 위에 섹션 고유색을 겹쳐 텍스트 대비를 그대로 지킨다. img가 key={url}로 매번 새로
+   마운트되므로 전환마다 fadeIn이 다시 걸린다(완전한 크로스페이드는 아니지만 급격한 컷은 피함). */
+.sectionBg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.sectionBg img { width: 100%; height: 100%; object-fit: cover; animation: sectionBgFadeIn 1.2s ease both; }
+.proof .sectionBg::after { content: ""; position: absolute; inset: 0; background: rgba(18,45,43,.86); }
+.closing .sectionBg::after { content: ""; position: absolute; inset: 0; background: rgba(168,220,228,.82); }
+
+@keyframes sectionBgFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes pathMove { to { stroke-dashoffset: -180; } }
+
+@media (max-width: 900px) {
+  .heroGrid { grid-template-columns: 1fr; }
+  .routeStage { min-height: 570px; }
+  .artOne { width: 280px; }
+  .artTwo { width: 170px; }
+  .proof { grid-template-columns: 1fr; }
+  .proof dl { margin-top: 24px; }
+  .routeCards { grid-template-columns: 1fr 1fr; }
+  .routeCards li:nth-child(2) { margin-top: 50px; }
+  .routeCards li:last-child { grid-column: 1 / -1; width: 55%; margin-left: auto; }
+  .closing { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .compareBar { right: 10px; bottom: 10px; }
+  .compareBar span { display: none; }
+  .hero { padding: 20px 18px 42px; }
+  .topline p { max-width: 220px; }
+  .topline span { display: none; }
+  .heroGrid { gap: 12px; }
+  .heroCopy { padding-top: 56px; }
+  .hero h1 { font-size: clamp(43px, 13.5vw, 60px); }
+  .lead { margin-top: 25px; }
+  .promptBox { margin-top: 30px; }
+  .promptActions { align-items: flex-end; }
+  .promptActions > span { max-width: 110px; }
+  .routeStage { min-height: 520px; margin: 0 -5px; }
+  .routeStage::before { width: 350px; height: 350px; }
+  .artOne { top: 110px; width: 220px; }
+  .artTwo { width: 135px; bottom: 76px; }
+  .hotspot { right: 0; }
+  .pinOne { left: 38%; }
+  .pinTwo { left: 58%; }
+  .proof { padding: 76px 20px 84px; }
+  .proof dl { grid-template-columns: 1fr; }
+  .proof dl > div { min-height: 132px; padding-left: 0; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.16); }
+  .proof dd { margin-top: 28px; }
+  .itinerary { padding: 76px 18px 92px; }
+  .sectionHeading { display: block; }
+  .sectionHeading > a { display: inline-block; margin-top: 24px; }
+  .routeCards { grid-template-columns: 1fr; }
+  .routeCards li:nth-child(2), .routeCards li:last-child { width: auto; margin: 16px 0 0; grid-column: auto; }
+  .closing { padding: 74px 20px 88px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routeLine path { animation: none; }
+  .sectionBg img { animation: none; }
+}
