@@ -6,14 +6,15 @@ import { fetchFeatured, FeaturedSpot, SpotCategory } from "../../lib/api";
 import { CATEGORY_META } from "../recommend/constants";
 import styles from "./DemoHome.module.css";
 
-const moods = ["아이와 천천히", "둘이서 조용히", "혼자 오래 걷기"] as const;
+const moods = ["아이와 천천히", "가족과 함께", "둘이서 조용히", "혼자 오래 걷기"] as const;
 type Mood = (typeof moods)[number];
 
 // 무드별로 실제 category 필드를 다르게 걸러 보여준다(대표 지시 2026-08-28 — "모드에 따라
 // 추천 코스도 달라야 함"). 스팟명·사진 어느 것도 지어내지 않고, 이미 받아온 실데이터를
 // 재정렬만 한다 — 매칭이 부족하면 나머지 카테고리로 채워 카드가 비지 않게 한다.
 const MOOD_CATEGORIES: Record<Mood, SpotCategory[]> = {
-  "아이와 천천히": ["attraction", "nature", "market"],
+  "아이와 천천히": ["nature", "attraction", "market"],
+  "가족과 함께": ["restaurant", "attraction", "market"],
   "둘이서 조용히": ["cafe", "craft", "trail"],
   "혼자 오래 걷기": ["trail", "nature"],
 };
@@ -41,7 +42,7 @@ function crowdLabel(spot: FeaturedSpot): string {
 }
 
 export default function DemoHome() {
-  const [mood, setMood] = useState<Mood>(moods[1]);
+  const [mood, setMood] = useState<Mood>("둘이서 조용히");
   // 그림 자리를 실제 관광지 사진으로 채운다(대표 지시 2026-08-27). null=로딩 중.
   const [spots, setSpots] = useState<FeaturedSpot[] | null>(null);
   // 통계·마무리 섹션 배경 사진 자동전환 인덱스(대표 지시 2026-08-28).
@@ -120,7 +121,7 @@ export default function DemoHome() {
             <h1>
               붐비는 길 옆에,
               <br />
-              <em>당신의 길</em>이 있습니다.
+              <em>숨은 길</em>이 있습니다.
             </h1>
             <p className={styles.lead}>
               가고 싶은 곳과 여행 기분을 말해주세요. 관광 데이터와 취향을 함께 읽어 더 한적하고,
