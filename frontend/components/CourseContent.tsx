@@ -20,6 +20,7 @@ import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import LoginRequiredGate from "./LoginRequiredGate";
+import RegionMapSection from "./RegionMapSection";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
 import CourseMap from "./course/CourseMap";
 import CourseStepCard from "./course/CourseStepCard";
@@ -739,6 +740,14 @@ export default function CourseContent() {
           </>
         )}
       </section>
+
+      {/* 2026-08-29(대표 지시) — "지도를 AI 코스짜기에도 넣어줘, 위에 하나 있고 그 밑으로
+          기존 페이지 있으면 될 거 같다". 홈에 이미 있는 독립 지도 섹션(RegionMapSection.tsx,
+          HomeContent.tsx와 동일 컴포넌트 재사용 — 새로 안 만듦)을 로그인 게이트보다도 위에
+          둔다. 로그인 전에도 "이 지역 실제로 이렇게 보인다"를 먼저 보여주는 미리보기 역할 —
+          지금 화면에 있는 마지막 지역(sigunguCd)을 그대로 쓴다(custom 모드도 이 state를
+          공유하므로 문제 없음, RegionPicker는 ai 모드에서만 이 값을 바꾼다). */}
+      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
 
       {!loggedIn ? (
         <LoginRequiredGate
