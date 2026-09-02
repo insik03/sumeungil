@@ -9,6 +9,7 @@ import Hero from "./Hero";
 import HeroGreeting from "./HeroGreeting";
 import ServiceQuickMenu from "./ServiceQuickMenu";
 import FeaturedSpots from "./FeaturedSpots";
+import RegionMapSection from "./RegionMapSection";
 import CoursePromo from "./CoursePromo";
 import FestivalBanner from "./FestivalBanner";
 
@@ -135,6 +136,11 @@ export default function HomeContent() {
       )}
       <HeroGreeting />
       <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} />
+      {/* 2026-08-29(대표 지시) — 지역 지도를 히어로 밖 독립 섹션으로. RegionMapSection.tsx
+          주석 참고: 처음엔 Hero.tsx 검색창 옆에 넣었다가 "위치 자체가 글러먹었다"는 재지적으로
+          여기(검색 직후, 퀵메뉴 전)로 옮겼다 — 방금 고른 지역을 지도로 한 번 더 확인시켜준
+          다음 퀵메뉴로 넘어가는 흐름. */}
+      <RegionMapSection regionCode={regionCode} />
       <ServiceQuickMenu regionCode={regionCode} />
       <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />
       {/* 부록 U.3(2026-08-01, 대표 지시) — 예상 혼잡 전광판은 congestion 화면으로 옮겼다.

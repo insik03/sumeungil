@@ -698,62 +698,24 @@ input:focus-visible,
 }
 
 /* =========================================================================
-   HERO 헤드라인 + 지역 지도 (2026-08-29, 대표 지시 — 데모 홈과 원래 홈을 자연스럽게 합치기)
-   §43이 뺐던 마케팅 헤드라인을 대표가 다시 요청해 되살린다("붐비는 길 옆에, 숨은 길이
-   있습니다"). 검색바 옆에 RegionRouteMap(demo-home/RegionRouteMap.tsx — 실제 시/도·시군구
-   행정경계 + 실좌표 코스선)을 나란히 둔다. 이 컴포넌트는 자체 CSS 변수(--paper/--ink/
-   --signal 등, DemoHome.module.css의 `.demo` 스코프)를 참조하므로, 그 스코프 밖(원래 홈)에서
-   쓰려면 이 래퍼가 같은 변수 이름을 **사이트 전역 토큰으로 재정의**해서 넘겨준다 — 데모 전용
-   팔레트를 통째로 들여오지 않고, 그 자리에서 var() 하나만 바꿔치기하는 방식이다.
-   시맨틱 규칙(§22): 코랄(--b-500)은 혼잡 전용이라 장식용 포인트로 못 쓴다 — 데모의 시그널
-   코랄 대신 브랜드 그린(--g-500)을 신호색으로 재정의한다(로고·퀵메뉴 아이콘과 동일 판단). */
-.hero-headline {
-  margin: var(--sp-8) var(--sp-4) 0;
-  font-size: clamp(28px, 6vw, 40px);
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-  text-wrap: balance;
-}
-.hero-headline em {
-  font-style: italic;
-  font-family: "Nanum Myeongjo", "Noto Serif KR", serif;
-  color: var(--g-600);
-}
-@media (min-width: 1024px) {
-  .hero-headline {
-    max-width: var(--container-1);
-    margin: var(--sp-10) auto 0;
-    padding: 0 var(--sp-10);
-    font-size: clamp(34px, 3.6vw, 52px);
-  }
-}
+   지역 지도 섹션 (RegionMapSection.tsx, 2026-08-29, 대표 지시)
+   RegionRouteMap(demo-home/RegionRouteMap.tsx — 실제 시/도·시군구 행정경계 + 실좌표 코스선)을
+   홈의 독립 섹션으로 보여준다. 처음엔 Hero.tsx 검색창 옆에 나란히 넣었으나 대표가 두 차례
+   "부자연스럽다"고 재지적해(카드 장식·높이를 맞춰도 "히어로에 욱여넣은 배치" 자체가 문제)
+   히어로 밖으로 완전히 뺐다 — 이 섹션이 그 자리를 대신한다(RegionMapSection.tsx 주석 참고).
 
-.hero-top-grid {
-  display: grid;
-  gap: var(--sp-6);
-}
-@media (min-width: 1024px) {
-  .hero-top-grid {
-    grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.86fr);
-    /* 2026-08-29 재작업(대표 지적 — 카드 두 개 높이가 안 맞아 짝처럼 안 보임) —
-       start면 지도(내용이 큰 SVG라 키가 큼) 옆에 검색 카드가 훨씬 짧게 남아 나란한
-       카드 쌍이 아니라 크기가 안 맞는 두 블록으로 보였다. stretch로 서로 높이를 맞춘다. */
-    align-items: stretch;
-    max-width: var(--container-1);
-    margin: var(--sp-8) auto var(--sp-8);
-    padding: 0 var(--sp-10);
-  }
-  /* 그리드가 폭·중앙정렬을 맡으므로, 검색바 자신의 중복 max-width/auto-margin은 끈다.
-     stretch로 늘어난 높이만큼 내용이 위에만 붙지 않도록 세로 중앙 배치한다(내용 아래
-     휑한 흰 여백 대신, 카드 안에서 균형 있게 자리잡도록). */
-  .hero-top-grid .home-search-bar {
-    max-width: none;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
+   RegionRouteMap은 자체 CSS 변수(--paper/--ink/--signal 등, DemoHome.module.css의 `.demo`
+   스코프)를 참조하므로, 그 스코프 밖(원래 홈)에서 쓰려면 .home-region-map이 같은 변수 이름을
+   **사이트 전역 토큰으로 재정의**해서 넘겨준다 — 데모 전용 팔레트를 통째로 들여오지 않고,
+   그 자리에서 var() 하나만 바꿔치기하는 방식이다. 시맨틱 규칙(§22): 코랄(--b-500)은 혼잡
+   전용이라 장식용 포인트로 못 쓴다 — 데모의 시그널 코랄 대신 브랜드 그린(--g-500)을
+   신호색으로 재정의한다(로고·퀵메뉴 아이콘과 동일 판단). */
+.region-map-section__sub {
+  max-width: 620px;
+  margin-bottom: var(--sp-6);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
 }
 
 .home-region-map {
@@ -769,25 +731,22 @@ input:focus-visible,
   --paper-rgb: 239, 251, 245;
   --ink-rgb: 5, 14, 27;
   --river-rgb: 216, 245, 232;
-  /* 2026-08-29 재작업(대표 지적 "전혀 안 자연스럽다") — 데모의 손그림풍 카드 장식(비대칭
-     모서리·하드섀도우)을 RegionRouteMap.tsx가 hidePicker일 때 벗기므로(.routeStageBare),
-     그 대신 바로 옆 .home-search-bar와 완전히 같은 카드 문법(흰 배경·r-lg·shadow-card·
-     n-100 테두리)을 여기서 입힌다 — 검색창과 지도가 "짝을 이루는 카드 한 쌍"으로 보이게. */
+  /* 데모의 손그림풍 카드 장식(비대칭 모서리·하드섀도우)을 RegionRouteMap.tsx가 hidePicker일
+     때 벗기므로(.routeStageBare), 대신 이 사이트의 표준 카드 문법(흰 배경·r-lg·shadow-card·
+     n-100 테두리 — .home-search-bar/.featured-card 등과 동일)을 여기서 입힌다. */
   background: var(--white);
   border: 1px solid var(--n-100);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
   overflow: hidden;
-  margin: 0 var(--sp-4);
-  min-height: 300px;
+  min-height: 420px;
+}
+.region-map-section__card {
+  max-width: 760px;
 }
 @media (min-width: 1024px) {
   .home-region-map {
-    margin: 0;
-    /* 460px는 검색 카드보다 훨씬 커서 짝이 안 맞아 보였다(대표 지적) — 검색 카드의
-       자연 높이(라벨+입력+칩 행, 대략 300px대)에 더 가깝게 낮췄다. 실제 최종 높이는
-       위 .hero-top-grid의 stretch가 두 카드 중 더 큰 쪽에 맞춰 결정한다. */
-    min-height: 340px;
+    min-height: 560px;
   }
 }
 /* RegionRouteMap의 루트가 <figure>(styles.routeStage, height:660 기준 SVG)라 이 래퍼 안에서

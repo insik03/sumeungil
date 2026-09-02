@@ -9,9 +9,8 @@ import {
   fetchFeatured,
   fetchRegionSearch,
 } from "../lib/api";
-import { DEFAULT_SIDO_CODE, PROVINCE_REGIONS, SIDO_REGIONS, SidoRegion } from "./regions/constants";
+import { PROVINCE_REGIONS, SIDO_REGIONS, SidoRegion } from "./regions/constants";
 import ChipScrollRow from "./ChipScrollRow";
-import RegionRouteMap from "./demo-home/RegionRouteMap";
 
 /**
  * §43(2026-08-01, 03-design-spec.md, 대표 지시 4건 — 레이아웃 재설계) — 마케팅 헤드라인/서브카피
@@ -51,9 +50,6 @@ function sidoToRegionItem(sido: SidoRegion): RegionSearchItem {
 const SEARCH_DEBOUNCE_MS = 200;
 const CAROUSEL_LIMIT = 6;
 const AUTO_ROTATE_MS = 5000;
-// 히어로 지역 지도(RegionRouteMap)용 후보 풀 크기. 시/도 전체에서 좌표 있는 스팟을 걸러
-// 최대 3곳만 코스선으로 잇는다(DemoHome.tsx와 동일 관례) — 넉넉히 받아와야 결측 후에도 남는다.
-const MAP_SPOTS_LIMIT = 12;
 
 function isEndpointMissing(err: unknown): boolean {
   // regions/search가 아직 없는 백엔드(MVP-1 상태)이면 404, 아예 미기동이면 네트워크 실패(status 0)로 온다.
@@ -297,36 +293,6 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
   const isChipActive = (sido: SidoRegion) =>
     !!selectedRegion && selectedRegion.sigungu_cd === sido.regionCode;
 
-  // ---- 지역 지도(RegionRouteMap, 대표 지시 2026-08-29 "데모와 원래 홈을 자연스럽게 합치기") ----
-  // 검색바가 만드는 selectedRegion은 시군구(구/군) 단위지만 지도는 시/도 단위 외곽선을 그린다.
-  // area_cd가 이미 시/도 코드다(sidoToRegionItem이 area_cd: sido.sidoCode로 채움, 자유 검색
-  // 결과도 백엔드가 같은 필드를 내려준다) — 새 코드를 지어내지 않고 그대로 찾는다.
-  const selectedSido: SidoRegion =
-    SIDO_REGIONS.find((sido) => sido.sidoCode === selectedRegion?.area_cd) ??
-    SIDO_REGIONS.find((sido) => sido.sidoCode === DEFAULT_SIDO_CODE) ??
-    SIDO_REGIONS[0];
-
-  const [mapSpots, setMapSpots] = useState<FeaturedSpot[]>([]);
-  const [mapSpotsLoading, setMapSpotsLoading] = useState(true);
-  useEffect(() => {
-    const controller = new AbortController();
-    setMapSpotsLoading(true);
-    // areaCd(시/도 전체 풀)로 받는다 — regionCode(구 단위)를 쓰면 지도가 커버하는 범위보다
-    // 좁아져 코스선을 그릴 좌표가 쉽게 바닥난다(DemoHome.tsx와 동일 호출 패턴).
-    fetchFeatured(undefined, MAP_SPOTS_LIMIT, controller.signal, false, selectedSido.sidoCode)
-      .then((res) => {
-        if (controller.signal.aborted) return;
-        setMapSpots([...res.hidden_picks, ...res.trending].filter((s) => !!s.image_url));
-        setMapSpotsLoading(false);
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return;
-        setMapSpots([]);
-        setMapSpotsLoading(false);
-      });
-    return () => controller.abort();
-  }, [selectedSido.sidoCode]);
-
   const inputRef = useRef<HTMLInputElement>(null);
 
   const status = selectedRegion
@@ -337,20 +303,27 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
 
   return (
     <>
-      {/* §43이 뺐던 마케팅 헤드라인을 대표가 다시 요청해(2026-08-29, 데모 홈 "숨은 길" 카피를
-          원래 홈과 합치기) 되살렸다 — sr-only 대신 실제로 보이는 h1으로 되돌린다. 페이지당 h1
-          하나 규칙은 그대로 지킨다(이 요소가 유일한 h1). */}
-      <h1 className="hero-headline">
-        붐비는 길 옆에,
-        <br />
-        <em>숨은 길</em>이 있습니다.
-      </h1>
+      {/* §43(2026-08-01, 03-design-spec.md — 대표 지시 4건 레이아웃 재설계) — 마케팅 카피 블록
+          (이유브로우+헤드라인+서브카피 3단)을 통째로 없앴다("혼잡한 관광 대신…" 멘트, 대표 지시
+          원문 2 그대로 반영). 확보된 세로 공간은 전부 아래 히어로 캐러셀(사진) 확대에 쓴다.
+          단, 페이지에는 h1이 정확히 하나 있어야 한다는 접근성 규칙(이 코드베이스의 다른 모든
+          화면이 지키는 관례 — FestivalsContent/RegionsContent 등 h1=section__title 패턴)을
+          깨지 않기 위해 시각적으로는 숨기되(sr-only) 의미상 h1은 유지한다. 로그인 사용자용
+          한 줄 인사(hero-greeting)는 2026-08-18부터 HeroGreeting.tsx로 옮겨 HomeContent.tsx가
+          더 아래(카테고리 창 밑)에 따로 배치한다 — design-taste-frontend 스킬 §4.7 "히어로
+          텍스트 요소는 최소한으로" 원칙과 redesign-skill "Missing whitespace" 원칙은 이 h1
+          자리에 여전히 적용된다. 비로그인 사용자는 이 자리에 아무 텍스트도 없다(추측 카피로
+          채우지 않는다 — 이 코드베이스의 기존 "정직" 원칙과 동일선상).
+          2026-08-29 — 대표 지시로 "숨은 길" 헤드라인+지역지도를 이 자리(히어로, 검색바 옆)에
+          한 번 넣었다가, 재지적("애초에 위치 자체가 글러먹었다")으로 되돌렸다. 지도는
+          RegionMapSection.tsx로 옮겨 홈 안의 독립 섹션이 됐다 — 자리를 옮긴 것뿐 기능은
+          그대로다. 여기 h1도 그 되돌림의 일부로 원래(sr-only)로 복귀. */}
+      <h1 className="sr-only">숨은길 — 혼잡한 명소 대신 숨은 코스를 추천하는 AI 여행 서비스</h1>
 
-      <div className="hero-top-grid">
-        {/* §24 — 부킹형 큰 검색 카드(라벨+박스+칩+CTA 버튼, shadow-lg, 히어로 위 겹침)를 없애고
-            인라인 컴팩트 바로 축소했다. CTA 버튼은 아래 서비스 퀵메뉴의 "AI 코스" 타일과 의도가
-            겹쳐(동일 CTA 중복) 제거했다 — 검색/지역 선택 기능만 남긴다. */}
-        <div className="home-search-bar">
+      {/* §24 — 부킹형 큰 검색 카드(라벨+박스+칩+CTA 버튼, shadow-lg, 히어로 위 겹침)를 없애고
+          인라인 컴팩트 바로 축소했다. CTA 버튼은 아래 서비스 퀵메뉴의 "AI 코스" 타일과 의도가
+          겹쳐(동일 CTA 중복) 제거했다 — 검색/지역 선택 기능만 남긴다. */}
+      <div className="home-search-bar">
         <label className="home-search-bar__label" htmlFor="destInput">
           어디로 떠나시나요?
         </label>
@@ -454,20 +427,6 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
         </div>
         <div className="dest-search__status" aria-live="polite">
           {status}
-        </div>
-        </div>
-
-        {/* 검색바가 이미 지역 선택 UI(칩+자유검색)를 갖고 있으므로 지도 자체 도시 선택 칩은
-            숨긴다(hidePicker) — 지도는 검색바가 고른 지역을 그대로 반영만 하는 동반 시각 요소다.
-            mood는 실제 홈에 없는 개념이라 넘기지 않는다(RegionRouteMap이 optional로 처리). */}
-        <div className="home-region-map">
-          <RegionRouteMap
-            selectedSido={selectedSido}
-            spots={mapSpots}
-            spotsLoading={mapSpotsLoading}
-            onSelectSido={selectSido}
-            hidePicker
-          />
         </div>
       </div>
 
