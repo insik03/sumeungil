@@ -190,6 +190,7 @@ async def _to_cards(
                 category=spot.category,  # type: ignore[arg-type]
                 region_name=_region_name(region_code),
                 address=spot.address,
+                location={"lat": spot.lat, "lng": spot.lng},
                 congestion=SpotCongestion(
                     index=round(rate, 2), level=classify_level(rate), tier="B",
                 ),

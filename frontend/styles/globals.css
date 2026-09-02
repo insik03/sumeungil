@@ -1071,13 +1071,23 @@ input:focus-visible,
   align-items: center;
   justify-content: center;
   gap: var(--sp-3);
+  width: 100%;
+  min-width: 0;
   margin-top: var(--sp-3);
 }
 .hero-carousel__dots {
   display: flex;
+  max-width: 100%;
   gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+.hero-carousel__dots::-webkit-scrollbar {
+  display: none;
 }
 .hero-carousel__dot {
+  flex: 0 0 var(--touch-min);
   width: var(--touch-min);
   height: var(--touch-min);
   display: inline-flex;
@@ -1809,8 +1819,8 @@ input:focus-visible,
 
 /* §40(신규) — 별점·리뷰 표시(RatingBadge.tsx). 스팟/축제 카드 공용 단일 소스. 배지(.badge)와
    같은 텍스트 크기를 쓰되 배경 없는 무채색 텍스트로 둬 "혼잡도 배지"와 시맨틱이 다름을
-   구분한다(둘 다 색 있는 pill이면 혼잡도처럼 오독될 수 있다). 데이터가 없을 때도("-", 0)
-   항상 같은 자리를 차지해 카드 높이가 데이터 유무로 달라지지 않는다. */
+   구분한다(둘 다 색 있는 pill이면 혼잡도처럼 오독될 수 있다). 데이터가 없으면 숫자처럼
+   보이는 placeholder 대신 "후기 없음"을 표시한다. */
 .rating-badge {
   display: inline-flex;
   align-items: center;

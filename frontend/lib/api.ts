@@ -112,7 +112,7 @@ export async function fetchCongestionBoard(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     // 네트워크 자체 실패(백엔드 미기동 등) — 계약에 없는 상황이므로 프론트가 자체 코드 부여
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
@@ -193,7 +193,7 @@ export async function fetchForecast(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "혼잡도 예보를 불러오지 못했습니다.");
   }
 
@@ -235,7 +235,7 @@ export async function fetchRegionSearch(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -334,7 +334,7 @@ export async function fetchOnboardingTagSchema(signal?: AbortSignal): Promise<Ta
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -571,7 +571,7 @@ export async function fetchRecommendedPlaces(
       body: JSON.stringify(payload),
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -679,7 +679,7 @@ export async function fetchCompare(
       body: JSON.stringify(payload),
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -777,7 +777,7 @@ export async function fetchSpotDetail(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -890,7 +890,7 @@ export async function fetchCourse(
       signal,
       credentials: "include", // 2026-08-17: AI 코스짜기 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -930,7 +930,7 @@ export async function fetchArrangeCourse(
       signal,
       credentials: "include", // 2026-08-17: AI 코스짜기 로그인 필수화 — 세션 쿠키를 실어 보내야 401이 안 난다.
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -986,7 +986,7 @@ export async function fetchSpotSearch(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -1016,6 +1016,8 @@ export interface FeaturedSpot {
   category: SpotCategory;
   region_name: string;
   address: string | null;
+  /** SpotCard와 같은 원천 실좌표. 지도는 이 값이 유효한 스팟만 경로에 포함한다. */
+  location: { lat: number; lng: number };
   congestion: SpotCongestion | null;
   is_hidden_gem: boolean;
   /** null이면 사진 없음 — 프론트가 카테고리 아이콘/색블록 플레이스홀더로 대체(재판정 아님, 표시 방식). */
@@ -1084,7 +1086,7 @@ export async function fetchFeatured(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "발견 콘텐츠를 불러오지 못했습니다.");
   }
 
@@ -1184,7 +1186,7 @@ export async function fetchCollections(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "테마 컬렉션을 불러오지 못했습니다.");
   }
 
@@ -1269,7 +1271,7 @@ export async function fetchFestivals(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "축제 정보를 불러오지 못했습니다.");
   }
 
@@ -1321,7 +1323,7 @@ export async function fetchRegionChildren(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "시군구 목록을 불러오지 못했습니다.");
   }
 
@@ -1393,7 +1395,7 @@ export async function fetchFestivalDetail(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "축제 정보를 불러오지 못했습니다.");
   }
 
@@ -1447,7 +1449,7 @@ export async function fetchNationwideWeather(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "전국 날씨 정보를 불러오지 못했습니다.");
   }
 
@@ -1527,7 +1529,7 @@ export async function fetchPlanOutlook(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "여행 시기 정보를 불러오지 못했습니다.");
   }
 
@@ -1600,7 +1602,7 @@ export async function fetchSeasonalPlaces(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "계절 여행지 정보를 불러오지 못했습니다.");
   }
 
@@ -1687,7 +1689,7 @@ export async function fetchReviews(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "후기를 불러오지 못했습니다.");
   }
 
@@ -1723,7 +1725,7 @@ export async function fetchReviewsSummaryBulk(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "별점 정보를 불러오지 못했습니다.");
   }
 
@@ -1773,7 +1775,7 @@ export async function createReview(
       body: JSON.stringify(payload),
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -1809,7 +1811,7 @@ export async function patchReview(
       body: JSON.stringify(payload),
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -1832,7 +1834,7 @@ export async function deleteReview(
       headers: { Accept: "application/json", ...deviceHeaders() },
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "백엔드 서버에 연결할 수 없습니다.");
   }
 
@@ -1864,7 +1866,7 @@ export async function reportReview(
       body: JSON.stringify({ reason }),
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "신고를 접수하지 못했습니다.");
   }
 
@@ -1910,7 +1912,7 @@ export async function shareCourse(
       body: JSON.stringify(payload),
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "코스를 공유하지 못했습니다.");
   }
 
@@ -1951,7 +1953,7 @@ export async function fetchSharedCourse(
       credentials: "include", // 2026-08-20(QA L-2) — 좋아요 호출과 통일. 세션 쿠키가 있어야 is_mine 등 로그인 종속 값이 정확하다.
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "공유 코스를 불러오지 못했습니다.");
   }
 
@@ -2005,7 +2007,7 @@ export async function fetchSharedCoursesFeed(
       credentials: "include", // 2026-08-20(QA L-2) — 좋아요 호출과 통일. 빠지면 liked_by_me가 분리배포/로컬개발에서 항상 false로 보인다.
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "다른 사람 코스를 불러오지 못했습니다.");
   }
 
@@ -2034,7 +2036,7 @@ export async function likeSharedCourse(shareCode: string): Promise<SharedCourseL
       headers: { Accept: "application/json" },
       credentials: "include",
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "좋아요를 반영하지 못했습니다.");
   }
   if (!res.ok) {
@@ -2052,7 +2054,7 @@ export async function unlikeSharedCourse(shareCode: string): Promise<SharedCours
       headers: { Accept: "application/json" },
       credentials: "include",
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "좋아요를 취소하지 못했습니다.");
   }
   if (!res.ok) {
@@ -2073,7 +2075,7 @@ export async function deleteSharedCourse(
       headers: { Accept: "application/json", ...deviceHeaders() },
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "공유를 삭제하지 못했습니다.");
   }
 
@@ -2114,7 +2116,7 @@ export async function saveMyCourse(
       credentials: "include",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "코스를 저장하지 못했습니다.");
   }
   if (!res.ok) {
@@ -2133,7 +2135,7 @@ export async function fetchMyCourses(signal?: AbortSignal): Promise<MyCourseSumm
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "저장한 코스를 불러오지 못했습니다.");
   }
   if (!res.ok) {
@@ -2156,7 +2158,7 @@ export async function fetchMyCourseDetail(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "저장한 코스를 불러오지 못했습니다.");
   }
   if (!res.ok) {
@@ -2177,7 +2179,7 @@ export async function deleteMyCourse(
       credentials: "include",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "저장한 코스를 삭제하지 못했습니다.");
   }
   if (!res.ok) {
@@ -2212,7 +2214,7 @@ export async function createInquiry(
       credentials: "include",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "문의를 접수하지 못했습니다.");
   }
   if (!res.ok) {
@@ -2231,7 +2233,7 @@ export async function fetchMyInquiries(signal?: AbortSignal): Promise<InquirySum
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "문의 내역을 불러오지 못했습니다.");
   }
   if (!res.ok) {
@@ -2254,7 +2256,7 @@ export async function fetchMyOnboardingProfile(
       cache: "no-store",
       signal,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(0, "NETWORK_UNAVAILABLE", "취향 프로필을 불러오지 못했습니다.");
   }
   if (!res.ok) {

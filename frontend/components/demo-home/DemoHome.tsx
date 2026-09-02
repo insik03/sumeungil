@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { fetchFeatured, FeaturedSpot, SpotCategory } from "../../lib/api";
 import { CATEGORY_META } from "../recommend/constants";
+import { DEFAULT_SIDO_CODE, SIDO_REGIONS, SidoRegion } from "../regions/constants";
 import styles from "./DemoHome.module.css";
+import RegionRouteMap from "./RegionRouteMap";
 
 const moods = ["아이와 천천히", "가족과 함께", "둘이서 조용히", "혼자 오래 걷기"] as const;
 type Mood = (typeof moods)[number];
@@ -22,17 +24,14 @@ const MOOD_CATEGORIES: Record<Mood, SpotCategory[]> = {
 // 배경 사진 자동전환 주기(ms). prefers-reduced-motion이면 아예 돌리지 않는다.
 const BG_ROTATE_MS = 4000;
 
-// 해운대구(부산) — 이 데모의 히어로 카피("해운대를 지나 기장 안쪽으로")와 맞는, 실제로
-// 시드 데이터가 있는 지역. 기장군은 별도 시드가 없어 쓸 수 없다.
-const DEMO_REGION_CODE = "26350";
+const DEFAULT_SIDO =
+  SIDO_REGIONS.find((sido) => sido.sidoCode === DEFAULT_SIDO_CODE) ?? SIDO_REGIONS[0];
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
   CATEGORY_META.map((c) => [c.value, c.label])
 );
 
-// 사진 있는 실스팟을 못 받아왔을 때(네트워크 실패 등)만 쓰는 자리표시 이미지. 대체 문구가 아니라
-// 카드 자체가 비지 않게 하는 최후 폴백이다 — 실사진이 오면 전부 즉시 교체된다.
-const FALLBACK_IMAGES = ["/landmarks/47940.png", "/landmarks/43.png", "/landmarks/52.png"];
+const EMPTY_SPOTS: FeaturedSpot[] = [];
 
 function crowdLabel(spot: FeaturedSpot): string {
   if (!spot.congestion) return "정보없음";
@@ -43,6 +42,7 @@ function crowdLabel(spot: FeaturedSpot): string {
 
 export default function DemoHome() {
   const [mood, setMood] = useState<Mood>("둘이서 조용히");
+  const [selectedSido, setSelectedSido] = useState<SidoRegion>(DEFAULT_SIDO);
   // 그림 자리를 실제 관광지 사진으로 채운다(대표 지시 2026-08-27). null=로딩 중.
   const [spots, setSpots] = useState<FeaturedSpot[] | null>(null);
   // 통계·마무리 섹션 배경 사진 자동전환 인덱스(대표 지시 2026-08-28).
@@ -50,26 +50,25 @@ export default function DemoHome() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchFeatured(DEMO_REGION_CODE, 12, controller.signal)
+    setSpots(null);
+    // 시도 버튼을 고르면 대표 시군구 한 곳이 아니라 시도 전체 풀에서 추천을 받는다.
+    // Hero.tsx와 같은 SIDO_REGIONS 코드 체계를 쓰되, 지도 범위와 데이터 범위를 일치시킨다.
+    fetchFeatured(undefined, 12, controller.signal, false, selectedSido.sidoCode)
       .then((res) => {
         const withPhoto = [...res.hidden_picks, ...res.trending].filter((s) => s.image_url);
         setSpots(withPhoto);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setSpots([]); // 실패해도 조용히 폴백 이미지로
+        if (!controller.signal.aborted) setSpots([]); // 실패해도 화면 전체를 깨뜨리지 않는다.
       });
     return () => controller.abort();
-  }, []);
+  }, [selectedSido.sidoCode]);
 
-  const heroSpots = spots ?? [];
-  // 히어로 원형 사진 2장은 장식용 — 카드와 안 겹치게 앞 2곳은 항상 이 자리로 예약한다.
-  const heroImg = (i: number) => heroSpots[i]?.image_url ?? FALLBACK_IMAGES[i] ?? FALLBACK_IMAGES[0];
-  const heroAlt = (i: number, fallback: string) => (heroSpots[i] ? `${heroSpots[i].name} 사진` : fallback);
-
-  // 무드가 바뀌면 그 무드의 카테고리를 우선 보여주고(히어로가 예약한 앞 2곳은 제외), 부족하면
+  const heroSpots = spots ?? EMPTY_SPOTS;
+  // 무드가 바뀌면 그 무드의 카테고리를 우선 보여주고, 부족하면
   // 나머지 실스팟으로 채운다(빈 카드 방지 — 카테고리 매칭 없어도 섹션 자체는 항상 채워짐).
   const routeSpots = useMemo(() => {
-    const pool = heroSpots.slice(2);
+    const pool = heroSpots;
     const wanted = new Set(MOOD_CATEGORIES[mood]);
     const matched = pool.filter((s) => wanted.has(s.category));
     const rest = pool.filter((s) => !wanted.has(s.category));
@@ -84,7 +83,6 @@ export default function DemoHome() {
     image: s.image_url as string,
     alt: `${s.name} 사진`,
   }));
-
   // 배경 로테이션: 사진 2장 이상 있고, 움직임을 줄여달라는 설정이 아닐 때만 돈다.
   useEffect(() => {
     if (heroSpots.length < 2) return;
@@ -112,7 +110,7 @@ export default function DemoHome() {
       <section className={styles.hero} id="demo-main">
         <div className={styles.topline}>
           <p>관광객을 줄이는 여행이 아니라, 여행지를 넓히는 방법</p>
-          <span>BUSAN · 오늘 09:40 기준</span>
+          <span>{selectedSido.shortName} · 오늘 09:40 기준</span>
         </div>
 
         <div className={styles.heroGrid}>
@@ -130,9 +128,9 @@ export default function DemoHome() {
 
             <div className={styles.promptBox}>
               <span className={styles.promptLabel}>오늘은 어떤 여행을 원하세요?</span>
-              <p>부산에서 둘이 걷기 좋고, 바다가 보이는 조용한 곳</p>
+              <p>{selectedSido.shortName}에서 둘이 걷기 좋고, 덜 붐비는 조용한 곳</p>
               <div className={styles.promptActions}>
-                <span>부산 · 2명 · 도보 중심</span>
+                <span>{selectedSido.shortName} · 2명 · 도보 중심</span>
                 <Link href="/course">이 문장으로 코스 만들기 <b aria-hidden="true">↗</b></Link>
               </div>
             </div>
@@ -152,22 +150,13 @@ export default function DemoHome() {
             </div>
           </div>
 
-          <div className={styles.routeStage} aria-label="추천 경로 미리보기">
-            <div className={styles.hotspot}>
-              <span>지금 해운대</span>
-              <strong>예상 혼잡 82%</strong>
-              <small>매우 붐빔</small>
-            </div>
-            <svg className={styles.routeLine} viewBox="0 0 520 620" aria-hidden="true">
-              <path d="M394 25C466 120 239 111 310 218C382 327 99 330 183 445C226 504 153 558 91 590" />
-            </svg>
-            <div className={`${styles.routePin} ${styles.pinOne}`}><i>1</i><span>숲의 입구</span></div>
-            <div className={`${styles.routePin} ${styles.pinTwo}`}><i>2</i><span>동네의 점심</span></div>
-            <div className={`${styles.routePin} ${styles.pinThree}`}><i>3</i><span>조용한 바다</span></div>
-            <div className={styles.artOne}><img src={heroImg(0)} alt={heroAlt(0, "산과 숲길이 그려진 숨은 명소")} /></div>
-            <div className={styles.artTwo}><img src={heroImg(1)} alt={heroAlt(1, "바닷길이 그려진 숨은 명소")} /></div>
-            <p className={styles.routeCaption}><b>{mood}</b>에 맞춘<br />분산 경로가 열렸어요.</p>
-          </div>
+          <RegionRouteMap
+            selectedSido={selectedSido}
+            spots={routeSpots}
+            spotsLoading={spots === null}
+            mood={mood}
+            onSelectSido={setSelectedSido}
+          />
         </div>
       </section>
 
@@ -191,8 +180,8 @@ export default function DemoHome() {
       <section className={styles.itinerary} aria-labelledby="route-title">
         <div className={styles.sectionHeading}>
           <div>
-            <p className={styles.kicker}>오늘의 숨은 경로 · 5시간 10분</p>
-            <h2 id="route-title">해운대를 지나, 기장 안쪽으로</h2>
+            <p className={styles.kicker}>오늘의 숨은 경로 · 실데이터 {routes.length}곳</p>
+            <h2 id="route-title">{selectedSido.shortName}의 숨은 길을 따라</h2>
           </div>
           <Link href="/course">내 취향으로 다시 짜기 <span aria-hidden="true">↗</span></Link>
         </div>

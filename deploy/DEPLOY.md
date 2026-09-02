@@ -13,7 +13,7 @@
 인터넷 :80
    │
    ▼
-[nginx]  ─ /      ──▶ [frontend:3000]  Next.js 14
+[nginx]  ─ /      ──▶ [frontend:3000]  Next.js 15
          └ /api/  ──▶ [backend:8000]   FastAPI (uvicorn, worker 1)
                             │
                             └────────▶ [ollama:11434]  qwen2.5:7b (CPU 추론)
@@ -624,13 +624,14 @@ docker stats                            # CPU/메모리 실시간
 
 ---
 
-## 아직 하지 않은 것 (의도적 스코프 밖)
+## 운영 자동화 상태
 
-- **HTTPS / 도메인**: 현재는 `http://<IP>` 다. 도메인 확보 후 nginx 에 certbot(letsencrypt)을
-  붙이고 443 을 (b) 양쪽에 열면 된다. 그때 `NEXT_PUBLIC_API_BASE`·`CORS_ORIGINS` 를
-  `https://<도메인>` 으로 바꾸고 frontend 를 **재빌드**해야 한다.
-- **자동 배포(CI/CD)**: 현재는 rsync + `up -d --build` 수동 절차다.
-- **자동 백업(스케줄)**: 아래 백업 대상이 생겼지만 cron/스냅샷 자동화는 아직 없다 — 수동 절차다.
+- **HTTPS / 도메인**: `https://sumeungil.co.kr`과 certbot 자동 갱신을 사용한다.
+- **검증 CI**: `.github/workflows/ci.yml`이 프론트 lint/build와 PostgreSQL 기반 백엔드 회귀
+  스크립트를 PR·main push마다 실행한다. 실제 Ollama 모델 검증 2개는 로컬/배포 전 점검 항목이다.
+- **배포**: 서버 반영은 여전히 수동 승인 후 `docker compose up -d --build`로 수행한다.
+- **백업**: `postgres-backup` 서비스가 자동 덤프·검증·보존기간 정리를 수행한다. 오프사이트
+  사본을 만들려면 `.env`의 `BACKUP_S3_URI`와 접근 자격증명을 반드시 채운다.
 
 ---
 
@@ -646,15 +647,26 @@ docker stats                            # CPU/메모리 실시간
 | **`postgres-data`** | **후기·공유코스·로그인 계정·온보딩 프로필·AI 코스 전부** | **복구 불가** |
 | `sumeungil-data` | 과거 SQLite 파일(이관 완료 후 사실상 미사용) | 이관이 끝났다면 무해, 백업 우선순위 낮음 |
 
-```bash
-# 백업 (VM 에서) — pg_dump로 논리 백업(SQL 텍스트) 1개 파일을 만든다.
-docker compose exec -T postgres pg_dump -U sumeungil -d sumeungil \
-  > sumeungil-postgres-$(date +%Y%m%d).sql
+`postgres-backup` 컨테이너는 기동 직후 1회, 이후 기본 24시간마다 PostgreSQL custom-format
+덤프를 `deploy/backups/`에 만든다. 생성 직후 `pg_restore --list`로 읽기 검증하고 SHA-256
+체크섬을 남긴다. 로컬 사본은 기본 14일 보관한다. `BACKUP_S3_URI`가 설정되어 있으면 같은
+파일과 체크섬을 AES-256 서버측 암호화로 S3 호환 외부 저장소에도 올린다.
 
-# 복구
+```bash
+# 마지막 자동 백업과 업로드 로그 확인
+docker compose ps postgres-backup
+docker compose logs --tail=100 postgres-backup
+ls -lh backups/
+
+# 복구 전 덤프 무결성/목록 확인
+docker compose exec postgres-backup pg_restore --list \
+  /backups/sumeungil-YYYYMMDDTHHMMSSZ.dump >/dev/null
+
+# 복구 — 서비스 쓰기를 멈춘 뒤 기존 DB에 적용
 docker compose stop backend
-cat sumeungil-postgres-YYYYMMDD.sql | docker compose exec -T postgres \
-  psql -U sumeungil -d sumeungil
+docker compose exec -T postgres sh -c \
+  'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /dev/stdin' \
+  < backups/sumeungil-YYYYMMDDTHHMMSSZ.dump
 docker compose start backend
 ```
 
@@ -663,8 +675,9 @@ docker compose start backend
   (데이터는 남고 API 만 503 을 반환한다).
 - 관리자 콘솔로 개별 글만 숨기고 싶다면 (h) 절 참고 — 기능 전체를 닫는 것보다 이쪽이 먼저다.
   `admin_actions`(감사 로그)도 같은 Postgres 안에 있으므로 위 백업에 함께 포함된다.
-- 정기 자동 백업(cron)은 아직 없다 — 수동 절차다. 배포 규모가 커지면 `pg_dump`를 cron에
-  등록하고 오프사이트(예: 오브젝트 스토리지)로 보내는 것을 검토할 것.
+- `.env`에서 `BACKUP_S3_URI`를 비워두면 같은 VM에만 사본이 남아 호스트 장애를 견디지
+  못한다. 운영에서는 S3 호환 외부 저장소를 반드시 설정하고 버킷 수명주기도 별도로 지정한다.
+- 분기마다 빈 임시 데이터베이스에 최신 덤프를 복원해 실제 복구 가능 여부를 확인한다.
 
 ---
 

@@ -87,7 +87,7 @@ export function computeBadge(festival: Festival): FestivalBadge | null {
  */
 interface FestivalCardProps {
   festival: Festival;
-  /** §40(신규) — 별점·리뷰 자리(표시만). 호출부가 넘기지 않으면 RatingBadge가 "-"/0으로 표기한다. */
+  /** §40(신규) — 별점·리뷰 자리. 요약이 없으면 RatingBadge가 "후기 없음"으로 표기한다. */
   rating?: number | null;
   reviewCount?: number;
 }
@@ -180,7 +180,7 @@ export default function FestivalBanner({ regionCode }: FestivalBannerProps) {
         )
           .then((s) => setSummaries(s))
           .catch(() => {
-            // 실패해도 조용히 무시 — RatingBadge가 "-"/0 폴백을 그대로 보여준다.
+            // 실패해도 조용히 무시 — RatingBadge가 "후기 없음" 상태를 보여준다.
           });
       })
       .catch(() => {

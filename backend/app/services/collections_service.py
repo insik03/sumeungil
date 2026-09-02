@@ -343,6 +343,7 @@ def _assemble(
                         category=s.category,  # type: ignore[arg-type]
                         region_name=region_name_for(s),
                         address=s.address,
+                        location={"lat": s.lat, "lng": s.lng},
                         congestion=recommend_service._match_congestion(s.name, cmap_for(s)),
                         is_hidden_gem=s.is_hidden_gem,
                         image_url=(p := photo_by_id.get(s.id, NO_PHOTO)).url,  # type: ignore[union-attr]

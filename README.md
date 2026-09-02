@@ -4,7 +4,7 @@
 2026 관광데이터 활용 공모전 ②-2 웹·앱 구현 부문 지정과제 2번 출품작.
 
 - 운영: https://sumeungil.co.kr
-- 스택: FastAPI (backend) + Next.js 14 (frontend) + nginx + Ollama, Docker Compose 배포
+- 스택: FastAPI (backend) + Next.js 15 (frontend) + nginx + PostgreSQL + Ollama, Docker Compose 배포
 
 ## 처음 온 사람은 이 순서로
 

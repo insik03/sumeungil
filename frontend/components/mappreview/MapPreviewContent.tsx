@@ -106,7 +106,7 @@ export default function MapPreviewContent() {
           address: pick.address ?? null,
           summary,
         });
-      } catch (e: unknown) {
+      } catch {
         if (c.signal.aborted) return;
         setHiddenErr("숨은 명소를 불러오지 못했어요.");
       }

@@ -60,6 +60,7 @@ interface SeasonalSectionProps {
   /** 선택된 지역(sigungu_cd). FeaturedSpots·ThemeCollections와 동일 원칙 — 없으면 백엔드
    * 기본 지역으로 호출한다. */
   regionCode?: string | null;
+  headingLevel?: "h1" | "h2";
 }
 
 /**
@@ -72,7 +73,8 @@ interface SeasonalSectionProps {
  *
  * graceful: 404/네트워크 실패 시 섹션 전체가 조용히 사라진다(ThemeCollections.tsx와 동일 원칙).
  */
-export default function SeasonalSection({ regionCode }: SeasonalSectionProps) {
+export default function SeasonalSection({ regionCode, headingLevel = "h2" }: SeasonalSectionProps) {
+  const Heading = headingLevel;
   const [season, setSeason] = useState<Season>(() => currentSeason());
   const [status, setStatus] = useState<Status>("loading");
   const [data, setData] = useState<SeasonalPlacesResponse | null>(null);
@@ -95,13 +97,25 @@ export default function SeasonalSection({ regionCode }: SeasonalSectionProps) {
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        // 엔드포인트 미배포(404)든 네트워크 실패든 원인을 구분하지 않고 조용히 숨긴다.
+        // 독립 페이지의 제목까지 사라지지 않게 아래에서 복구 가능한 오류 상태를 보여준다.
         setStatus("error");
       });
     return () => controller.abort();
   }, [season, regionCode, blockKey]);
 
-  if (status === "error") return null;
+  if (status === "error") {
+    return (
+      <section className="section featured-section" aria-labelledby="seasonalHeading">
+        <span className="eyebrow-pill eyebrow-pill--mint">계절 여행</span>
+        <Heading className="section__title" id="seasonalHeading">
+          지금 이 계절에 가기 좋은 곳
+        </Heading>
+        <p className="seasonal__empty" role="status">
+          계절 여행 정보를 불러오지 못했어요. 잠시 후 다시 확인해 주세요.
+        </p>
+      </section>
+    );
+  }
 
   const popular = data?.popular ?? [];
   const hidden = data?.hidden ?? [];
@@ -110,9 +124,9 @@ export default function SeasonalSection({ regionCode }: SeasonalSectionProps) {
   return (
     <section className="section featured-section" aria-labelledby="seasonalHeading">
       <span className="eyebrow-pill eyebrow-pill--mint">계절 여행</span>
-      <h2 className="section__title" id="seasonalHeading">
+      <Heading className="section__title" id="seasonalHeading">
         지금 이 계절에 가기 좋은 곳
-      </h2>
+      </Heading>
 
       {/* §46 — 지역 선택(전국 + 9권역). 이 섹션이 홈에 박혀 있던 시절엔 지역이 고정이었으나,
           전용 페이지가 된 뒤 대표 지시로 지역을 고를 수 있게 했다. regionCode prop 으로 지역이

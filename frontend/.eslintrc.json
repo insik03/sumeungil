@@ -1,0 +1,33 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "overrides": [
+    {
+      "files": ["components/charts/**/*.{ts,tsx}"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    },
+    {
+      "files": ["tailwind.config.js"],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off"
+      }
+    },
+    {
+      "files": [
+        "components/FeaturedSpots.tsx",
+        "components/FestivalBanner.tsx",
+        "components/PhotoCarousel.tsx",
+        "components/compare/CompareCard.tsx",
+        "components/course/CourseStepCard.tsx",
+        "components/course/CourseStepPhotoStrip.tsx",
+        "components/demo-home/DemoHome.tsx",
+        "components/mappreview/MapPreviewContent.tsx",
+        "components/mappreview/NationwideBoard.tsx"
+      ],
+      "rules": {
+        "@next/next/no-img-element": "off"
+      }
+    }
+  ]
+}

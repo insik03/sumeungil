@@ -13,7 +13,6 @@ import {
   fetchArrangeCourse,
   fetchCourse,
   fetchMyOnboardingProfile,
-  saveMyCourse,
 } from "../lib/api";
 import { logout } from "../lib/authStorage";
 import { loadOnboardingResult, saveOnboardingResult } from "../lib/onboardingStorage";
@@ -22,7 +21,6 @@ import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseC
 import { useLoggedInName } from "../lib/useLoggedInName";
 import LoginRequiredGate from "./LoginRequiredGate";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
-import SaveToggleButton from "./recommend/SaveToggleButton";
 import CourseMap from "./course/CourseMap";
 import CourseStepCard from "./course/CourseStepCard";
 import CourseStepPhotoStrip from "./course/CourseStepPhotoStrip";
