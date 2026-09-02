@@ -38,8 +38,15 @@ interface RegionRouteMapProps {
   selectedSido: SidoRegion;
   spots: FeaturedSpot[];
   spotsLoading: boolean;
-  mood: string;
+  /** 데모 홈의 무드 캡션용. 없으면(실제 홈 임베드) 무드 없이 스팟 개수만 보여준다. */
+  mood?: string;
   onSelectSido: (sido: SidoRegion) => void;
+  /**
+   * 실제 홈 임베드용(대표 지시 2026-08-29 — 데모와 원래 홈을 자연스럽게 합치기). 이 컴포넌트를
+   * 품는 화면이 이미 자체 지역 선택 UI(Hero.tsx의 검색바+시도 칩)를 갖고 있으면 내부 도시
+   * 선택 칩을 중복 노출하지 않는다 — 지도는 그 선택을 그대로 반영만 한다.
+   */
+  hidePicker?: boolean;
 }
 
 interface ProjectedStop {
@@ -114,6 +121,7 @@ export default function RegionRouteMap({
   spotsLoading,
   mood,
   onSelectSido,
+  hidePicker = false,
 }: RegionRouteMapProps) {
   const [asset, setAsset] = useState<RegionMapAsset | null>(null);
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -181,25 +189,27 @@ export default function RegionRouteMap({
 
   return (
     <figure className={styles.routeStage} aria-label={mapSummary}>
-      <div className={styles.cityPicker} aria-label="지도 지역 선택">
-        <span>지도 지역</span>
-        <ChipScrollRow>
-          {SIDO_REGIONS.map((sido) => {
-            const active = sido.sidoCode === selectedSido.sidoCode;
-            return (
-              <button
-                key={sido.sidoCode}
-                type="button"
-                className={`chip chip--all ${styles.cityChip}${active ? ` is-active ${styles.cityChipActive}` : ""}`}
-                aria-pressed={active}
-                onClick={() => onSelectSido(sido)}
-              >
-                {sido.shortName}
-              </button>
-            );
-          })}
-        </ChipScrollRow>
-      </div>
+      {!hidePicker && (
+        <div className={styles.cityPicker} aria-label="지도 지역 선택">
+          <span>지도 지역</span>
+          <ChipScrollRow>
+            {SIDO_REGIONS.map((sido) => {
+              const active = sido.sidoCode === selectedSido.sidoCode;
+              return (
+                <button
+                  key={sido.sidoCode}
+                  type="button"
+                  className={`chip chip--all ${styles.cityChip}${active ? ` is-active ${styles.cityChipActive}` : ""}`}
+                  aria-pressed={active}
+                  onClick={() => onSelectSido(sido)}
+                >
+                  {sido.shortName}
+                </button>
+              );
+            })}
+          </ChipScrollRow>
+        </div>
+      )}
 
       <div className={styles.mapHeading} aria-hidden="true">
         <span>
@@ -291,8 +301,12 @@ export default function RegionRouteMap({
         </div>
       )}
       <p className={styles.routeCaption} aria-hidden="true">
-        <b>{mood}</b>에 맞춘
-        <br />
+        {mood ? (
+          <>
+            <b>{mood}</b>에 맞춘
+            <br />
+          </>
+        ) : null}
         {routeNames.length ? `실제 스팟 ${routeNames.length}곳` : "좌표 있는 스팟을 찾는 중"}
       </p>
       <figcaption className={styles.srOnly}>{mapSummary}</figcaption>

@@ -696,6 +696,87 @@ input:focus-visible,
     padding: var(--sp-5) var(--sp-6);
   }
 }
+
+/* =========================================================================
+   HERO 헤드라인 + 지역 지도 (2026-08-29, 대표 지시 — 데모 홈과 원래 홈을 자연스럽게 합치기)
+   §43이 뺐던 마케팅 헤드라인을 대표가 다시 요청해 되살린다("붐비는 길 옆에, 숨은 길이
+   있습니다"). 검색바 옆에 RegionRouteMap(demo-home/RegionRouteMap.tsx — 실제 시/도·시군구
+   행정경계 + 실좌표 코스선)을 나란히 둔다. 이 컴포넌트는 자체 CSS 변수(--paper/--ink/
+   --signal 등, DemoHome.module.css의 `.demo` 스코프)를 참조하므로, 그 스코프 밖(원래 홈)에서
+   쓰려면 이 래퍼가 같은 변수 이름을 **사이트 전역 토큰으로 재정의**해서 넘겨준다 — 데모 전용
+   팔레트를 통째로 들여오지 않고, 그 자리에서 var() 하나만 바꿔치기하는 방식이다.
+   시맨틱 규칙(§22): 코랄(--b-500)은 혼잡 전용이라 장식용 포인트로 못 쓴다 — 데모의 시그널
+   코랄 대신 브랜드 그린(--g-500)을 신호색으로 재정의한다(로고·퀵메뉴 아이콘과 동일 판단). */
+.hero-headline {
+  margin: var(--sp-8) var(--sp-4) 0;
+  font-size: clamp(28px, 6vw, 40px);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.hero-headline em {
+  font-style: italic;
+  font-family: "Nanum Myeongjo", "Noto Serif KR", serif;
+  color: var(--g-600);
+}
+@media (min-width: 1024px) {
+  .hero-headline {
+    max-width: var(--container-1);
+    margin: var(--sp-10) auto 0;
+    padding: 0 var(--sp-10);
+    font-size: clamp(34px, 3.6vw, 52px);
+  }
+}
+
+.hero-top-grid {
+  display: grid;
+  gap: var(--sp-6);
+}
+@media (min-width: 1024px) {
+  .hero-top-grid {
+    grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.86fr);
+    align-items: start;
+    max-width: var(--container-1);
+    margin: var(--sp-8) auto var(--sp-8);
+    padding: 0 var(--sp-10);
+  }
+  /* 그리드가 폭·중앙정렬을 맡으므로, 검색바 자신의 중복 max-width/auto-margin은 끈다. */
+  .hero-top-grid .home-search-bar {
+    max-width: none;
+    margin: 0;
+  }
+}
+
+.home-region-map {
+  --paper: var(--g-50);
+  --mist: var(--g-100);
+  --ink-soft: var(--ink-muted);
+  --river: var(--n-100);
+  --signal: var(--g-500);
+  --line: var(--n-100);
+  /* RegionRouteMap.tsx의 지도 채움·경계선은 hex 대신 이 트리플릿으로 rgba() 불투명도를 섞는다
+     (DemoHome.module.css `.demo` 참고) — hex 변수만 바꾸면 지도 자체는 안 바뀌므로 반드시
+     같이 맞춘다. paper-rgb=g-50, ink-rgb=ink(전역), river-rgb=g-100(연한 브랜드 그린 틴트). */
+  --paper-rgb: 239, 251, 245;
+  --ink-rgb: 5, 14, 27;
+  --river-rgb: 216, 245, 232;
+  margin: 0 var(--sp-4);
+  min-height: 320px;
+}
+@media (min-width: 1024px) {
+  .home-region-map {
+    margin: 0;
+    min-height: 460px;
+  }
+}
+/* RegionRouteMap의 루트가 <figure>(styles.routeStage, height:660 기준 SVG)라 이 래퍼 안에서
+   실제 표시 높이만 이 래퍼 크기로 눌러준다 — 컴포넌트 내부 마크업/치수 계산은 그대로 둔다. */
+.home-region-map figure {
+  height: 100%;
+  min-height: inherit;
+}
+
 .dest-search__box {
   display: flex;
   align-items: center;
