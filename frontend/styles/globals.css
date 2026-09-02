@@ -736,15 +736,23 @@ input:focus-visible,
 @media (min-width: 1024px) {
   .hero-top-grid {
     grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.86fr);
-    align-items: start;
+    /* 2026-08-29 재작업(대표 지적 — 카드 두 개 높이가 안 맞아 짝처럼 안 보임) —
+       start면 지도(내용이 큰 SVG라 키가 큼) 옆에 검색 카드가 훨씬 짧게 남아 나란한
+       카드 쌍이 아니라 크기가 안 맞는 두 블록으로 보였다. stretch로 서로 높이를 맞춘다. */
+    align-items: stretch;
     max-width: var(--container-1);
     margin: var(--sp-8) auto var(--sp-8);
     padding: 0 var(--sp-10);
   }
-  /* 그리드가 폭·중앙정렬을 맡으므로, 검색바 자신의 중복 max-width/auto-margin은 끈다. */
+  /* 그리드가 폭·중앙정렬을 맡으므로, 검색바 자신의 중복 max-width/auto-margin은 끈다.
+     stretch로 늘어난 높이만큼 내용이 위에만 붙지 않도록 세로 중앙 배치한다(내용 아래
+     휑한 흰 여백 대신, 카드 안에서 균형 있게 자리잡도록). */
   .hero-top-grid .home-search-bar {
     max-width: none;
     margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 }
 
@@ -771,12 +779,15 @@ input:focus-visible,
   box-shadow: var(--shadow-card);
   overflow: hidden;
   margin: 0 var(--sp-4);
-  min-height: 320px;
+  min-height: 300px;
 }
 @media (min-width: 1024px) {
   .home-region-map {
     margin: 0;
-    min-height: 460px;
+    /* 460px는 검색 카드보다 훨씬 커서 짝이 안 맞아 보였다(대표 지적) — 검색 카드의
+       자연 높이(라벨+입력+칩 행, 대략 300px대)에 더 가깝게 낮췄다. 실제 최종 높이는
+       위 .hero-top-grid의 stretch가 두 카드 중 더 큰 쪽에 맞춰 결정한다. */
+    min-height: 340px;
   }
 }
 /* RegionRouteMap의 루트가 <figure>(styles.routeStage, height:660 기준 SVG)라 이 래퍼 안에서

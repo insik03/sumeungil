@@ -62,21 +62,29 @@ const MAP_WIDTH = 620;
 const MAP_HEIGHT = 660;
 const MAP_LEFT = 52;
 const MAP_RIGHT = 48;
+// 데모 홈 단독 사용(도시선택 칩바+제목 두 줄이 위쪽을 차지)일 때의 여백. 실제 홈 임베드는
+// hidePicker라 칩바가 없고 제목도 한 줄로 압축돼(CSS top:22px) 그만큼 덜 필요하다 —
+// 그대로 두면 지도 모양이 카드 안에서 작게 붕 뜬 것처럼 보인다(대표 지적 2026-08-29
+// "히어로 배너랑 지도 위치 부자연스럽다" 재작업).
 const MAP_TOP = 132;
+const MAP_TOP_COMPACT = 56;
 const MAP_BOTTOM = 62;
+const MAP_BOTTOM_COMPACT = 34;
 
-function createProjector(bounds: MapBounds) {
+function createProjector(bounds: MapBounds, compact: boolean) {
   const midLat = (bounds.minLat + bounds.maxLat) / 2;
   const lngScale = Math.cos((midLat * Math.PI) / 180);
   const minX = bounds.minLng * lngScale;
   const maxX = bounds.maxLng * lngScale;
   const geoWidth = Math.max(maxX - minX, Number.EPSILON);
   const geoHeight = Math.max(bounds.maxLat - bounds.minLat, Number.EPSILON);
+  const top = compact ? MAP_TOP_COMPACT : MAP_TOP;
+  const bottom = compact ? MAP_BOTTOM_COMPACT : MAP_BOTTOM;
   const availableWidth = MAP_WIDTH - MAP_LEFT - MAP_RIGHT;
-  const availableHeight = MAP_HEIGHT - MAP_TOP - MAP_BOTTOM;
+  const availableHeight = MAP_HEIGHT - top - bottom;
   const scale = Math.min(availableWidth / geoWidth, availableHeight / geoHeight);
   const offsetX = MAP_LEFT + (availableWidth - geoWidth * scale) / 2;
-  const offsetY = MAP_TOP + (availableHeight - geoHeight * scale) / 2;
+  const offsetY = top + (availableHeight - geoHeight * scale) / 2;
 
   return ([lng, lat]: Coordinate) => ({
     x: offsetX + (lng * lngScale - minX) * scale,
@@ -155,7 +163,7 @@ export default function RegionRouteMap({
 
   const geometry = useMemo(() => {
     if (!asset) return null;
-    const project = createProjector(asset.bounds);
+    const project = createProjector(asset.bounds, hidePicker);
     const outerPath = ringPath(asset.outerRing, project);
     const districtPaths = asset.districts.flatMap((district) =>
       district.rings.map((ring, ringIndex) => ({
@@ -179,7 +187,7 @@ export default function RegionRouteMap({
       .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
       .join(" ");
     return { outerPath, districtPaths, projectedStops, routePath };
-  }, [asset, spots]);
+  }, [asset, spots, hidePicker]);
 
   const routeNames = geometry?.projectedStops.map((point) => point.spot.name) ?? [];
   const mapSummary = routeNames.length
