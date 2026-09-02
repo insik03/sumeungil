@@ -741,20 +741,18 @@ export default function CourseContent() {
         )}
       </section>
 
-      {/* 2026-08-29(대표 지시) — "지도를 AI 코스짜기에도 넣어줘, 위에 하나 있고 그 밑으로
-          기존 페이지 있으면 될 거 같다". 홈에 이미 있는 독립 지도 섹션(RegionMapSection.tsx,
-          HomeContent.tsx와 동일 컴포넌트 재사용 — 새로 안 만듦)을 로그인 게이트보다도 위에
-          둔다. 로그인 전에도 "이 지역 실제로 이렇게 보인다"를 먼저 보여주는 미리보기 역할 —
-          지금 화면에 있는 마지막 지역(sigunguCd)을 그대로 쓴다(custom 모드도 이 state를
-          공유하므로 문제 없음, RegionPicker는 ai 모드에서만 이 값을 바꾼다). */}
-      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
-
       {!loggedIn ? (
         <LoginRequiredGate
           title="로그인이 필요해요"
           message="AI 코스짜기는 로그인 후 이용할 수 있어요. 로그인하면 만든 코스를 저장해 다시 볼 수도 있어요."
         />
       ) : (
+      <>
+      {/* 2026-08-29(대표 지시) — "지도를 AI 코스짜기에도 넣어줘". 처음엔 로그인 게이트보다
+          위(미리보기)에 뒀는데 대표가 "로그인해야 볼 수 있게 해야지"로 재지시 — 로그인
+          이후에만 보이도록 이 안(게이트 통과 후 분기)으로 옮겼다. 홈과 같은 컴포넌트 재사용은
+          그대로(RegionMapSection.tsx, 새로 안 만듦). */}
+      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
       <section className="section" aria-labelledby="courseHeading">
         <div className="course-mode-switch" role="tablist" aria-label="코스 만들기 방식">
           <button
@@ -1003,6 +1001,7 @@ export default function CourseContent() {
           </>
         )}
       </section>
+      </>
       )}
     </>
   );
