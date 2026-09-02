@@ -188,7 +188,10 @@ export default function RegionRouteMap({
   const leadStop = geometry?.projectedStops[0]?.spot;
 
   return (
-    <figure className={styles.routeStage} aria-label={mapSummary}>
+    <figure
+      className={`${styles.routeStage}${hidePicker ? ` ${styles.routeStageBare}` : ""}`}
+      aria-label={mapSummary}
+    >
       {!hidePicker && (
         <div className={styles.cityPicker} aria-label="지도 지역 선택">
           <span>지도 지역</span>

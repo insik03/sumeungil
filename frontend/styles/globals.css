@@ -761,6 +761,15 @@ input:focus-visible,
   --paper-rgb: 239, 251, 245;
   --ink-rgb: 5, 14, 27;
   --river-rgb: 216, 245, 232;
+  /* 2026-08-29 재작업(대표 지적 "전혀 안 자연스럽다") — 데모의 손그림풍 카드 장식(비대칭
+     모서리·하드섀도우)을 RegionRouteMap.tsx가 hidePicker일 때 벗기므로(.routeStageBare),
+     그 대신 바로 옆 .home-search-bar와 완전히 같은 카드 문법(흰 배경·r-lg·shadow-card·
+     n-100 테두리)을 여기서 입힌다 — 검색창과 지도가 "짝을 이루는 카드 한 쌍"으로 보이게. */
+  background: var(--white);
+  border: 1px solid var(--n-100);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
   margin: 0 var(--sp-4);
   min-height: 320px;
 }

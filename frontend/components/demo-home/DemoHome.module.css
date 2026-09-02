@@ -76,6 +76,13 @@
 .moods .moodActive { border-color: var(--ink); color: white; background: var(--ink); }
 
 .routeStage { position: relative; min-height: 660px; isolation: isolate; overflow: hidden; margin: 0; border: 1px solid var(--line); border-radius: 5px 38px 5px 5px; background: #e9f1ed; box-shadow: 12px 14px 0 rgba(18,45,43,.08); }
+/* 실제 홈 임베드용(대표 지시 2026-08-29 재작업 — "전혀 안 자연스럽다"). 데모 특유의 비대칭
+   모서리·하드 오프셋 섀도우는 이 지도만의 손그림풍 장식이라, 호스트 화면이 이미 자기 카드
+   스타일(예: 원래 홈의 .home-search-bar — 흰 배경/둥근 모서리/소프트 섀도우)을 갖고 있으면
+   그 장식을 벗겨야 한 화면처럼 보인다. 같은 모듈 안이라 .routeStage와 클래스 특이성이
+   같으므로 파일 내 선언 순서(이 규칙이 더 아래)로 뒤엎는다 — 전역 스타일시트에서 해시된
+   모듈 클래스명을 겨냥할 수 없어서 안(밖)이 아니라 안에서 벗기는 방식을 택했다. */
+.routeStageBare { border: none; border-radius: 0; background: none; box-shadow: none; }
 .cityPicker { position: absolute; top: 15px; right: 18px; left: 18px; z-index: 10; display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid rgba(18,45,43,.16); border-radius: 3px 20px 3px 3px; background: rgba(243,247,244,.94); box-shadow: 5px 6px 0 rgba(18,45,43,.07); }
 .cityPicker > span { color: var(--ink-soft); font-size: 10px; font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
 .cityPicker :global(.chip-row-fade) { min-width: 0; }
@@ -85,6 +92,9 @@
 .cityChip:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 .cityChipActive, .cityPicker :global(.chip.is-active) { border-color: var(--ink); color: white; background: var(--ink); }
 .mapHeading { position: absolute; top: 88px; left: 24px; z-index: 5; display: flex; flex-direction: column; gap: 3px; padding-left: 12px; border-left: 2px solid var(--signal); }
+/* .routeStageBare(위) 참고 — 도시선택 칩바가 없는 임베드에서는 그 칩바가 남기던 위쪽 공백이
+   그대로 남으므로 제목을 그만큼 끌어올린다. */
+.routeStageBare .mapHeading { top: 22px; }
 .mapHeading span { color: var(--ink-soft); font-size: 10px; letter-spacing: .08em; }
 .mapHeading b { font-size: 13px; }
 .regionMap { position: absolute; inset: 0; width: 100%; height: 100%; }
