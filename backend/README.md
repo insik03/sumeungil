@@ -89,7 +89,7 @@ MVP-5에서 핫플 vs 숨은길 1:1 대조 리포트(`POST /api/v1/compare`)를 
 ### `POST /api/v1/onboarding/analyze` (MVP-3)
 
 자유 텍스트 + 칩(영문 코드 배열)으로 취향 태그(`OnboardingResult`)를 추출한다.
-LLM 호출은 backend가 로컬 Ollama(`qwen2.5:7b`, 실측 3~7초)를 감싸서 수행하며,
+LLM 호출은 backend가 로컬 Ollama(개발 기본 `qwen3.5:4b-q4_K_M`)를 감싸서 수행하며,
 프론트는 Ollama를 직접 부르지 않는다. 계약 부록 B.1/B.3.
 
 요청 body (`text`·`chips` 둘 다 선택, 단 둘 다 비면 400):
@@ -350,9 +350,12 @@ curl "http://localhost:8000/api/v1/regions/search?q=경주"
 curl "http://localhost:8000/api/v1/congestion/board?area_cd=47&sigungu_cd=47130&limit=5"
 ```
 
-MVP-3 온보딩 (로컬 Ollama `qwen2.5:7b` 필요 — `ollama pull qwen2.5:7b`):
+MVP-3 온보딩 (로컬 품질 우선 기본값 `qwen3.5:4b-q4_K_M`):
 
 ```bash
+# 최초 1회. 기존 모델과 품질 비교는 아래 benchmark_local_llms.py 참고.
+ollama pull qwen3.5:4b-q4_K_M
+
 # 칩 UI 소스
 curl http://localhost:8000/api/v1/onboarding/tag-schema
 
@@ -361,6 +364,9 @@ printf '{"text":"6세 아이랑 반려견이랑 걷기 좋은 곳","chips":[]}' 
 curl -X POST http://localhost:8000/api/v1/onboarding/analyze \
   -H "Content-Type: application/json; charset=utf-8" --data-binary @body.json
 #   -> extracted_by:"llm-v1", fallback_used:false, tags 7축 + tag_vector[36]
+
+# 같은 한국어 관광 골든 케이스로 기존 7B/3B와 새 2B의 JSON 성공률·F1·지연 비교
+python scripts/benchmark_local_llms.py --models qwen2.5:7b qwen3.5:2b-q4_K_M qwen3.5:4b-q4_K_M
 
 # 빈 입력 -> 400 EMPTY_INPUT
 curl -X POST http://localhost:8000/api/v1/onboarding/analyze \

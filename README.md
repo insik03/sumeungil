@@ -1,75 +1,218 @@
-# 숨은길 (Sumeungil)
+<div align="center">
 
-혼잡한 명소 대신 **숨은 관광지를 추천**하는 AI 여행 웹서비스.
-2026 관광데이터 활용 공모전 ②-2 웹·앱 구현 부문 지정과제 2번 출품작.
+# 숨은길 · Sumeungil
 
-- 운영: https://sumeungil.co.kr
-- 스택: FastAPI (backend) + Next.js 15 (frontend) + nginx + PostgreSQL + Ollama, Docker Compose 배포
+### 붐비는 명소 대신, 나에게 맞는 숨은 관광지를 찾는 AI 여행 서비스
 
-## 처음 온 사람은 이 순서로
+[![Service](https://img.shields.io/badge/서비스-sumeungil.co.kr-176B55?style=for-the-badge&logo=safari&logoColor=white)](https://sumeungil.co.kr)
+![Contest](https://img.shields.io/badge/2026_관광데이터_활용_공모전-출품작-E8A33D?style=for-the-badge)
+![Local AI](https://img.shields.io/badge/AI-100%25_Local-111827?style=for-the-badge&logo=ollama&logoColor=white)
 
-1. **[인수인계 8월 10일.md](인수인계%208월%2010일.md)** — 현재 상태, 대기 항목, 그리고 **다시 밟으면 시간을 잃는 함정들**
-2. [01-interface-contract.md](01-interface-contract.md) — 백-프론트 인터페이스 계약 (부록 T~X 포함)
-3. [deploy/DEPLOY.md](deploy/DEPLOY.md) — 배포·HTTPS·관리자 콘솔 절차
-4. [APPROVALS.md](APPROVALS.md) — 결재 로그 (게이트 통과 이력)
-5. [STATUS.md](STATUS.md) — 대표님 확인용 현재 구현 현황
+실시간 혼잡도와 여행 취향을 결합해 관광지를 추천하고, 하루 코스와 이동 경로까지 한 번에 구성합니다.
 
-지나간 단계별 PRD·설계·QA·보안·법률 리뷰는 [docs/](docs/)에 있다 — 지금 뭘 해야 하는지는 위 5개면 충분하고, docs/는 "그때 왜 그렇게 정했는지" 찾을 때만 연다.
+</div>
+
+## 서비스 한눈에 보기
+
+| 취향 분석 | 숨은 관광지 추천 | AI 코스 설계 | 여행 현황 |
+|:---:|:---:|:---:|:---:|
+| 자연어·선택 태그에서 여행 취향 추출 | 혼잡도·취향·거리·신뢰도를 함께 반영 | 관광지 순서, 이동 시간, 지도 경로 생성 | 전국 혼잡도·날씨·축제 정보를 한 화면에 제공 |
+
+## 아키텍처
+
+```mermaid
+flowchart LR
+    U["여행자<br/>Mobile · Web"]
+
+    subgraph EDGE["서비스 진입점"]
+        N["Nginx<br/>TLS · Reverse Proxy"]
+    end
+
+    subgraph APP["Application"]
+        F["Next.js 15<br/>React · TypeScript"]
+        B["FastAPI<br/>Recommendation API"]
+    end
+
+    subgraph CORE["Data & Local AI"]
+        DB[("PostgreSQL<br/>회원 · 취향 · 코스 · 후기")]
+        AI["Ollama<br/>Qwen3.5 Local LLM"]
+    end
+
+    subgraph PUBLIC["Tourism Data"]
+        KTO["한국관광공사<br/>TourAPI · 혼잡도"]
+        KMA["기상청<br/>날씨 예보"]
+        MAP["NAVER Map · TMAP<br/>지도 · 경로"]
+    end
+
+    subgraph OPS["Operations"]
+        P["Prometheus"]
+        G["Grafana"]
+    end
+
+    U -->|HTTPS| N
+    N --> F
+    F -->|REST /api/v1| N
+    N --> B
+    B --> DB
+    B -->|취향 추출 · 요약 · 여행 팁| AI
+    B --> KTO
+    B --> KMA
+    B --> MAP
+    F -. 지도 SDK .-> MAP
+    P -->|metrics 수집| B
+    G --> P
+
+    classDef entry fill:#ECF7F2,stroke:#176B55,color:#12382E,stroke-width:2px;
+    classDef app fill:#EEF4FF,stroke:#4263A8,color:#162B4D,stroke-width:2px;
+    classDef core fill:#FFF6E5,stroke:#C98217,color:#50320A,stroke-width:2px;
+    classDef external fill:#F7F7F7,stroke:#7A8581,color:#29332F;
+    classDef ops fill:#F4EEFF,stroke:#7950B3,color:#33204D;
+    class U,N entry;
+    class F,B app;
+    class DB,AI core;
+    class KTO,KMA,MAP external;
+    class P,G ops;
+```
+
+<details>
+<summary><strong>추천 요청이 처리되는 흐름</strong></summary>
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 여행자
+    participant Web as Next.js
+    participant API as FastAPI
+    participant LLM as Ollama · Qwen3.5
+    participant Data as 관광·날씨 API
+    participant DB as PostgreSQL
+
+    User->>Web: 여행 취향과 지역 입력
+    Web->>API: 추천 요청
+    API->>LLM: 자연어 취향을 구조화 태그로 변환
+    LLM-->>API: JSON 태그
+    API->>Data: 관광지·혼잡도·날씨 조회
+    Data-->>API: 최신 원천 데이터
+    API->>API: 취향·혼잡도·거리·신뢰도 점수화
+    API->>DB: 프로필·코스 저장
+    API-->>Web: 추천 장소와 AI 코스
+    Web-->>User: 지도·타임라인·여행 팁 표시
+```
+
+</details>
+
+## 기술 스택
+
+### Frontend
+
+<p>
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js_15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
+  <img alt="CSS" src="https://img.shields.io/badge/CSS-663399?style=for-the-badge&logo=css&logoColor=white" />
+  <img alt="Lucide" src="https://img.shields.io/badge/Lucide-111827?style=for-the-badge&logo=lucide&logoColor=F56565" />
+</p>
+
+### Backend · AI
+
+<p>
+  <img alt="Python" src="https://img.shields.io/badge/Python_3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <img alt="Pydantic" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white" />
+  <img alt="Ollama" src="https://img.shields.io/badge/Ollama-Local_LLM-111111?style=for-the-badge&logo=ollama&logoColor=white" />
+  <img alt="Qwen" src="https://img.shields.io/badge/Qwen3.5-2B--4B_Q4-615CED?style=for-the-badge" />
+</p>
+
+### Data · Infrastructure
+
+<p>
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL_16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
+  <img alt="Docker" src="https://img.shields.io/badge/Docker_Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
+  <img alt="Nginx" src="https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white" />
+  <img alt="Prometheus" src="https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white" />
+  <img alt="Grafana" src="https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white" />
+  <img alt="GitHub Actions" src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" />
+</p>
+
+| 영역 | 역할 |
+|---|---|
+| **Next.js · React · TypeScript** | 반응형 웹 UI, 지도와 추천 결과 렌더링 |
+| **FastAPI · Pydantic** | REST API, 입력 계약 검증, 추천·코스 도메인 로직 |
+| **Ollama · Qwen3.5** | 외부 전송 없는 로컬 취향 추출, 요약, 개인화 여행 팁 |
+| **PostgreSQL** | 회원, 취향 프로필, AI 코스, 후기와 공유 데이터 저장 |
+| **TourAPI · 기상청 · 지도 API** | 관광지, 혼잡도, 날씨, 이동 경로 원천 데이터 |
+| **Docker · Nginx** | ARM64 서버 컨테이너 배포, TLS와 리버스 프록시 |
+| **Prometheus · Grafana** | API 지표 수집과 운영 모니터링 |
 
 ## 로컬 실행
 
+### 1. Backend
+
 ```bash
-# backend (포트 8000)
 cd backend
 pip install -r requirements.txt
-cp .env.example .env   # 키 값은 대표에게 요청
-py -m uvicorn app.main:app --port 8000
+cp .env.example .env   # 필요한 키는 프로젝트 관리자에게 요청
+ollama pull qwen3.5:4b-q4_K_M
+python -m uvicorn app.main:app --port 8000
+```
 
-# frontend (포트 3000)
+### 2. Frontend
+
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-API 확인은 Swagger UI(http://localhost:8000/docs) 또는 ReDoc(http://localhost:8000/redoc). `APP_ENV`가
-`production`이 아닐 때만 열린다 — 운영에서는 의도적으로 꺼져 있다(관리자 콘솔 스키마 노출 +
-Swagger UI의 외부 CDN 스크립트 로드가 세션 쿠키에 닿는 XSS 경로가 되는 걸 막기 위함, `backend/app/main.py` 주석 참고).
+- Web: `http://localhost:3000`
+- API 문서: `http://localhost:8000/docs`
+- 로컬 LLM 비교: `cd backend && python scripts/benchmark_local_llms.py`
 
-## 규칙
+API 문서는 `APP_ENV`가 `production`이 아닐 때만 열립니다. 운영에서는 관리자 스키마 노출과
+Swagger UI 외부 CDN 스크립트의 세션 접근 위험을 줄이기 위해 의도적으로 비활성화합니다.
 
-- **시크릿(.env, 키, 해시)은 절대 커밋하지 않는다** — .gitignore가 막고 있지만 눈으로도 확인할 것
-- **운영 배포는 대표 승인 후에만** — 절차는 DEPLOY.md, 결과는 APPROVALS.md에 기록
-- 10~12월(심사 기간)에는 서버를 정지시키는 작업 금지
+## 처음 온 사람은 이 순서로
+
+1. **[인수인계 8월 10일.md](인수인계%208월%2010일.md)** — 현재 상태, 대기 항목, 다시 밟으면 시간을 잃는 함정
+2. [01-interface-contract.md](01-interface-contract.md) — 프론트엔드와 백엔드 API 계약
+3. [deploy/DEPLOY.md](deploy/DEPLOY.md) — Docker, HTTPS, 운영 배포 절차
+4. [APPROVALS.md](APPROVALS.md) — 결재·게이트 통과 이력
+5. [STATUS.md](STATUS.md) — 기능별 구현·검수 현황
+6. [docs/02-ai-strategy-현황.md](docs/02-ai-strategy-현황.md) — 로컬 AI 구조와 안전·폴백 전략
+
+지나간 단계별 PRD·설계·QA·보안·법률 리뷰는 [docs/](docs/)에서 확인할 수 있습니다.
+
+## 운영 원칙
+
+- 시크릿(`.env`, API 키, 해시)은 저장소에 커밋하지 않습니다.
+- 운영 배포는 대표 승인 후 진행하고 결과를 `APPROVALS.md`에 기록합니다.
+- 10~12월 심사 기간에는 서버 중단 가능성이 있는 작업을 진행하지 않습니다.
 
 ## 브랜치 전략
 
-영구 브랜치는 두 개, `main`과 `develop`이다.
+영구 브랜치는 `main`과 `develop`입니다.
 
-- `main` — 운영 배포 기준(release). 태그와 배포는 여기서만 나간다.
-- `develop` — 평소 작업이 모이는 통합 브랜치. PR은 기본적으로 여기로 올린다.
+- `main` — 운영 배포 기준. 태그와 배포는 여기서만 진행합니다.
+- `develop` — 평소 작업이 모이는 통합 브랜치. PR은 기본적으로 여기로 올립니다.
 
-규칙은 이 다섯이다.
+1. 작업 브랜치는 이슈 단위로 `develop`에서 만들고, 병합 후 삭제합니다.
+2. 작업 내용을 설명하는 이슈를 만듭니다.
+3. `main`·`develop`에는 직접 푸시하지 않고 PR로 병합합니다.
+4. 기본 리뷰어는 대표 `@insik03`입니다. 자세한 내용은 `.github/CODEOWNERS`를 참고합니다.
+5. 커밋과 PR 제목에는 아래 타입 접두어를 사용합니다.
 
-1. **작업 브랜치는 이슈 단위.** `develop`에서 따고, 머지되면 지운다.
-2. **브랜치에 맞는 이슈를 만든다** — 뭘, 왜 하는지 한두 줄이면 충분.
-3. **`main`·`develop`에는 PR로만.** 직접 푸시하지 않는다. PR엔 이슈를 `Closes #번호`로 연결.
-4. **리뷰어는 기본으로 대표(@insik03)** — `.github/CODEOWNERS` 참고. 대표 본인이 올리는 PR은 GitHub 정책상 스스로를 리뷰어로 못 거니 팀원이 리뷰하거나 본인 확인 후 머지.
-5. **커밋/PR 제목엔 타입 접두어를 붙인다** — `.github/release.yml` 카테고리·라벨이 여기 맞춰져 있어, 릴리스 만들 때(`gh release create vX.Y.Z --generate-notes`) 자동으로 분류된 changelog가 나온다.
-
-  | 접두어 | 뜻 | 대응 라벨 |
-  | --- | --- | --- |
-  | `feat:` | 새 기능 | enhancement |
-  | `fix:` | 버그 수정 | bug |
-  | `security:` | 보안 관련 변경 | security |
-  | `docs:` | 문서 | documentation |
-  | `chore:` | 설정·잡무·리팩터링 | chore |
-  | `release:` | `develop → main` 배포용 머지 | release |
+| 접두어 | 뜻 | 대응 라벨 |
+|---|---|---|
+| `feat:` | 새 기능 | enhancement |
+| `fix:` | 버그 수정 | bug |
+| `security:` | 보안 관련 변경 | security |
+| `docs:` | 문서 | documentation |
+| `chore:` | 설정·잡무·리팩터링 | chore |
+| `release:` | `develop → main` 배포용 머지 | release |
 
 브랜치 이름 예시: `feat/course-map`, `fix/naver-maps-load`, `docs/readme`
 
 ## 매일 작업 시작
-
-최신 `develop`을 받은 뒤에만 고친다.
 
 ```bash
 git checkout develop
@@ -80,8 +223,14 @@ git checkout -b feat/화면이름
 ## 저장소 접근 권한
 
 | GitHub | 권한 |
-| --- | --- |
+|---|---|
 | `insik03` | admin |
 | `qweasd-22` | write |
 
-팀원이 새로 필요하면 대표에게 초대를 요청한다.
+팀원이 새로 필요하면 대표에게 초대를 요청합니다.
+
+---
+
+<div align="center">
+  <sub>2026 관광데이터 활용 공모전 · 웹/앱 구현 부문 지정과제 출품작</sub>
+</div>
