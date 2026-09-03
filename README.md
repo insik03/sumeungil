@@ -25,71 +25,9 @@ VM 한 대(NAVER Cloud · 모두의AI실험실, 2 vCPU / 15GB)에 Docker Compose
 ollama는 인증이 없고, backend를 직접 노출하면 레이트리밋을 우회할 수 있기 때문이다.
 외부 API 키는 전부 서버(backend `.env`)에만 있고 브라우저로 나가지 않는다.
 
-```mermaid
-flowchart TB
-    U["여행자 브라우저<br/>Next.js 화면 · NAVER 지도 JS SDK"]
+![숨은길 인프라 구조](docs/architecture.png)
 
-    subgraph VM["NAVER Cloud VM 1대 · Docker Compose"]
-        direction TB
-        subgraph EDGE["호스트에 열린 포트: 80 · 443"]
-            NG["nginx<br/>TLS 종단 · 리버스 프록시<br/>봇 경로 차단 · LLM 경로별 타임아웃"]
-            CB["certbot<br/>Let's Encrypt 12h 자동 갱신"]
-        end
-        subgraph NET["도커 내부망 (호스트 포트 없음)"]
-            FE["frontend<br/>Next.js 15 · :3000"]
-            BE["backend<br/>FastAPI · uvicorn 1 worker · :8000<br/>레이트리밋 · 인메모리 캐시 · 세션 쿠키"]
-            PG[("postgres 16<br/>회원 · 취향 · AI코스 · 후기<br/>공유코스 · 문의 · 방문로그")]
-            OL["ollama<br/>Qwen 로컬 LLM · CPU 추론<br/>취향 추출 · 코스 요약 · 여행 팁"]
-            PR["prometheus<br/>backend /metrics 수집"]
-            BK["postgres-backup<br/>pg_dump 매일 · 로컬 14일"]
-        end
-    end
-
-    subgraph DATA["공공데이터포털 data.go.kr — backend만 호출"]
-        TOUR["한국관광공사 TourAPI<br/>관광지 · 축제 · 사진"]
-        KTO["한국관광공사 집중률<br/>관광지별 혼잡도 예측 17일"]
-        KMA["기상청 관광지 단기예보"]
-        STD["표준데이터 문화축제"]
-    end
-    subgraph SVC["외부 서비스 — backend만 호출"]
-        TMAP["SK Tmap 경로 API<br/>도보 · 자동차 이동시간"]
-        OAUTH["Google · Kakao OAuth"]
-    end
-    subgraph OPS["운영 · 감시 (VM 밖)"]
-        GH["GitHub Actions<br/>CI · 의존성 감사<br/>30분 외부 헬스체크"]
-        SL["Slack 알림-봇<br/>에러 · 이상 · 아침 요약<br/>/서버상태 · /문의"]
-        GF["Grafana (aitestbed.kr)"]
-        S3[("오프사이트 백업 버킷<br/>S3 호환")]
-    end
-
-    U -->|HTTPS| NG
-    NG -->|"/"| FE
-    NG -->|"/api/ · /health"| BE
-    NG -->|"/prom/ Basic Auth"| PR
-    CB -.인증서.-> NG
-    BE --> PG
-    BE -->|"HTTP :11434"| OL
-    PR -->|scrape| BE
-    BK --> PG
-    BK -.-> S3
-    BE --> TOUR & KTO & KMA & STD
-    BE --> TMAP & OAUTH
-    BE -->|webhook| SL
-    GH -->|"GET /api/v1/health 30분마다"| NG
-    GH --> SL
-    GF -->|"/prom/"| NG
-
-    classDef edge fill:#ECF7F2,stroke:#176B55,color:#12382E,stroke-width:2px
-    classDef app fill:#EEF4FF,stroke:#4263A8,color:#162B4D,stroke-width:2px
-    classDef store fill:#FFF6E5,stroke:#C98217,color:#50320A,stroke-width:2px
-    classDef ext fill:#F7F7F7,stroke:#7A8581,color:#29332F
-    classDef ops fill:#F4EEFF,stroke:#7950B3,color:#33204D
-    class U,NG,CB edge
-    class FE,BE app
-    class PG,OL,PR,BK store
-    class TOUR,KTO,KMA,STD,TMAP,OAUTH ext
-    class GH,SL,GF,S3 ops
-```
+<sub>그림 원본은 [docs/architecture.svg](docs/architecture.svg), 생성 스크립트는 [docs/architecture.gen.py](docs/architecture.gen.py) — 구성이 바뀌면 스크립트를 고쳐 다시 뽑는다.</sub>
 
 ### 요청이 지나가는 길
 
