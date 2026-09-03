@@ -16,7 +16,7 @@ export default function PlanPage() {
   return (
     <div className="page">
       <main>
-        <DeparturePlanner />
+        <DeparturePlanner headingLevel="h1" />
       </main>
       <Footer />
     </div>

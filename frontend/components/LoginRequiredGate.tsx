@@ -26,7 +26,7 @@ export default function LoginRequiredGate({
   return (
     <section className="onboard-section" aria-label={title}>
       <div className="board-error" role="status">
-        <p className="board-error__msg">{title}</p>
+        <h1 className="board-error__msg">{title}</h1>
         <p className="board-error__hint">{message}</p>
         <button
           className="btn btn--coral"

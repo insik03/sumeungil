@@ -282,13 +282,14 @@ export function Line({
   }, [lines, dataKey]);
 
   const pathRef = useRef<SVGPathElement>(null);
-  const { pathLength, pathD } = usePathStrokeMetrics(pathRef, [
+  const { pathLength, pathD } = usePathStrokeMetrics(
+    pathRef,
     renderData,
     innerWidth,
     dashFromIndex,
-    animate,
-    useDataTransitionPath ? animatedPathD : null,
-  ]);
+    String(animate),
+    useDataTransitionPath ? animatedPathD : null
+  );
 
   const reactId = useId();
   const gradientId = `line-gradient-${dataKey}-${reactId}`;

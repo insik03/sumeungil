@@ -140,6 +140,8 @@ class FeaturedSpot(BaseModel):
     category: SpotCategory
     region_name: str | None = None
     address: str | None = None
+    # ★ 지역 지도 경로용 additive(2026-09-02). SpotCard와 같은 실좌표 모델을 재사용한다.
+    location: SpotLocation
     congestion: SpotCongestion | None = None  # board 이름매칭(추천과 동일 로직). 없으면 null
     is_hidden_gem: bool = False
     image_url: str | None = None              # TourAPI firstimage(https 승격). 없으면 null(지어내지 않음)

@@ -124,7 +124,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [open]);
+  }, [open, onClose, onLoggedIn]);
 
   if (!open) return null;
 

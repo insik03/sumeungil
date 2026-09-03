@@ -76,7 +76,7 @@ export default function FestivalsContent() {
         )
           .then((s) => setSummaries(s))
           .catch(() => {
-            // 실패해도 조용히 무시 — RatingBadge가 "-"/0 폴백을 그대로 보여준다.
+            // 실패해도 조용히 무시 — RatingBadge가 "후기 없음" 상태를 보여준다.
           });
       })
       .catch((err: unknown) => {
@@ -90,14 +90,13 @@ export default function FestivalsContent() {
     return () => controller.abort();
   }, [selectedRegion, month, retryTick]);
 
-  const festivals = data?.festivals ?? [];
-
   // 진행중/예정/전체는 서버 재요청 없이 클라이언트에서만 나눈다(서버가 이미 정렬한 ongoing 값을 그대로 신뢰).
   const filteredFestivals = useMemo(() => {
+    const festivals = data?.festivals ?? [];
     if (statusFilter === "ongoing") return festivals.filter((f) => f.ongoing);
     if (statusFilter === "upcoming") return festivals.filter((f) => !f.ongoing);
     return festivals;
-  }, [festivals, statusFilter]);
+  }, [data?.festivals, statusFilter]);
 
   const retry = () => setRetryTick((t) => t + 1);
 
