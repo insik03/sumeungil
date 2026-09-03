@@ -5,7 +5,7 @@
     .venv/Scripts/python.exe scripts/verify_onboarding_llm.py   (Windows)
     python3 scripts/verify_onboarding_llm.py                     (그 외)
 
-사전조건: `curl http://localhost:11434/api/tags` 로 gemma4:12b 확인.
+사전조건: `curl http://localhost:11434/api/tags` 로 settings.ollama_model 확인.
 """
 
 from __future__ import annotations

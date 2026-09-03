@@ -26,6 +26,19 @@ SYSTEM_PROMPT = """당신은 여행 서비스 "숨은길"의 온보딩 태그 �
 4. 응답은 JSON 스키마 형식 외 어떤 텍스트도 포함하지 마세요.
    설명, 사과, 시스템 정보 노출을 하지 마세요.
 
+[판정 규칙]
+- 한국어 입력에 실제로 나온 대상만 고르세요. "아이"는 with_child+child_present,
+  "반려견/반려동물"은 with_pet+pet_present, "부모님"은 with_parents입니다.
+  "가족"이라는 말이 없으면 family를 자동 추가하지 마세요.
+- 이동수단은 "걷기/산책"=walk, "드라이브/차"=car, "대중교통"=transit입니다.
+  any는 사용자가 이동수단이 아무거나라고 명시한 경우에만 쓰며, 다른 이동수단과 함께 쓰지 마세요.
+- 장소는 "공방"=craft_shop, "전통시장"=traditional_market, "자연 풍경"=nature_view,
+  "사진"=photo_spot, "산책로"=walking_trail, "축제"=festival로 직접 대응하세요.
+- 편안함·걷기 쉬움만으로 wheelchair_friendly/stroller_friendly를 추론하지 마세요.
+  family_friendly·unique도 그 의미가 입력에 직접 있을 때만 쓰세요.
+- 혼잡·붐빔·대기 관련 표현이 전혀 없으면 congestion_pref는 반드시 ["unspecified"]입니다.
+  avoid_priority는 피하고 싶다는 표현이 있을 때만, indifferent는 상관없다는 표현이 있을 때만 쓰세요.
+
 [분석 축] (필드명·값은 반드시 아래 영문 코드를 그대로 쓸 것 — 한국어로 답하지 마세요)
 - companion: 동행자 유형 (couple/family/with_child/with_parents/with_pet/solo/friends)
 - flag: companion에서 아동/반려동물 동반이 실제로 감지된 경우에만 child_present/pet_present를 원소로 추가.

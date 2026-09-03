@@ -80,14 +80,17 @@ class Settings:
         # --- MVP-3 온보딩 LLM (로컬 Ollama) ---
         # 08-interface-contract.md 부록B B.0/B.4 — 로컬 실행, API 키·국외이전 없음.
         self.ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
-        # 모델 선정(2026-07-24 오케스트레이터 실측 비교):
-        #   - gemma4:12b   정확하나 CPU에서 56~101초 → 60초 타임아웃을 자주 넘겨 폴백됨(사실상 미사용)
-        #   - qwen2.5:3b   3~5초로 빠르나 축 배치가 어긋나 태그 유실
-        #   - qwen2.5:7b   3~7초 + 축 배치·정확도 우수 → **채택(기본값)**
-        # 셋 다 로컬(무료·무키·무국외이전). 상용 시 CloudProvider로 교체(엔드포인트 계약 불변).
-        self.ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b").strip()
-        self.ollama_temperature: float = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
-        # qwen2.5:7b 실측 3~7초. 로드/부하 변동 여유로 30초. (부록B §B.6: 프론트 fetch
+        # 2026-09-03 로컬 실측: qwen3.5 4B Q4가 관광 태그 스모크 테스트 F1 0.951로
+        # qwen2.5 7B(0.889)·qwen3.5 2B(0.787)보다 정확했다. 개발 기본값은 4B로 두되,
+        # CPU 2코어 운영 서버는 .env.production.example처럼 2B를 명시해 지연을 제한한다.
+        self.ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b-q4_K_M").strip()
+        # 추출·요약은 창작보다 재현성이 중요하다. Ollama 구조화 출력 권장값과 같이 0을 쓴다.
+        self.ollama_temperature: float = float(os.getenv("OLLAMA_TEMPERATURE", "0"))
+        # Qwen 계열 thinking은 짧은 API 응답에 지연만 더하므로 기본 비활성화한다.
+        self.ollama_think: bool = os.getenv("OLLAMA_THINK", "false").strip().lower() == "true"
+        # 연속 요청의 모델 재로딩(콜드 스타트)을 줄인다. 빈 문자열이면 Ollama 기본값을 쓴다.
+        self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "10m").strip()
+        # CPU 추론 부하 변동 여유로 30초. (부록B §B.6: 프론트 fetch
         # 타임아웃은 이보다 길게 — 프론트 60초로 이미 넉넉함.)
         self.ollama_timeout_sec: float = float(os.getenv("OLLAMA_TIMEOUT_SEC", "30"))
 
