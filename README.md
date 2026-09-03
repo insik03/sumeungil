@@ -20,83 +20,123 @@
 
 ## 아키텍처
 
+VM 한 대(NAVER Cloud · 모두의AI실험실, 2 vCPU / 15GB)에 Docker Compose로 컨테이너 8개를 올린다.
+**호스트에 열린 포트는 nginx의 80·443뿐**이고, backend·ollama·postgres는 도커 내부망에만 있다 —
+ollama는 인증이 없고, backend를 직접 노출하면 레이트리밋을 우회할 수 있기 때문이다.
+외부 API 키는 전부 서버(backend `.env`)에만 있고 브라우저로 나가지 않는다.
+
 ```mermaid
-flowchart LR
-    U["여행자<br/>Mobile · Web"]
+flowchart TB
+    U["여행자 브라우저<br/>Next.js 화면 · NAVER 지도 JS SDK"]
 
-    subgraph EDGE["서비스 진입점"]
-        N["Nginx<br/>TLS · Reverse Proxy"]
+    subgraph VM["NAVER Cloud VM 1대 · Docker Compose"]
+        direction TB
+        subgraph EDGE["호스트에 열린 포트: 80 · 443"]
+            NG["nginx<br/>TLS 종단 · 리버스 프록시<br/>봇 경로 차단 · LLM 경로별 타임아웃"]
+            CB["certbot<br/>Let's Encrypt 12h 자동 갱신"]
+        end
+        subgraph NET["도커 내부망 (호스트 포트 없음)"]
+            FE["frontend<br/>Next.js 15 · :3000"]
+            BE["backend<br/>FastAPI · uvicorn 1 worker · :8000<br/>레이트리밋 · 인메모리 캐시 · 세션 쿠키"]
+            PG[("postgres 16<br/>회원 · 취향 · AI코스 · 후기<br/>공유코스 · 문의 · 방문로그")]
+            OL["ollama<br/>Qwen 로컬 LLM · CPU 추론<br/>취향 추출 · 코스 요약 · 여행 팁"]
+            PR["prometheus<br/>backend /metrics 수집"]
+            BK["postgres-backup<br/>pg_dump 매일 · 로컬 14일"]
+        end
     end
 
-    subgraph APP["Application"]
-        F["Next.js 15<br/>React · TypeScript"]
-        B["FastAPI<br/>Recommendation API"]
+    subgraph DATA["공공데이터포털 data.go.kr — backend만 호출"]
+        TOUR["한국관광공사 TourAPI<br/>관광지 · 축제 · 사진"]
+        KTO["한국관광공사 집중률<br/>관광지별 혼잡도 예측 17일"]
+        KMA["기상청 관광지 단기예보"]
+        STD["표준데이터 문화축제"]
+    end
+    subgraph SVC["외부 서비스 — backend만 호출"]
+        TMAP["SK Tmap 경로 API<br/>도보 · 자동차 이동시간"]
+        OAUTH["Google · Kakao OAuth"]
+    end
+    subgraph OPS["운영 · 감시 (VM 밖)"]
+        GH["GitHub Actions<br/>CI · 의존성 감사<br/>30분 외부 헬스체크"]
+        SL["Slack 알림-봇<br/>에러 · 이상 · 아침 요약<br/>/서버상태 · /문의"]
+        GF["Grafana (aitestbed.kr)"]
+        S3[("오프사이트 백업 버킷<br/>S3 호환")]
     end
 
-    subgraph CORE["Data & Local AI"]
-        DB[("PostgreSQL<br/>회원 · 취향 · 코스 · 후기")]
-        AI["Ollama<br/>Qwen3.5 Local LLM"]
-    end
+    U -->|HTTPS| NG
+    NG -->|"/"| FE
+    NG -->|"/api/ · /health"| BE
+    NG -->|"/prom/ Basic Auth"| PR
+    CB -.인증서.-> NG
+    BE --> PG
+    BE -->|"HTTP :11434"| OL
+    PR -->|scrape| BE
+    BK --> PG
+    BK -.-> S3
+    BE --> TOUR & KTO & KMA & STD
+    BE --> TMAP & OAUTH
+    BE -->|webhook| SL
+    GH -->|"GET /api/v1/health 30분마다"| NG
+    GH --> SL
+    GF -->|"/prom/"| NG
 
-    subgraph PUBLIC["Tourism Data"]
-        KTO["한국관광공사<br/>TourAPI · 혼잡도"]
-        KMA["기상청<br/>날씨 예보"]
-        MAP["NAVER Map · TMAP<br/>지도 · 경로"]
-    end
-
-    subgraph OPS["Operations"]
-        P["Prometheus"]
-        G["Grafana"]
-    end
-
-    U -->|HTTPS| N
-    N --> F
-    F -->|REST /api/v1| N
-    N --> B
-    B --> DB
-    B -->|취향 추출 · 요약 · 여행 팁| AI
-    B --> KTO
-    B --> KMA
-    B --> MAP
-    F -. 지도 SDK .-> MAP
-    P -->|metrics 수집| B
-    G --> P
-
-    classDef entry fill:#ECF7F2,stroke:#176B55,color:#12382E,stroke-width:2px;
-    classDef app fill:#EEF4FF,stroke:#4263A8,color:#162B4D,stroke-width:2px;
-    classDef core fill:#FFF6E5,stroke:#C98217,color:#50320A,stroke-width:2px;
-    classDef external fill:#F7F7F7,stroke:#7A8581,color:#29332F;
-    classDef ops fill:#F4EEFF,stroke:#7950B3,color:#33204D;
-    class U,N entry;
-    class F,B app;
-    class DB,AI core;
-    class KTO,KMA,MAP external;
-    class P,G ops;
+    classDef edge fill:#ECF7F2,stroke:#176B55,color:#12382E,stroke-width:2px
+    classDef app fill:#EEF4FF,stroke:#4263A8,color:#162B4D,stroke-width:2px
+    classDef store fill:#FFF6E5,stroke:#C98217,color:#50320A,stroke-width:2px
+    classDef ext fill:#F7F7F7,stroke:#7A8581,color:#29332F
+    classDef ops fill:#F4EEFF,stroke:#7950B3,color:#33204D
+    class U,NG,CB edge
+    class FE,BE app
+    class PG,OL,PR,BK store
+    class TOUR,KTO,KMA,STD,TMAP,OAUTH ext
+    class GH,SL,GF,S3 ops
 ```
 
+### 요청이 지나가는 길
+
+| 화면 | 경로 | 외부 호출 | LLM |
+|---|---|---|---|
+| 혼잡도 전광판 · 지역 추천 | nginx → backend → 캐시(인메모리, TTL) → 없으면 TourAPI·집중률·기상청 | 공공데이터포털 | 없음 — 취향·혼잡도·거리·날씨 점수화만 |
+| AI 취향 분석(온보딩) | 자유 서술 → 인젝션 가드 → ollama JSON 태그 → 실패 시 규칙 기반 폴백 → postgres 프로필 저장 | 없음 | 1회 · 로그인 필수 · 6회/분 |
+| AI 코스짜기 | 스팟 선정 → Tmap 구간 이동시간 **동시 호출**(`asyncio.gather`) → ollama 코스 요약(동시 1건 세마포어, 타임아웃 시 요약 없이 응답) → 로그인 시 저장 | SK Tmap | 요약 1회 · 24h 캐시 |
+| 개인화 여행 팁 | 취향·지역·날짜 키로 캐시 → 없으면 ollama → 실패 시 정적 팁 | 없음 | 조건부 · 킬스위치 |
+| 로그인 | Google · Kakao OAuth 콜백 → 세션 쿠키(HttpOnly) | OAuth | 없음 |
+
+LLM이 도는 경로는 셋뿐이고(온보딩 · 코스 요약 · 여행 팁) 모두 **실패해도 화면이 깨지지 않는 폴백**이
+있다. nginx도 이 세 경로(`/api/v1/onboarding/`, `/api/v1/courses/`, `/api/v1/tips/`)만 따로 긴 타임아웃을 준다.
+backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이기 때문이다 — 트래픽이 늘면 `cache/base.py`
+인터페이스 뒤를 Redis로 바꾸고 워커를 늘린다.
+
 <details>
-<summary><strong>추천 요청이 처리되는 흐름</strong></summary>
+<summary><strong>AI 코스짜기 한 번에 일어나는 일</strong></summary>
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as 여행자
-    participant Web as Next.js
-    participant API as FastAPI
-    participant LLM as Ollama · Qwen3.5
-    participant Data as 관광·날씨 API
-    participant DB as PostgreSQL
+    participant NG as nginx
+    participant BE as FastAPI
+    participant TM as SK Tmap
+    participant OL as ollama
+    participant PG as postgres
 
-    User->>Web: 여행 취향과 지역 입력
-    Web->>API: 추천 요청
-    API->>LLM: 자연어 취향을 구조화 태그로 변환
-    LLM-->>API: JSON 태그
-    API->>Data: 관광지·혼잡도·날씨 조회
-    Data-->>API: 최신 원천 데이터
-    API->>API: 취향·혼잡도·거리·신뢰도 점수화
-    API->>DB: 프로필·코스 저장
-    API-->>Web: 추천 장소와 AI 코스
-    Web-->>User: 지도·타임라인·여행 팁 표시
+    User->>NG: POST /api/v1/courses/recommend (지역 · 취향)
+    NG->>BE: 프록시 (LLM 경로 타임아웃 적용)
+    BE->>BE: 캐시된 스팟 풀에서 후보 선정 · 점수화
+    par 구간마다 동시에
+        BE->>TM: 도보 경로
+        BE->>TM: 자동차 경로
+    end
+    TM-->>BE: 이동시간 · 거리 (실패 구간은 "이동 정보 없음")
+    BE->>OL: 코스 요약 요청 (세마포어 1 · 타임아웃)
+    alt 제한 시간 안에 응답
+        OL-->>BE: JSON 요약
+    else 타임아웃 · 형식 오류
+        BE->>BE: 요약 없이 진행 (ai_summary: null)
+    end
+    opt 로그인 상태
+        BE->>PG: AI 코스 저장
+    end
+    BE-->>User: 스팟 순서 · 구간 이동 · 지도 좌표 · 요약
 ```
 
 </details>
@@ -141,7 +181,7 @@ sequenceDiagram
 | **Ollama · Qwen3.5** | 외부 전송 없는 로컬 취향 추출, 요약, 개인화 여행 팁 |
 | **PostgreSQL** | 회원, 취향 프로필, AI 코스, 후기와 공유 데이터 저장 |
 | **TourAPI · 기상청 · 지도 API** | 관광지, 혼잡도, 날씨, 이동 경로 원천 데이터 |
-| **Docker · Nginx** | ARM64 서버 컨테이너 배포, TLS와 리버스 프록시 |
+| **Docker · Nginx** | 단일 VM(x86_64) 컨테이너 배포, TLS와 리버스 프록시 |
 | **Prometheus · Grafana** | API 지표 수집과 운영 모니터링 |
 
 ## 로컬 실행
