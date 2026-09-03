@@ -8,6 +8,13 @@ import RegionRouteMap from "./demo-home/RegionRouteMap";
 interface RegionMapSectionProps {
   /** 선택된 지역(sigungu_cd). FeaturedSpots/CoursePromo와 동일 원칙. */
   regionCode?: string | null;
+  /**
+   * 2026-09-03(대표: "지도 크기를 naver map 크기랑 똑같이 해서 그 밑에 붙여줄 수 있어?") —
+   * true면 제목·설명이 있는 독립 섹션 대신 **지도 카드만** 그린다. /recommend의 지도 칸
+   * 안에서 NAVER 지도(SpotMap) 바로 아래에 같은 크기로 쌓기 위한 모드. 크기는 부모
+   * (.recommend-layout__map--stacked)가 정한다 — 여기서는 높이를 강제하지 않는다.
+   */
+  inline?: boolean;
 }
 
 // RegionRouteMap용 후보 풀 크기. 시/도 전체에서 좌표 있는 스팟을 걸러 최대 3곳만
@@ -28,7 +35,7 @@ const MAP_SPOTS_LIMIT = 12;
  * Hero.tsx의 검색/칩이 지역 선택 UI를 갖고 있으므로 지도 자체 도시 선택 칩은 계속 숨긴다
  * (hidePicker) — 지도는 선택된 지역을 그대로 반영하는 동반 콘텐츠다.
  */
-export default function RegionMapSection({ regionCode }: RegionMapSectionProps) {
+export default function RegionMapSection({ regionCode, inline = false }: RegionMapSectionProps) {
   const selectedSido = useMemo(() => {
     const sidoCode = regionCode?.slice(0, 2);
     return (
@@ -59,6 +66,20 @@ export default function RegionMapSection({ regionCode }: RegionMapSectionProps) 
       });
     return () => controller.abort();
   }, [selectedSido.sidoCode]);
+
+  if (inline) {
+    return (
+      <div className="home-region-map region-map-inline" aria-label={`${selectedSido.shortName} 지역 지도`}>
+        <RegionRouteMap
+          selectedSido={selectedSido}
+          spots={spots}
+          spotsLoading={spotsLoading}
+          onSelectSido={() => {}}
+          hidePicker
+        />
+      </div>
+    );
+  }
 
   return (
     <section className="section region-map-section" aria-labelledby="regionMapHeading">
