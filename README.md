@@ -28,6 +28,10 @@ npm install
 npm run dev
 ```
 
+API 확인은 Swagger UI(http://localhost:8000/docs) 또는 ReDoc(http://localhost:8000/redoc). `APP_ENV`가
+`production`이 아닐 때만 열린다 — 운영에서는 의도적으로 꺼져 있다(관리자 콘솔 스키마 노출 +
+Swagger UI의 외부 CDN 스크립트 로드가 세션 쿠키에 닿는 XSS 경로가 되는 걸 막기 위함, `backend/app/main.py` 주석 참고).
+
 ## 규칙
 
 - **시크릿(.env, 키, 해시)은 절대 커밋하지 않는다** — .gitignore가 막고 있지만 눈으로도 확인할 것
@@ -36,8 +40,8 @@ npm run dev
 
 ## 기여 워크플로우
 
-1. 작업 전 **이슈를 먼저 만든다** — 뭘, 왜 하는지 한두 줄이면 충분
-2. 이슈 기반으로 브랜치를 딴다 (`main`에서 최신 상태로 분기)
-3. 작업 후 **PR을 올린다** — 이슈를 `Closes #번호`로 연결
+1. **`develop`에서 브랜치를 딴다** (최신 상태로 분기)
+2. 브랜치에 맞는 **이슈를 만든다** — 뭘, 왜 하는지 한두 줄이면 충분
+3. 작업 후 **PR을 올린다** — base는 `develop`, 이슈를 `Closes #번호`로 연결
 4. 리뷰어는 기본으로 **대표(@insik03)**가 지정된다 — `.github/CODEOWNERS` 참고. 대표 본인이 올리는 PR은 GitHub 정책상 스스로를 리뷰어로 못 거니 팀원(지훈·태준)이 리뷰하거나 본인 확인 후 머지
-5. main에 직접 푸시하지 않는다
+5. `main`·`develop`에 직접 푸시하지 않는다 — `main`은 운영 배포 기준 브랜치(release), `develop`이 평소 통합 브랜치
