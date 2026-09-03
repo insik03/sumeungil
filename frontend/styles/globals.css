@@ -3253,11 +3253,11 @@ input:focus-visible,
     height: auto;
     min-height: 520px;
     height: calc(100vh - 76px - var(--sp-10));
-    position: sticky;
-    top: calc(76px + var(--sp-5));
+    /* 2026-09-03(대표: "지도 스크롤하면 따라오는거 없애줘 불편하다") — 원래 sticky로 목록을
+       내려도 지도가 따라왔는데, 지도가 두 개 쌓이니 화면을 다 가려 불편. 그냥 흐름에 둔다. */
     margin-top: 0;
   }
-  /* 두 지도가 뷰포트 안에 같이 들어가도록 칸 높이를 반씩 나눈다(각 최소 300px). sticky는 유지. */
+  /* 두 지도가 뷰포트 안에 같이 들어가도록 칸 높이를 반씩 나눈다(각 최소 300px). */
   .recommend-layout__map--stacked {
     --rec-map-h: max(300px, calc((100vh - 76px - var(--sp-10) - var(--sp-3)) / 2));
     display: flex;
