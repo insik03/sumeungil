@@ -18,6 +18,12 @@ qa-reviewer가 지적한 대로 다른 기능(admin/community/onboarding)엔 전
 from __future__ import annotations
 
 import os
+
+# 2026-09-03 — 공유 코스 검증은 시드에 실제로 있는 스팟 id를 써야 한다. 2026-08-20부터
+# rebuild_course_for_store(strict=True)가 빈/없는 스팟을 400 INVALID_COURSE로 거부한다.
+def _real_spot_ids(n: int = 1) -> list[int]:
+    from app.deps import get_spot_repository
+    return [s.id for s in get_spot_repository().all_spots()[:n]]
 import sys
 import time
 import uuid
@@ -249,7 +255,7 @@ check(
 r = c7.post(
     "/api/v1/courses/share",
     headers=dev("m1-share"),
-    json={"nickname": "공유사칭", "title": "T", "course": {"spots": []}},
+    json={"nickname": "공유사칭", "title": "T", "course": {"spots": [{"id": sid} for sid in _real_spot_ids(1)]}},
 )
 share_code = r.json().get("share_code")
 check("로그인 중 코스 공유 생성 성공", r.status_code == 201 and share_code, str(r.text))
