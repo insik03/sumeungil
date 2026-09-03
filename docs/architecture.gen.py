@@ -4,7 +4,7 @@
 사용법 (docs/ 에서):
   mkdir icons && cd icons && npm init -y && npm i simple-icons@16.29.0 && cd ..
   python architecture.gen.py            # architecture.svg / architecture.html 생성
-  chrome --headless=new --window-size=1800,1000 --force-device-scale-factor=2 \n         --screenshot=architecture.png file:///<절대경로>/architecture.html
+  chrome --headless=new --window-size=1800,1000 --force-device-scale-factor=3 \n         --screenshot=architecture.png file:///<절대경로>/architecture.html
 구성이 바뀌면 이 파일의 노드·화살표를 고치고 다시 뽑는다. 로고는 simple-icons(CC0).
 """
 import re, pathlib
@@ -34,7 +34,9 @@ def icon(name, cx, cy, size=44, color=None):
     s = size / 24
     add(f'<g transform="translate({cx - size/2:.1f},{cy - size/2:.1f}) scale({s:.4f})"><path d="{d}" fill="{c}"/></g>')
 
+TYPE_SCALE = 1.18
 def text(x, y, s, size=15, weight=600, fill="#1F2328", anchor="middle", family="sans", ls=0):
+    size = round(size * TYPE_SCALE, 1)
     fam = "'IBM Plex Sans KR','Malgun Gothic',sans-serif" if family == "sans" else "'IBM Plex Mono',Consolas,monospace"
     add(f'<text x="{x}" y="{y}" font-family="{fam}" font-size="{size}" font-weight="{weight}" fill="{fill}" text-anchor="{anchor}" letter-spacing="{ls}">{s}</text>')
 
@@ -57,14 +59,14 @@ def arrow(pts, kind="traffic", label=None, lx=None, ly=None, dash=None, lanchor=
     c = COLORS[kind]
     d = " ".join(f"{p[0]},{p[1]}" for p in pts)
     da = f' stroke-dasharray="{dash}"' if dash else ""
-    add(f'<polyline points="{d}" fill="none" stroke="{c}" stroke-width="2.2" marker-end="url(#ah-{kind})"{da} stroke-linejoin="round"/>')
+    add(f'<polyline points="{d}" fill="none" stroke="{c}" stroke-width="2.8" marker-end="url(#ah-{kind})"{da} stroke-linejoin="round"/>')
     if label:
         if lx is None:
             (x1, y1), (x2, y2) = pts[0], pts[-1]
             lx, ly = (x1 + x2) / 2, (y1 + y2) / 2 - 8
-        tw = len(label) * (lsize * 0.62 if lfam == "sans" else lsize * 0.6) + 14
+        tw = len(label) * (lsize * TYPE_SCALE * 0.62 if lfam == "sans" else lsize * TYPE_SCALE * 0.6) + 14
         ax = lx - tw / 2 if lanchor == "middle" else (lx - 6 if lanchor == "start" else lx - tw + 6)
-        add(f'<rect x="{ax:.1f}" y="{ly - lsize - 2}" width="{tw:.1f}" height="{lsize + 8}" rx="6" fill="#FFFFFF" opacity="0.92"/>')
+        add(f'<rect x="{ax:.1f}" y="{ly - lsize*TYPE_SCALE - 2}" width="{tw:.1f}" height="{lsize*TYPE_SCALE + 8}" rx="6" fill="#FFFFFF" opacity="0.92"/>')
         text(lx, ly, label, lsize, 600, c, lanchor, lfam)
 
 # ---------- 캔버스 ----------
@@ -107,7 +109,7 @@ box(VX, VY, VW, VH, 26)
 icon("naver", VX + 30, VY + 30, 26)
 text(VX + 52, VY + 36, "NAVER Cloud VM 1대 · Docker Compose · 컨테이너 8개", 15, 700, "#1F2328", "start")
 caption(VX + 6, VY + VH + 28, "Production", size=17)
-text(VX + 118, VY + VH + 28, "2 vCPU · 15GB · x86_64 · Rocky Linux", 13, 400, "#57606A", "start")
+text(VX + 150, VY + VH + 28, "2 vCPU · 15GB · x86_64 · Rocky Linux", 13, 400, "#57606A", "start")
 
 # 엣지 서브박스 (호스트에 열린 포트)
 box(VX + 20, VY + 70, 230, 400, 18, "#1E8E5A", "#F1FAF5", 2)
