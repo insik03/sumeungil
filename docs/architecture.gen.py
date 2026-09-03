@@ -136,7 +136,7 @@ def tile(cy, name, title, sub, sub2=None, color=None):
     text(DX + 96, cy + 10, sub, 12, 400, "#57606A", "start")
     if sub2: text(DX + 96, cy + 28, sub2, 12, 400, "#57606A", "start")
 tile(DY + 118, "postgresql", "postgres 16", "회원 · 취향 · AI코스 · 후기", "공유코스 · 문의 · 방문로그")
-tile(DY + 262, "ollama", "ollama · Qwen 로컬 LLM", "CPU 추론 · 외부 전송 없음", "취향 추출 · 코스 요약 · 여행 팁")
+tile(DY + 262, "ollama", "ollama · Qwen", "로컬 추론 · 외부 전송 없음", "취향 추출 · 코스 요약 · 여행 팁")
 tile(DY + 406, "prometheus", "prometheus", "backend /metrics 수집", "Grafana는 nginx /prom/ 경유")
 tile(DY + 550, "python", "postgres-backup", "pg_dump 매일 · 로컬 14일 보관", "S3 호환 버킷으로 오프사이트")
 
@@ -146,7 +146,7 @@ RX, RW = 1280, 470
 box(RX, 150, RW, 300, 22)
 add(f'<rect x="{RX+22}" y="170" width="92" height="26" rx="6" fill="#1F2328"/>')
 text(RX + 68, 188, "data.go.kr", 12, 700, "#FFFFFF", "middle", "mono")
-text(RX + 126, 189, "공공데이터포털 — backend만 호출 · 키는 서버에만", 14, 700, "#1F2328", "start")
+text(RX + 126, 189, "공공데이터포털 · backend만 호출", 14, 700, "#1F2328", "start")
 rows = [("한국관광공사 TourAPI", "관광지 · 축제 · 사진 · 상세"),
         ("한국관광공사 집중률", "관광지별 혼잡도 예측 · 오늘부터 17일"),
         ("기상청 관광지 단기예보", "날씨 재정렬 · 실내 스팟 우선"),
