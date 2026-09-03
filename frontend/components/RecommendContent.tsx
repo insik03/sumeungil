@@ -13,7 +13,7 @@ import {
   fetchRecommendedPlaces,
   fetchReviewsSummaryBulk,
 } from "../lib/api";
-import { loadOnboardingResult } from "../lib/onboardingStorage";
+import { clearOnboardingResult, loadOnboardingResult } from "../lib/onboardingStorage";
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { safeDistanceKm } from "../lib/geo";
 import CategoryFilter from "./recommend/CategoryFilter";
@@ -22,6 +22,8 @@ import RecommendSpotCard, { SpotCardSkeleton } from "./recommend/SpotCard";
 import SaveToggleButton from "./recommend/SaveToggleButton";
 import RerankBanners from "./recommend/RerankBanners";
 import SpotMap from "./recommend/SpotMap";
+import RegionMapSection from "./RegionMapSection";
+import { useLoggedInName } from "../lib/useLoggedInName";
 import SpotTypeFilter from "./recommend/SpotTypeFilter";
 import SortControl from "./recommend/SortControl";
 import {
@@ -54,6 +56,8 @@ export default function RecommendContent() {
   const searchParams = useSearchParams();
   const paramRegionCode = searchParams.get("region_code");
 
+  // 지역 지도는 /course와 같이 로그인한 사용자에게만(대표: "공개 화면에 둘 거 아님 로그인에 넣으셈").
+  const loggedIn = useLoggedInName();
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 렌더부터 쿼리 지역으로 시작한다(기본 지역으로 한 번 조회한 뒤 다시 조회하는
   // 이중 호출을 피하기 위함). URL 쿼리는 SSR에서도 동일하게 읽혀 하이드레이션이 안전하다 —
@@ -179,6 +183,16 @@ export default function RecommendContent() {
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
+        // 부록 C.4a — 서버가 프로필 구조 위반으로 400 INVALID_PROFILE 을 주면 "프론트가 프로필을
+        // 폐기하고 온보딩을 재유도"하기로 돼 있는데 여기가 빠져 있었다. 그래서 sessionStorage에
+        // 낡은/깨진 프로필이 남아 있으면 매 요청이 400 → 에러 화면 → 다시 시도해도 또 400으로
+        // 갇혔다(2026-09-03 운영에서 recommend 400 반복 실측). 폐기하면 profile=null 로 바뀌어
+        // 이 effect 가 비개인화로 다시 조회하고, 온보딩 유도 배너가 자연스럽게 뜬다.
+        if (err instanceof ApiError && err.code === "INVALID_PROFILE" && profile) {
+          clearOnboardingResult();
+          setProfile(null);
+          return;
+        }
         setError(
           err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "추천 목록을 불러오지 못했습니다.")
         );
@@ -276,6 +290,12 @@ export default function RecommendContent() {
             : "지금은 예상 혼잡도가 낮은 순으로 보여드리고 있어요. 취향을 알려주시면 더 꼭 맞는 순서로 바꿔드려요."}
         </p>
       </section>
+
+      {/* 2026-09-03(대표 지시 "지도 합친거 왜 여행지 추천에 안 들어감") — /course 상단과 같은
+          지역 지도 섹션. 8/29엔 코스짜기에만 넣으라는 지시였고 이 화면은 요청이 없어 빠져 있었다.
+          선택 지역(sigunguCd)을 그대로 넘기므로 RegionPicker로 지역을 바꾸면 지도도 따라간다.
+          이 화면은 비로그인 공개라 지도만 로그인 사용자에게 보인다(/course와 같은 기준). */}
+      {loggedIn && <RegionMapSection regionCode={selectedRegion.sigunguCd} />}
 
       <section className="section" aria-labelledby="recommendHeading">
         <span className="eyebrow-pill eyebrow-pill--azure">프로필 맞춤 추천</span>

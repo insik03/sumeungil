@@ -92,6 +92,13 @@ interface HeroProps {
   /** 현재 선택된 지역(칩/검색으로 선택). null이면 기본 지역(해운대) */
   selectedRegion: RegionSearchItem | null;
   onSelectRegion: (region: RegionSearchItem | null) => void;
+  /**
+   * 2026-09-03 — 부모(HomeContent)가 기억해둔 지역을 sessionStorage에서 복원했는지. false면
+   * 캐러셀 데이터 요청을 미룬다. 첫 렌더의 null을 "지역 미선택"으로 오해해 전국 9개 도 병렬
+   * 호출을 쏜 뒤 곧바로 지역이 복원되며 전부 취소·재요청하던 이중 호출을 막는다(렉 원인).
+   * 다른 호출자가 없어 기본값은 true(즉시 요청).
+   */
+  regionResolved?: boolean;
 }
 
 /**
@@ -105,7 +112,7 @@ interface HeroProps {
  * 이 로직을 감싸는 마크업(부킹형 큰 카드 → 컴팩트 인라인 바)뿐이다. 빠른 추천 칩은 §30에서
  * 4→17개로 확장하며 사전조회(prefetch) 방식을 버렸다(위 sidoToRegionItem 주석 참고).
  */
-export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
+export default function Hero({ selectedRegion, onSelectRegion, regionResolved = true }: HeroProps) {
   const [value, setValue] = useState("");
 
   // ---- 캐러셀 슬라이드 ----
@@ -121,6 +128,7 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
   const programmaticTimerRef = useRef<number>(0);
 
   useEffect(() => {
+    if (!regionResolved) return; // 지역 복원 전 — 요청하지 않고 loading 상태로 대기
     const controller = new AbortController();
     setSlidesStatus("loading");
     if (selectedRegion) {
@@ -154,7 +162,7 @@ export default function Hero({ selectedRegion, onSelectRegion }: HeroProps) {
         });
     }
     return () => controller.abort();
-  }, [selectedRegion]);
+  }, [selectedRegion, regionResolved]);
 
   // 5초 자동 순환 — 슬라이드 2개 이상 + prefers-reduced-motion 아닐 때만.
   useEffect(() => {

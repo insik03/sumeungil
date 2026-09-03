@@ -16,10 +16,56 @@ from abc import ABC, abstractmethod
 import httpx
 from pydantic import ValidationError
 
-from . import prompts
+from . import prompts, tag_registry
 from .schemas import LLMExtractionError, RawLLMExtraction
 
 logger = logging.getLogger("sumeungil.ai.llm_provider")
+
+
+def _tag_extraction_schema() -> dict:
+    """Ollama structured-output용 스키마.
+
+    프롬프트에 enum을 적는 것에 그치지 않고 생성 단계에서도 registry 값만 허용한다.
+    서버측 registry 재검증은 모델/런타임 버그에 대비해 그대로 유지한다.
+    """
+    max_items = {
+        "companion": 3,
+        "flag": 2,
+        "mobility": 2,
+        "mood": 3,
+        "spot_pref": 4,
+        "accessibility": 3,
+        "congestion_pref": 1,
+    }
+    properties: dict[str, dict] = {
+        axis: {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": [row.value for row in tag_registry.REGISTRY if row.axis == axis],
+            },
+            "uniqueItems": True,
+            "maxItems": max_items[axis],
+        }
+        for axis in tag_registry.AXES
+    }
+    properties["congestion_pref"]["minItems"] = 1
+    properties.update(
+        {
+            "value_confidence": {
+                "type": "object",
+                "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1},
+            },
+            "extraction_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "unmatched_note": {"type": ["string", "null"]},
+        }
+    )
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": [*tag_registry.AXES, "value_confidence", "extraction_confidence", "unmatched_note"],
+        "additionalProperties": False,
+    }
 
 
 class LLMProvider(ABC):
@@ -53,22 +99,29 @@ class OllamaProvider(LLMProvider):
         model: str,
         timeout_sec: float = 45.0,
         temperature: float = 0.1,
+        think: bool = False,
+        keep_alive: str = "10m",
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout_sec = timeout_sec
         self._temperature = temperature
+        self._think = think
+        self._keep_alive = keep_alive
 
     async def extract_tags(self, free_text: str, chips: list[str] | None = None) -> RawLLMExtraction:
-        messages, sanitized = prompts.build_messages(free_text)
+        messages, _ = prompts.build_messages(free_text)
 
         payload = {
             "model": self._model,
-            "format": "json",
+            "format": _tag_extraction_schema(),
             "stream": False,
+            "think": self._think,
             "options": {"temperature": self._temperature},
             "messages": messages,
         }
+        if self._keep_alive:
+            payload["keep_alive"] = self._keep_alive
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout_sec) as client:
@@ -118,4 +171,6 @@ def create_provider_from_settings(settings) -> LLMProvider:  # noqa: ANN001 (app
         model=settings.ollama_model,
         timeout_sec=settings.ollama_timeout_sec,
         temperature=settings.ollama_temperature,
+        think=getattr(settings, "ollama_think", False),
+        keep_alive=getattr(settings, "ollama_keep_alive", "10m"),
     )

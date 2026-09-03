@@ -30,6 +30,32 @@ from .tag_registry import REGISTRY
 
 logger = logging.getLogger("sumeungil.ai.tips")
 
+TIPS_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tips": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 5,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": ["혼잡", "교통", "날씨", "반려동물", "안전"],
+                    },
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                },
+                "required": ["category", "title", "body"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["tips"],
+    "additionalProperties": False,
+}
+
 # 태그 코드 → 한국어 라벨. registry(§1.3 정본)를 그대로 재사용한다 — 새 매핑표를 만들지 않는다.
 # 36개 값이 축을 넘어 중복되지 않는 것을 확인하고 값 단위로 인덱싱한다(TipFeatures.tags 는
 # 축 정보 없이 코드만 담는 계약이라 이 형태가 필요하다).
@@ -80,7 +106,8 @@ TIPS_SYSTEM_PROMPT = """당신은 여행 서비스 "숨은길"의 개인화 여�
 6. title은 20자 내외, body는 2문장(최대 120자) 이내로 쓰세요. 친근한 "~해요" 말투.
 7. 3~5건을 생성하세요. 서로 다른 category를 우선하되 억지로 5개 category를 채우지
    마세요(카테고리는 참고 데이터가 실제로 뒷받침할 때만 고르세요).
-8. 출력은 JSON 하나뿐입니다. 다른 키·설명·마크다운·따옴표 금지.
+8. "반려동물" category는 선호에 반려동물 관련 항목이 있을 때만 생성하세요.
+9. 출력은 JSON 하나뿐입니다. 다른 키·설명·마크다운·따옴표 금지.
 
 [출력 JSON 형식]
 { "tips": [ { "category": "혼잡"|"교통"|"날씨"|"반려동물"|"안전",
@@ -169,13 +196,36 @@ def _parse_tips(content: str) -> list[GeneratedTip]:
     return out
 
 
-class OllamaTipsGenerator:
-    """로컬 Ollama `POST /api/chat` + `format:"json"` 구현(온보딩·코스요약과 같은 모델)."""
+def _filter_unsupported_tips(
+    tips: list[GeneratedTip], features: TipFeatures
+) -> list[GeneratedTip]:
+    """입력 근거가 필수인 카테고리를 서버가 한 번 더 검증한다.
 
-    def __init__(self, base_url: str, model: str, temperature: float = 0.1) -> None:
+    소형 모델이 "3~5건"을 채우려 반려동물 팁을 관성적으로 만드는 경우가 있으므로,
+    관련 태그가 하나도 없으면 해당 팁을 폐기한다. 건수 하한 판정·정적 폴백은 기존처럼
+    services/tips_service.py가 담당한다.
+    """
+    pet_tags = {"with_pet", "pet_present", "pet_friendly_required"}
+    pet_supported = bool(pet_tags.intersection(features.tags))
+    return [tip for tip in tips if tip.category != "반려동물" or pet_supported]
+
+
+class OllamaTipsGenerator:
+    """로컬 Ollama 구조화 출력 구현(온보딩·코스요약과 같은 모델)."""
+
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        temperature: float = 0.0,
+        think: bool = False,
+        keep_alive: str = "10m",
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._temperature = temperature
+        self._think = think
+        self._keep_alive = keep_alive
 
     async def generate(
         self, features: TipFeatures, *, timeout_sec: float
@@ -183,14 +233,17 @@ class OllamaTipsGenerator:
         context = build_context(features)
         payload = {
             "model": self._model,
-            "format": "json",
+            "format": TIPS_OUTPUT_SCHEMA,
             "stream": False,
+            "think": self._think,
             "options": {"temperature": self._temperature},
             "messages": [
                 {"role": "system", "content": TIPS_SYSTEM_PROMPT},
                 {"role": "user", "content": f"<trip_context>\n{context}\n</trip_context>"},
             ],
         }
+        if self._keep_alive:
+            payload["keep_alive"] = self._keep_alive
         # 툴/함수 호출을 전혀 부여하지 않는다(방어계층 4 — 온보딩 Provider 와 동일).
         try:
             async with httpx.AsyncClient(timeout=timeout_sec) as client:
@@ -206,7 +259,8 @@ class OllamaTipsGenerator:
         except (ValueError, KeyError, TypeError) as exc:
             logger.info("tips: Ollama 응답 envelope 파싱 실패(정적 폴백): %s", exc)
             return []
-        return _parse_tips(content) if isinstance(content, str) else []
+        parsed = _parse_tips(content) if isinstance(content, str) else []
+        return _filter_unsupported_tips(parsed, features)
 
 
 def create_tips_generator_from_settings(settings) -> TipsGenerator:  # noqa: ANN001
@@ -214,6 +268,8 @@ def create_tips_generator_from_settings(settings) -> TipsGenerator:  # noqa: ANN
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
         temperature=settings.ollama_temperature,
+        think=getattr(settings, "ollama_think", False),
+        keep_alive=getattr(settings, "ollama_keep_alive", "10m"),
     )
 
 

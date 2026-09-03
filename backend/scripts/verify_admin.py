@@ -24,6 +24,13 @@ import secrets
 import subprocess
 import sys
 import uuid
+
+# 2026-09-03 — 공유 코스 검증은 시드에 실제로 있는 스팟 id를 써야 한다. 2026-08-20부터
+# rebuild_course_for_store(strict=True)가 없는 스팟을 400 INVALID_COURSE로 거부한다
+# (이 스크립트는 CI가 2026-09-02에 생기기 전까지 안 돌아서 그때 깨진 걸 몰랐다).
+def _real_spot_ids(n: int = 2) -> list[int]:
+    from app.deps import get_spot_repository
+    return [s.id for s in get_spot_repository().all_spots()[:n]]
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -39,6 +46,9 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 PHASE = os.environ.get("_VERIFY_ADMIN_PHASE", "A")
+# B5.5(고객문의)는 로그인 세션이 필요하다. UserAuth.enabled 가 세션 서명키(USER_SESSION_SECRET)
+# 유무로 켜지므로, CI처럼 시크릿이 없는 환경에서는 401만 나온다 — verify_auth.py와 같은 임시값을 준다.
+os.environ.setdefault("USER_SESSION_SECRET", "verify-session-secret-not-for-prod")
 
 # !!! import 전에 !!! 임시 Postgres 스키마 주입(개발용 실데이터를 건드리지 않게 —
 # 2026-08-17 PostgreSQL 전환으로 tempfile SQLite 파일 방식에서 바뀌었다). phase B는
@@ -238,7 +248,8 @@ def phase_b() -> int:
     # login/logout/me + reviews(목록)·reviews/{id}(삭제)·hide·unhide + courses 4종 + stats = 12
     # 14 = 12(부록 T) + /admin/operators(부록 V) + /admin/traffic(부록 X 트래픽 집계).
     # 16 = 14 + /admin/inquiries(목록)·/admin/inquiries/{id}/reply(답변, 2026-08-18 추가).
-    check("OpenAPI 에 admin 경로 16개 노출", len(admin_paths) == 16, str(admin_paths))
+    # 18 = 16 + /admin/users(회원 탭)·/admin/server-status(서버 상태 탭, 둘 다 2026-08-24 추가).
+    check("OpenAPI 에 admin 경로 18개 노출", len(admin_paths) == 18, str(admin_paths))
 
     r1 = client.post("/api/v1/admin/login", json={"password": "wrong-password"})
     check("틀린 비밀번호 → 401", r1.status_code == 401, str(r1.status_code))
@@ -418,7 +429,7 @@ def phase_b() -> int:
 
     code = client.post("/api/v1/courses/share",
                        json={"nickname": "코스장인", "title": "해운대 반나절",
-                             "course": {"spots": [{"id": 1}, {"id": 2}]}},
+                             "course": {"spots": [{"id": sid} for sid in _real_spot_ids(2)]}},
                        headers=dev_a).json()["share_code"]
 
     r = client.get("/api/v1/admin/courses", params={"status": "all"})
