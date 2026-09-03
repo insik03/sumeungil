@@ -425,7 +425,8 @@ export default function CourseContent() {
   // 2026-08-17(대표 지시) — AI 코스짜기(추천·직접만들기 둘 다)는 로그인 필수.
   const loggedIn = useLoggedInName();
 
-  const [mode, setMode] = useState<CourseMode>("ai");
+  // 마이페이지의 "내 코스 만들기" 타일이 ?mode=custom으로 바로 이 탭에 진입시킨다.
+  const [mode, setMode] = useState<CourseMode>(searchParams.get("mode") === "custom" ? "custom" : "ai");
 
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 조회부터 쿼리 지역으로 나간다(기본 지역 조회 후 재조회하는 이중 호출 방지).
