@@ -12,6 +12,13 @@ lifespan 을 열지 않으므로(=`with TestClient` 미사용) 프리워밍·주
 
 from __future__ import annotations
 
+# 2026-09-03 — 공유 코스 검증은 시드에 실제로 있는 스팟 id를 써야 한다. 2026-08-20부터
+# rebuild_course_for_store(strict=True)가 없는 스팟을 400 INVALID_COURSE로 거부한다
+# (이 스크립트는 CI가 2026-09-02에 생기기 전까지 안 돌아서 그때 깨진 걸 몰랐다).
+def _real_spot_ids(n: int = 2) -> list[int]:
+    from app.deps import get_spot_repository
+    return [s.id for s in get_spot_repository().all_spots()[:n]]
+
 import asyncio
 import os
 import sys
@@ -67,7 +74,7 @@ def dev(tag: str) -> dict[str, str]:
     return {"X-Device-Id": f"dev-{tag}-{uuid.uuid4().hex[:12]}"}
 
 
-COURSE = {"region": {"code": "26350"}, "spots": [{"id": 1, "name": "해운대"}]}
+COURSE = {"region": {"code": "26350"}, "spots": [{"id": sid} for sid in _real_spot_ids(1)]}
 
 
 def share(headers: dict[str, str], title: str) -> str:

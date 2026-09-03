@@ -10,6 +10,13 @@ lifespan 을 일부러 열지 않는다(`with` 미사용) — 그래야 기동 �
 
 from __future__ import annotations
 
+# 2026-09-03 — 공유 코스 검증은 시드에 실제로 있는 스팟 id를 써야 한다. 2026-08-20부터
+# rebuild_course_for_store(strict=True)가 없는 스팟을 400 INVALID_COURSE로 거부한다
+# (이 스크립트는 CI가 2026-09-02에 생기기 전까지 안 돌아서 그때 깨진 걸 몰랐다).
+def _real_spot_ids(n: int = 2) -> list[int]:
+    from app.deps import get_spot_repository
+    return [s.id for s in get_spot_repository().all_spots()[:n]]
+
 import os
 import sys
 import uuid
@@ -272,7 +279,7 @@ section("7. 코스 공유")
 
 S1, S2 = dev("s1"), dev("s2")
 course = {"region": {"code": "26350", "name": "부산 해운대구"},
-          "spots": [{"id": 1, "name": "해운대해수욕장"}, {"id": 2, "name": "동백섬"}],
+          "spots": [{"id": sid} for sid in _real_spot_ids(2)],
           "legs": [{"walk": {"minutes": 12, "meters": 900}}]}
 
 r = client.post("/api/v1/courses/share",
@@ -283,8 +290,13 @@ check("share_code 8자 base32", len(code) == 8 and code.isalnum() and code.upper
 
 r = client.get(f"/api/v1/courses/shared/{code}", headers=S2)
 detail = r.json()
-check("공유 상세 200 + payload 원형 보존",
-      r.status_code == 200 and detail["course"] == course, str(r.status_code))
+# 2026-08-20부터 저장 직전에 rebuild_course_for_store 가 스팟을 서버 원본으로 다시 채운다
+# (클라이언트가 보낸 이름·사진은 버림) — 그래서 "원형 보존"은 스팟 id 순서·구간 정보로 본다.
+check("공유 상세 200 + 스팟 순서·구간 보존",
+      r.status_code == 200
+      and [s["id"] for s in detail["course"]["spots"]] == [s["id"] for s in course["spots"]]
+      and detail["course"]["legs"][0]["walk"]["minutes"] == 12,
+      f'{r.status_code} {detail.get("course", {}).get("legs")}')
 check("spot_count 파생", detail["spot_count"] == 2, str(detail.get("spot_count")))
 check("조회수 증가(1)", detail["view_count"] == 1, str(detail.get("view_count")))
 check("타인 조회 is_mine=false", detail["is_mine"] is False)
@@ -301,7 +313,8 @@ check("피드 목록 200 + 1건", r.status_code == 200 and lst["total"] == 1, st
 check("목록 항목에 payload 미포함", "course" not in lst["items"][0], str(list(lst["items"][0])))
 check("목록 항목 필드 계약",
       set(lst["items"][0]) == {"share_code", "nickname", "title", "spot_count", "created_at",
-                               "view_count"}, str(list(lst["items"][0])))
+                               "view_count", "like_count", "liked_by_me"},  # R.14(2026-08-20) 좋아요 필드 추가
+      str(list(lst["items"][0])))
 
 r = client.get("/api/v1/courses/shared/AAAAAAAA")
 check("없는 코드 → 404", r.status_code == 404, str(r.status_code))
