@@ -13,7 +13,7 @@ import {
   fetchRecommendedPlaces,
   fetchReviewsSummaryBulk,
 } from "../lib/api";
-import { loadOnboardingResult } from "../lib/onboardingStorage";
+import { clearOnboardingResult, loadOnboardingResult } from "../lib/onboardingStorage";
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { safeDistanceKm } from "../lib/geo";
 import CategoryFilter from "./recommend/CategoryFilter";
@@ -183,6 +183,16 @@ export default function RecommendContent() {
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
+        // 부록 C.4a — 서버가 프로필 구조 위반으로 400 INVALID_PROFILE 을 주면 "프론트가 프로필을
+        // 폐기하고 온보딩을 재유도"하기로 돼 있는데 여기가 빠져 있었다. 그래서 sessionStorage에
+        // 낡은/깨진 프로필이 남아 있으면 매 요청이 400 → 에러 화면 → 다시 시도해도 또 400으로
+        // 갇혔다(2026-09-03 운영에서 recommend 400 반복 실측). 폐기하면 profile=null 로 바뀌어
+        // 이 effect 가 비개인화로 다시 조회하고, 온보딩 유도 배너가 자연스럽게 뜬다.
+        if (err instanceof ApiError && err.code === "INVALID_PROFILE" && profile) {
+          clearOnboardingResult();
+          setProfile(null);
+          return;
+        }
         setError(
           err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "추천 목록을 불러오지 못했습니다.")
         );
