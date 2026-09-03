@@ -188,7 +188,18 @@ def _enforce_caps_in_tx(conn: psycopg.Connection, *, device_id: str, now: Any) -
     여기서 실패해도 공유 생성 자체는 성공해야 한다 — 정리는 부가 작업이고, 사용자는
     "정리 실패" 때문에 자기 코스를 못 올리는 상황을 이해할 수 없다. 다만 트랜잭션이
     깨지는 종류의 오류(psycopg.Error)는 삼키면 INSERT 까지 함께 롤백되므로 그대로 올린다.
+
+    ## 동시성 (5차 보안감사 #53, 2026-09-03)
+    "같은 트랜잭션 안"이라는 것만으로는 기기당 상한이 지켜지지 않는다 — 그 원자성은
+    **이 트랜잭션 자신**에게만 적용되고, 동시에 도는 다른 커넥션(같은 device_id로 온
+    또 다른 요청)과의 격리는 PostgreSQL 기본 격리수준(READ COMMITTED)에서 보장되지
+    않는다. 여러 요청이 동시에 "정리 불필요"로 판단하고 전부 INSERT에 성공할 수 있다
+    (그레이박스 재현: 19건 상태에서 10건 동시 삽입 → 상한 20건인데 최종 29건).
+    device_id 기준 트랜잭션 advisory lock으로 같은 기기의 요청들을 실제로 직렬화한다
+    — 다른 기기의 요청과는 경합하지 않으므로 전체 처리량에는 영향이 없다. 트랜잭션
+    종료(커밋/롤백) 시 자동 해제되므로 별도 unlock이 필요 없다.
     """
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (device_id,))
     batch = max(1, settings.share_cleanup_batch)
     # ① 기기당 상한 — 새로 들어올 1건의 자리를 미리 비운다(keep = 상한 - 1).
     removed = shared_course_repo.delete_oldest_by_device(
