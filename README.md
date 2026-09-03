@@ -44,40 +44,11 @@ LLM이 도는 경로는 셋뿐이고(온보딩 · 코스 요약 · 여행 팁) �
 backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이기 때문이다 — 트래픽이 늘면 `cache/base.py`
 인터페이스 뒤를 Redis로 바꾸고 워커를 늘린다.
 
-<details>
-<summary><strong>AI 코스짜기 한 번에 일어나는 일</strong></summary>
+### AI 코스짜기 한 번에 일어나는 일
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as 여행자
-    participant NG as nginx
-    participant BE as FastAPI
-    participant TM as SK Tmap
-    participant OL as ollama
-    participant PG as postgres
+![AI 코스짜기 요청 흐름](docs/course-flow.png)
 
-    User->>NG: POST /api/v1/courses/recommend (지역 · 취향)
-    NG->>BE: 프록시 (LLM 경로 타임아웃 적용)
-    BE->>BE: 캐시된 스팟 풀에서 후보 선정 · 점수화
-    par 구간마다 동시에
-        BE->>TM: 도보 경로
-        BE->>TM: 자동차 경로
-    end
-    TM-->>BE: 이동시간 · 거리 (실패 구간은 "이동 정보 없음")
-    BE->>OL: 코스 요약 요청 (세마포어 1 · 타임아웃)
-    alt 제한 시간 안에 응답
-        OL-->>BE: JSON 요약
-    else 타임아웃 · 형식 오류
-        BE->>BE: 요약 없이 진행 (ai_summary: null)
-    end
-    opt 로그인 상태
-        BE->>PG: AI 코스 저장
-    end
-    BE-->>User: 스팟 순서 · 구간 이동 · 지도 좌표 · 요약
-```
-
-</details>
+<sub>원본 [docs/course-flow.svg](docs/course-flow.svg) · 생성 스크립트 [docs/course-flow.gen.py](docs/course-flow.gen.py)</sub>
 
 ## 기술 스택
 
