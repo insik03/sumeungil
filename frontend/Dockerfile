@@ -1,4 +1,4 @@
-# 숨은길 frontend (Next.js 14 App Router) — Oracle Always Free ARM (aarch64) 배포용
+# 숨은길 frontend (Next.js 15 App Router) — Oracle Always Free ARM (aarch64) 배포용
 #
 # ARM64 메모: node:20-alpine 은 멀티아치(linux/amd64 + linux/arm64)라 ARM VM 에서 그대로
 # 빌드하면 arm64 레이어가 자동 선택된다. --platform 불필요.

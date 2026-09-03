@@ -93,6 +93,7 @@ def _featured_spot(
         category=spot.category,  # type: ignore[arg-type]
         region_name=region_name,
         address=spot.address,
+        location={"lat": spot.lat, "lng": spot.lng},
         congestion=congestion,
         is_hidden_gem=spot.is_hidden_gem,
         image_url=photo.url,

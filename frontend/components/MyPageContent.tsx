@@ -253,6 +253,15 @@ export default function MyPageContent() {
                 icon={<SparkleIcon />}
               />
               <ActivityTile href="/course" label="AI 코스짜기" count={null} icon={<RouteIcon />} />
+              {/* 태준 제안(2026-09-03) — "본인이 원하는 장소를 정하고" 부분은 /course의 기존
+                  "내 코스 만들기"(직접 스팟 선택 후 AI가 순서 배치) 모드와 정확히 일치한다.
+                  새 페이지 대신 ?mode=custom으로 그 탭에 바로 진입시킨다(CourseContent.tsx). */}
+              <ActivityTile
+                href="/course?mode=custom"
+                label="내 코스 만들기"
+                count={null}
+                icon={<RouteIcon />}
+              />
             </ul>
           </div>
 

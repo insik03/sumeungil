@@ -1,6 +1,6 @@
 # 숨은길 프론트엔드 (MVP-4)
 
-Next.js 14(App Router) + TypeScript. `projects/sumeungil/design-variants-v2/variant-B-boutique-travel.html`(채택 디자인 B안)을 실제 동작하는 React 컴포넌트로 이식했다.
+Next.js 15(App Router) + TypeScript. 채택한 부티크 트래블 디자인을 실제 동작하는 React 컴포넌트로 이식했다.
 
 **MVP-2**: 홈의 목적지 검색창 + 지역 칩(경주·전주·강릉·부산)이 실제로 `GET /api/v1/regions/search`로 지역 코드를 얻어 `GET /api/v1/congestion/board`를 재호출한다(01-interface-contract.md 부록 A).
 
@@ -115,7 +115,7 @@ frontend/
 
 ## 알려진 이슈 / 후속 확인 필요
 
-- `npm audit` 기준 Next.js 14.2.35에 남은 High 2건(Server Actions/rewrites SSRF, 내부 Server Function 노출)은 Next 16 major 업그레이드가 필요하다. 이 MVP는 Server Actions·커스텀 rewrites·next/image를 쓰지 않아 실질 노출면은 낮다고 판단했으나, 상용 배포 전 security-engineer 확인 필요.
+- 2026-08-31 `npm audit --omit=dev` 기준 알려진 운영 의존성 취약점 0건. PR과 main push마다 CI에서 lint·프로덕션 빌드를 실행한다.
 - 축제 배너는 정적 데이터다. 축제 API는 01-interface-contract.md에 아직 없음 — 필요 시 백엔드 협의 후 계약에 추가해야 한다.
 - MVP-2 지역 사전(`app/regions/seed.py`)은 데모용 정적 seed다. 검색창은 이 사전에 있는 지명만 매칭된다(예: "제주"는 되지만 임의 동네 이름은 0건).
 

@@ -696,6 +696,66 @@ input:focus-visible,
     padding: var(--sp-5) var(--sp-6);
   }
 }
+
+/* =========================================================================
+   지역 지도 섹션 (RegionMapSection.tsx, 2026-08-29, 대표 지시)
+   RegionRouteMap(demo-home/RegionRouteMap.tsx — 실제 시/도·시군구 행정경계 + 실좌표 코스선)을
+   홈의 독립 섹션으로 보여준다. 처음엔 Hero.tsx 검색창 옆에 나란히 넣었으나 대표가 두 차례
+   "부자연스럽다"고 재지적해(카드 장식·높이를 맞춰도 "히어로에 욱여넣은 배치" 자체가 문제)
+   히어로 밖으로 완전히 뺐다 — 이 섹션이 그 자리를 대신한다(RegionMapSection.tsx 주석 참고).
+
+   RegionRouteMap은 자체 CSS 변수(--paper/--ink/--signal 등, DemoHome.module.css의 `.demo`
+   스코프)를 참조하므로, 그 스코프 밖(원래 홈)에서 쓰려면 .home-region-map이 같은 변수 이름을
+   **사이트 전역 토큰으로 재정의**해서 넘겨준다 — 데모 전용 팔레트를 통째로 들여오지 않고,
+   그 자리에서 var() 하나만 바꿔치기하는 방식이다. 시맨틱 규칙(§22): 코랄(--b-500)은 혼잡
+   전용이라 장식용 포인트로 못 쓴다 — 데모의 시그널 코랄 대신 브랜드 그린(--g-500)을
+   신호색으로 재정의한다(로고·퀵메뉴 아이콘과 동일 판단). */
+.region-map-section__sub {
+  max-width: 620px;
+  margin-bottom: var(--sp-6);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+.home-region-map {
+  --paper: var(--g-50);
+  --mist: var(--g-100);
+  --ink-soft: var(--ink-muted);
+  --river: var(--n-100);
+  --signal: var(--g-500);
+  --line: var(--n-100);
+  /* RegionRouteMap.tsx의 지도 채움·경계선은 hex 대신 이 트리플릿으로 rgba() 불투명도를 섞는다
+     (DemoHome.module.css `.demo` 참고) — hex 변수만 바꾸면 지도 자체는 안 바뀌므로 반드시
+     같이 맞춘다. paper-rgb=g-50, ink-rgb=ink(전역), river-rgb=g-100(연한 브랜드 그린 틴트). */
+  --paper-rgb: 239, 251, 245;
+  --ink-rgb: 5, 14, 27;
+  --river-rgb: 216, 245, 232;
+  /* 데모의 손그림풍 카드 장식(비대칭 모서리·하드섀도우)을 RegionRouteMap.tsx가 hidePicker일
+     때 벗기므로(.routeStageBare), 대신 이 사이트의 표준 카드 문법(흰 배경·r-lg·shadow-card·
+     n-100 테두리 — .home-search-bar/.featured-card 등과 동일)을 여기서 입힌다. */
+  background: var(--white);
+  border: 1px solid var(--n-100);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  min-height: 420px;
+}
+.region-map-section__card {
+  max-width: 760px;
+}
+@media (min-width: 1024px) {
+  .home-region-map {
+    min-height: 560px;
+  }
+}
+/* RegionRouteMap의 루트가 <figure>(styles.routeStage, height:660 기준 SVG)라 이 래퍼 안에서
+   실제 표시 높이만 이 래퍼 크기로 눌러준다 — 컴포넌트 내부 마크업/치수 계산은 그대로 둔다. */
+.home-region-map figure {
+  height: 100%;
+  min-height: inherit;
+}
+
 .dest-search__box {
   display: flex;
   align-items: center;
@@ -1071,13 +1131,23 @@ input:focus-visible,
   align-items: center;
   justify-content: center;
   gap: var(--sp-3);
+  width: 100%;
+  min-width: 0;
   margin-top: var(--sp-3);
 }
 .hero-carousel__dots {
   display: flex;
+  max-width: 100%;
   gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+.hero-carousel__dots::-webkit-scrollbar {
+  display: none;
 }
 .hero-carousel__dot {
+  flex: 0 0 var(--touch-min);
   width: var(--touch-min);
   height: var(--touch-min);
   display: inline-flex;
@@ -1186,24 +1256,45 @@ input:focus-visible,
 .quick-menu__item:hover .quick-menu__icon,
 .quick-menu__item:focus-visible .quick-menu__icon {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-card);
+  background: var(--g-100);
+  border-color: rgba(47, 122, 84, 0.28);
+  box-shadow: 0 9px 20px rgba(21, 59, 42, 0.14);
 }
 .quick-menu__icon {
   width: 46px;
   height: 46px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid rgba(47, 122, 84, 0.18);
+  border-radius: 15px;
+  background: var(--g-50);
+  color: var(--g-700);
+  box-shadow: 0 5px 14px rgba(21, 59, 42, 0.09);
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+/* 여행 지도 위 장소 마커를 닮은 포인트. 10개 메뉴를 하나의 관광 사인 시스템으로 묶는다. */
+.quick-menu__icon::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border: 2px solid var(--white);
   border-radius: 50%;
-  background: linear-gradient(145deg, var(--g-100), var(--g-50));
-  color: var(--g-500);
-  /* 정지 상태에서도 은은한 브랜드 그린 글로우 — 호버 없이도 카드가 "떠 있는" 느낌을 준다. */
-  box-shadow: 0 4px 14px rgba(47, 122, 84, 0.16);
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+  background: var(--g-500);
+  box-sizing: content-box;
 }
 .quick-menu__icon svg {
   width: 22px;
   height: 22px;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7));
 }
 .quick-menu__label {
   font-size: 12px;
@@ -1232,6 +1323,7 @@ input:focus-visible,
   .quick-menu__icon {
     width: 56px;
     height: 56px;
+    border-radius: 18px;
   }
   .quick-menu__icon svg {
     width: 26px;
@@ -1252,10 +1344,10 @@ input:focus-visible,
   gap: var(--sp-4) var(--sp-2);
   margin-top: var(--sp-4);
 }
-/* §47.1(신규, 03-design-spec.md, 2026-08-20) — "여행 준비" 섹션(타일 2개)용 칸수 변형.
+/* §47.1(신규, 03-design-spec.md, 2026-08-20) — "여행 준비" 섹션(타일 3개)용 칸수 변형.
    새 디자인 언어가 아니라 기존 그리드의 칸수만 다른 변형(타일 자체는 100% 재사용). */
 .mypage-activity__grid--prep {
-  grid-template-columns: repeat(2, minmax(140px, 220px));
+  grid-template-columns: repeat(3, minmax(140px, 220px));
 }
 .mypage-activity__item {
   display: flex;
@@ -1809,8 +1901,8 @@ input:focus-visible,
 
 /* §40(신규) — 별점·리뷰 표시(RatingBadge.tsx). 스팟/축제 카드 공용 단일 소스. 배지(.badge)와
    같은 텍스트 크기를 쓰되 배경 없는 무채색 텍스트로 둬 "혼잡도 배지"와 시맨틱이 다름을
-   구분한다(둘 다 색 있는 pill이면 혼잡도처럼 오독될 수 있다). 데이터가 없을 때도("-", 0)
-   항상 같은 자리를 차지해 카드 높이가 데이터 유무로 달라지지 않는다. */
+   구분한다(둘 다 색 있는 pill이면 혼잡도처럼 오독될 수 있다). 데이터가 없으면 숫자처럼
+   보이는 placeholder 대신 "후기 없음"을 표시한다. */
 .rating-badge {
   display: inline-flex;
   align-items: center;

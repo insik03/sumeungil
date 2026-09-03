@@ -89,6 +89,45 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === p;
 }
 
+/**
+ * 붐비는 큰길(잉크색)에서 한적한 샛길(브랜드 그린)이 갈라지는 모습을 한 획처럼 단순화한 심볼.
+ * currentColor를 함께 써서 흰 GNB와 짙은 모바일 메뉴 양쪽에서 외곽선이 자연스럽게 반전된다.
+ */
+function BrandMark() {
+  return (
+    <svg
+      width="30"
+      height="30"
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      style={{ flex: "0 0 auto" }}
+    >
+      <circle cx="6.2" cy="26.2" r="1.8" fill="currentColor" />
+      <path
+        d="M6.4 24.2c.8-3.7 5.6-4.8 5.8-8.3.2-3.2-3.5-4.2-2.7-7 .5-1.9 2.5-3.5 5.5-4.1"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12.1 16.1c3.6-.1 5.1-1.8 4.7-4.5-.4-3.1 1.7-5.7 6.6-6.1"
+        stroke="var(--g-500)"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="m20.8 4.3 3.2.7-.9 3"
+        stroke="var(--g-500)"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function Header() {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
@@ -126,8 +165,8 @@ export default function Header() {
       <div className="gnb">
         <div className="gnb__inner">
           <Link className="gnb__logo" href="/" aria-label="숨은길 홈으로">
-            <span>숨은</span>
-            <span className="gnb__logo-badge">길</span>
+            <BrandMark />
+            <span>숨은길</span>
           </Link>
           <nav className="gnb__menu" aria-label="주요 메뉴">
             {NAV_ITEMS.map((item) => {
@@ -254,8 +293,8 @@ export default function Header() {
       <div className={`mobile-nav${navOpen ? " is-open" : ""}`}>
         <div className="mobile-nav__top">
           <div className="gnb__logo" style={{ color: "#fff" }}>
-            <span>숨은</span>
-            <span className="gnb__logo-badge">길</span>
+            <BrandMark />
+            <span>숨은길</span>
           </div>
           <button
             className="mobile-nav__close"

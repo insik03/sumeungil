@@ -50,129 +50,117 @@ const QUICK_MENU_ITEMS: QuickMenuItem[] = [
   { key: "tips", label: "여행 팁", href: "/tips" },
 ];
 
-/** 이모지 대신 인라인 SVG(ui-ux-pro-max 체크리스트 근거) — 코드베이스 전역의 기존 관례(FestivalGlyph 등)와 동일. */
+/**
+ * 작은 원형 배지에서도 한 세트로 읽히도록 24px 좌표계, 1.75px 선, 둥근 끝을 공통 적용한다.
+ * 완벽한 기하 도형보다 살짝 비대칭인 한두 개의 선과 점으로 여행 수첩에 그린 픽토그램처럼 정리했다.
+ */
+function QuickMenuSvg({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
 function QuickMenuIcon({ menuKey }: { menuKey: string }) {
   switch (menuKey) {
     case "onboarding":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 3l1.8 5.6H20l-4.8 3.5 1.8 5.6L12 14.2 7 17.7l1.8-5.6L4 8.6h6.2L12 3z"
-            fill="currentColor"
-          />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M12 20v-4.2c0-2.2-1.5-3.3-3.4-4.5C7 10.3 6 8.8 6 6.5" />
+          <path d="M12 15.8c0-2.2 1.3-3.4 3.2-4.6 1.6-1 2.8-2.3 2.8-4.5" />
+          <circle cx="6" cy="5" r="1.35" fill="currentColor" stroke="none" />
+          <circle cx="18" cy="5.2" r="1.35" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="20.2" r="1.35" fill="currentColor" stroke="none" />
+        </QuickMenuSvg>
       );
     case "recommend":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 20.2S3.8 15 3.8 9.4C3.8 6.4 6.1 4.5 8.6 4.5c1.5 0 2.9.8 3.4 2 .5-1.2 1.9-2 3.4-2 2.5 0 4.8 1.9 4.8 4.9 0 5.6-8.2 10.8-8.2 10.8z"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M12 3.4c4.9 0 8.5 3.5 8.5 8.3 0 4.9-3.7 8.9-8.5 8.9s-8.5-4-8.5-8.9c0-4.8 3.6-8.3 8.5-8.3Z" />
+          <path d="m15.8 7.7-2.2 5.8-5.4 2.8 2.1-6Z" />
+          <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
+        </QuickMenuSvg>
       );
     case "course":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 19c3.5-1 4.2-6.2 8-6.2s4.5 5.2 8 6.2"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <circle cx="4" cy="19" r="1.7" fill="currentColor" />
-          <circle cx="20" cy="19" r="1.7" fill="currentColor" />
-          <path d="M12 5v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          <circle cx="12" cy="3.4" r="1.6" fill="currentColor" />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M6.3 18.4c3.5-.7 2.1-5.7 5.7-6.1 3.4-.4 2.4-5.2 5.8-6.4" />
+          <circle cx="4.8" cy="18.7" r="1.55" fill="currentColor" stroke="none" />
+          <path d="m15.7 5.1 3.5.2-.5 3.5" />
+          <path d="M9.2 20.4c2.6.5 5.6.3 8.2-1" strokeDasharray="1.2 2.4" />
+        </QuickMenuSvg>
       );
     case "regions":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 21.5S5 15 5 9.8a7 7 0 0114 0c0 5.2-7 11.7-7 11.7z"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-          />
-          <circle cx="12" cy="9.6" r="2.4" fill="currentColor" />
-        </svg>
+        <QuickMenuSvg>
+          <path d="m3.5 6.7 5.3-2.5 6.3 2.3 5.4-2.3v13.5l-5.4 2.5-6.3-2.3-5.3 2.3Z" />
+          <path d="M8.8 4.2v13.7M15.1 6.5v13.7" />
+          <path d="M5.5 13.6c1.2-.9 2.1-1 3.3-.5 1.9.8 3.9.4 6.3-1.5 1.8-1.4 3.4-1.5 5.4-.7" />
+        </QuickMenuSvg>
       );
     case "board":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 20V11M10 20V4M16 20v-6.5M3 20h18"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M4 6.2h16" />
+          <path d="M4 12c2.4-1.8 4.3 1.8 6.7 0s4.5 1.8 6.8 0c.9-.7 1.7-.8 2.5-.4" />
+          <path d="M4 17.8h16" />
+          <circle cx="7" cy="6.2" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="12.2" cy="12" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="17" cy="17.8" r="1.25" fill="currentColor" stroke="none" />
+        </QuickMenuSvg>
       );
     case "stamp":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
-          <path
-            d="M8.2 12.4l2.4 2.4 5.2-5.4"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M9.2 13.5c.7-1.5 1-2.5.6-4.2-.6-2.8.5-4.7 2.2-4.7s2.8 1.9 2.2 4.7c-.4 1.7-.1 2.7.6 4.2" />
+          <path d="M7.5 13.5h9l2.2 4.3H5.3Z" />
+          <path d="M4.5 20.7c4.9-.8 10.1-.8 15 0" />
+        </QuickMenuSvg>
       );
     case "festival":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M6 3v18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          <path
-            d="M6 4.3l12 3.5L6 11.3"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-            fill="currentColor"
-            fillOpacity="0.22"
-          />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M3.5 6.2c4 2.7 12.8 3 17 .1" />
+          <path d="m6.2 7.5.6 4 2.6-2.9M11.2 8.6l1 4 2.2-3.8M16.2 8.4l1.1 3.6 2-4.4" />
+          <path d="M5.5 18.6c2-2.1 4.1-2.2 6.2-.2 2.3 2.2 4.6 2 6.8-.4" strokeDasharray="1.2 2.3" />
+        </QuickMenuSvg>
       );
     case "tips":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 3.5a5.8 5.8 0 00-2.9 10.8c.6.4 1 1.1 1 1.9v.4h3.8v-.4c0-.8.4-1.5 1-1.9A5.8 5.8 0 0012 3.5z"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinejoin="round"
-          />
-          <path d="M10.1 19.5h3.8M10.8 22h2.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M6 3.5h9l3 3v14H6Z" />
+          <path d="M15 3.5v3h3M9 10.3h6M9 13.8h5.2M9 17.3h3.5" />
+          <path d="M6 6H4.5M6 10H4.5M6 14H4.5M6 18H4.5" />
+        </QuickMenuSvg>
       );
     case "plan":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="3.5" y="5" width="17" height="15.5" rx="2.4" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M3.5 9.5h17" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <circle cx="12" cy="14.5" r="1.8" fill="currentColor" />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M5.4 5.7h13.2c1.1 0 1.9.8 1.9 1.9v11c0 1.1-.8 1.9-1.9 1.9H5.4c-1.1 0-1.9-.8-1.9-1.9v-11c0-1.1.8-1.9 1.9-1.9Z" />
+          <path d="M3.5 9.6h17M8 3.5v4M16 3.5v4" />
+          <path d="M7.5 16.8c1.5-2.4 3.1.5 4.6-1.7 1.1-1.6 2.5-1.9 4.4-1" />
+          <circle cx="7.3" cy="17" r="1" fill="currentColor" stroke="none" />
+        </QuickMenuSvg>
       );
     case "seasonal":
       return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 3v18M3 12h18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path
-            d="M12 3c2.4 2.2 2.4 6.6 0 9-2.4-2.4-2.4-6.8 0-9zM21 12c-2.2 2.4-6.6 2.4-9 0 2.4-2.4 6.8-2.4 9 0z"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-            fill="currentColor"
-            fillOpacity="0.2"
-          />
-        </svg>
+        <QuickMenuSvg>
+          <path d="M12 11.9c-3.5-.3-5.7-2.5-5.8-6 3.5-.1 5.7 2.3 5.8 6Z" />
+          <path d="M12.1 11.9c.4-3.5 2.7-5.6 6.1-5.6 0 3.5-2.4 5.6-6.1 5.6Z" />
+          <path d="M12 12.1c3.5.3 5.7 2.5 5.8 6-3.5.1-5.7-2.3-5.8-6Z" />
+          <path d="M11.9 12.1c-.4 3.5-2.7 5.6-6.1 5.6 0-3.5 2.4-5.6 6.1-5.6Z" />
+          <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+        </QuickMenuSvg>
       );
     default:
       return null;

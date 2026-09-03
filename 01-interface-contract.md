@@ -1346,6 +1346,7 @@ GET /api/v1/places/featured?region_code={code}&limit={n}
       "category": "attraction",      // C.2.1 enum(영문 소문자). 한국어 라벨은 프론트 변환
       "region_name": "부산광역시 해운대구",  // string | null
       "address": "부산 해운대구 ...",  // string | null
+      "location": { "lat": 35.1560327184, "lng": 129.1436566548 }, // ★ SpotCard와 같은 원천 실좌표
       "congestion": {                // object | null — board 이름매칭(C 추천과 동일 로직 재사용)
         "index": 81.79, "level": "high", "tier": "B"
       },
@@ -1359,8 +1360,10 @@ GET /api/v1/places/featured?region_code={code}&limit={n}
   "hidden_total": 29      // int | null — is_hidden_gem + trending 비중복 자격 통과 후보 수
 }
 ```
-- `FeaturedSpot` 필드 = `{ id, name, category, region_name, address, congestion|null, is_hidden_gem, image_url|null }`.
-  `match_score`/`recommended_for`/`overview`/`location` 은 **없다**(발견형 목록, SpotCard·SpotDetail 과 별도 계약).
+- `FeaturedSpot` 필드 = `{ id, name, category, region_name, address, location, congestion|null, is_hidden_gem, image_url|null }`.
+  `location`은 SpotCard와 동일한 `{lat,lng}`이며 로컬 스팟 레코드의 실좌표를 그대로 싣는다
+  (additive, 2026-09-02). `match_score`/`recommended_for`/`overview`는 **없다**(발견형 목록,
+  SpotCard·SpotDetail 과 별도 계약).
 
 ## H.3 선정 로직(신규 데이터·신규 공공 API 없음, 재사용 조립)
 - **trending**: M2 board(예상 혼잡도) 1회 조회 → 혼잡도 내림차순 → **스토어 이름매칭**으로 id/category 확보된

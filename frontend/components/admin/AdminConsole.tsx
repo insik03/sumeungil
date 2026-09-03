@@ -270,7 +270,11 @@ export default function AdminConsole({
       if (e instanceof ApiError && e.status === 404) {
         showToast("이미 처리된 항목이에요. 목록을 새로고침할게요.");
         setPendingDelete(null);
-        kind === "review" ? void loadReviews() : void loadCourses();
+        if (kind === "review") {
+          void loadReviews();
+        } else {
+          void loadCourses();
+        }
       } else showToast("삭제하지 못했어요.", "error");
     } finally {
       setBusyId(null);
