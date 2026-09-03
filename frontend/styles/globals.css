@@ -755,6 +755,14 @@ input:focus-visible,
   height: 100%;
   min-height: inherit;
 }
+/* 2026-09-03(대표) — /recommend 지도 칸 안에서 NAVER 지도 바로 아래에 같은 크기로 쌓이는 모드.
+   독립 섹션용 min-height(420/560)는 버리고 부모(.recommend-layout__map--stacked)가 준 높이를 쓴다. */
+.region-map-inline {
+  min-height: 0;
+}
+.region-map-inline figure {
+  min-height: 0;
+}
 
 .dest-search__box {
   display: flex;
@@ -3208,6 +3216,24 @@ input:focus-visible,
   height: 260px;
   margin-top: var(--sp-3);
 }
+/* 2026-09-03(대표: "지도 크기를 naver map 크기랑 똑같이 해서 그 밑에 붙여줘") — 로그인 시 지도 칸에
+   NAVER 지도(SpotMap)와 지역 지도(RegionMapSection inline)를 세로로 쌓는다. 두 지도는 같은 높이
+   (--rec-map-h)를 갖고, 칸 높이는 내용에 맞춘다. 모바일은 토글이 열렸을 때만 보인다. */
+.recommend-layout__map--stacked {
+  --rec-map-h: 260px;
+}
+.recommend-layout__map--stacked.is-open {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.recommend-layout__map--stacked .spot-map,
+.recommend-layout__map--stacked .region-map-inline {
+  height: var(--rec-map-h);
+  min-height: 0;
+  flex: 0 0 auto;
+}
 .recommend-layout__list {
   margin-top: var(--sp-5);
 }
@@ -3230,6 +3256,15 @@ input:focus-visible,
     position: sticky;
     top: calc(76px + var(--sp-5));
     margin-top: 0;
+  }
+  /* 두 지도가 뷰포트 안에 같이 들어가도록 칸 높이를 반씩 나눈다(각 최소 300px). sticky는 유지. */
+  .recommend-layout__map--stacked {
+    --rec-map-h: max(300px, calc((100vh - 76px - var(--sp-10) - var(--sp-3)) / 2));
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    height: auto;
+    min-height: 0;
   }
   .recommend-layout__list {
     margin-top: 0;
