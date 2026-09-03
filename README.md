@@ -175,6 +175,7 @@ git checkout -b feat/화면이름
 |---|---|
 | `insik03` | admin |
 | `qweasd-22` | write |
+| `qkroxwns-spec` | write (태준 · 2026-09-03 초대, 수락 대기) |
 
 팀원이 새로 필요하면 대표에게 초대를 요청합니다.
 
