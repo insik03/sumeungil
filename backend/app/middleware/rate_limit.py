@@ -12,9 +12,16 @@
 - **에러 봉투 동일**: 429 응답도 기존 `{"error":{"code","message","detail"}}` 형식을 그대로 쓴다
   (01-interface-contract.md §3). 프론트가 새 파서를 만들 필요가 없다.
 
-## 동시성 메모
-카운터 갱신 구간에는 `await` 가 하나도 없다 — asyncio 단일 이벤트루프에서 동기 코드 블록은
-원자적으로 실행되므로 Lock 이 필요 없다(MemoryCache 와 달리 I/O 를 끼지 않는다).
+## 동시성 메모 (5차 보안감사 #54, 2026-09-06 정정)
+카운터 갱신 구간에는 `await` 가 하나도 없어 **이벤트루프에서 호출될 때는** 원자적이다.
+하지만 이 클래스가 항상 이벤트루프에서만 불린다는 전제는 틀렸다 — `api/admin.py`의
+`admin_login`은 scrypt 해싱이 이벤트루프를 막지 않도록 의도적으로 `async def`가 아닌
+`def`이고, Starlette는 동기 라우트 핸들러를 **스레드풀**로 위임한다. 그 경로에서는
+여러 OS 스레드가 진짜로 동시에 `check()`를 실행할 수 있어 "동기라서 원자적"이라는
+근거가 깨진다(그레이박스 재현: GIL 스위치 간격을 인위적으로 좁히면 한도 5건인데
+최대 7건 통과). 그래서 `check()`/`_evict()`를 `threading.Lock`으로 감싼다 — 이벤트루프
+경로에서는 경합이 없어 락 대기 비용이 사실상 0이고, 스레드풀 경로에서는 실제로
+직렬화된다.
 대신 **프로세스별로 카운터가 분리**되므로 uvicorn 워커는 반드시 1개여야 한다
 (멀티워커면 실효 한도가 워커 수만큼 곱해진다 — deploy/docker-compose.yml 주석 참고).
 
@@ -50,6 +57,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import threading
 from collections import deque
 from dataclasses import dataclass
 from time import monotonic
@@ -165,6 +173,9 @@ class SlidingWindowLimiter:
         # 위조 XFF 로 키를 무한 생성해 메모리를 터뜨리는 것을 막는 상한.
         self._max_keys = max(100, int(max_keys))
         self._hits: dict[tuple[str, str], Deque[float]] = {}
+        # 스레드풀에서 호출되는 경로(예: admin_login, def 라우트) 대비 — 이벤트루프
+        # 경로는 경합이 없어 락 대기 비용이 사실상 0이다. 위 "동시성 메모" 참고.
+        self._lock = threading.Lock()
 
     @property
     def window_sec(self) -> int:
@@ -174,7 +185,12 @@ class SlidingWindowLimiter:
         return self._limits.get(bucket, self._limits.get(BUCKET_DEFAULT, 0))
 
     def check(self, client_key: str, bucket: str, now: float | None = None) -> Decision:
-        """1회 요청을 계산에 반영하고 허용 여부를 돌려준다(허용된 경우에만 카운트 증가)."""
+        """1회 요청을 계산에 반영하고 허용 여부를 돌려준다(허용된 경우에만 카운트 증가).
+
+        `threading.Lock`으로 감싼다 — 이벤트루프에서 호출될 때는 경합이 없어(단일
+        스레드) 대기 비용이 사실상 0이고, `admin_login`처럼 스레드풀에서 호출되는
+        경로에서는 실제로 직렬화된다(위 클래스 docstring "동시성 메모" 참고).
+        """
         limit = self.limit_for(bucket)
         ts = monotonic() if now is None else now
 
@@ -184,23 +200,24 @@ class SlidingWindowLimiter:
 
         key = (client_key, bucket)
         window_start = ts - self._window
-        hits = self._hits.get(key)
-        if hits is None:
-            hits = deque()
-            if len(self._hits) >= self._max_keys:
-                self._evict(ts)
-            self._hits[key] = hits
+        with self._lock:
+            hits = self._hits.get(key)
+            if hits is None:
+                hits = deque()
+                if len(self._hits) >= self._max_keys:
+                    self._evict(ts)
+                self._hits[key] = hits
 
-        while hits and hits[0] <= window_start:
-            hits.popleft()
+            while hits and hits[0] <= window_start:
+                hits.popleft()
 
-        if len(hits) >= limit:
-            # 가장 오래된 히트가 윈도우를 벗어나는 시각까지 기다려야 한다.
-            retry_after = max(1, int(self._window - (ts - hits[0])) + 1)
-            return Decision(False, bucket, limit, 0, retry_after)
+            if len(hits) >= limit:
+                # 가장 오래된 히트가 윈도우를 벗어나는 시각까지 기다려야 한다.
+                retry_after = max(1, int(self._window - (ts - hits[0])) + 1)
+                return Decision(False, bucket, limit, 0, retry_after)
 
-        hits.append(ts)
-        return Decision(True, bucket, limit, limit - len(hits), 0)
+            hits.append(ts)
+            return Decision(True, bucket, limit, limit - len(hits), 0)
 
     def _evict(self, now: float) -> None:
         """키 상한 초과 시 정리: ① 윈도우가 완전히 빈 키 제거 ② 그래도 넘치면 오래된 순 제거."""
