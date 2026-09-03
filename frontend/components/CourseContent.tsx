@@ -15,7 +15,7 @@ import {
   fetchMyOnboardingProfile,
 } from "../lib/api";
 import { logout } from "../lib/authStorage";
-import { loadOnboardingResult, saveOnboardingResult } from "../lib/onboardingStorage";
+import { clearOnboardingResult, loadOnboardingResult, saveOnboardingResult } from "../lib/onboardingStorage";
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
@@ -567,6 +567,14 @@ export default function CourseContent() {
           // 게이트로 돌아간다(useLoggedInName()이 null로 바뀜, 위 return문 참고).
           logout();
           setStatus("loading");
+          return;
+        }
+        // 부록 C.4a — 프로필 구조 위반(400 INVALID_PROFILE)이면 로컬 프로필을 폐기하고
+        // 비개인화로 다시 조회한다(RecommendContent.tsx와 같은 처리, 2026-09-03). 그대로 두면
+        // 낡은 sessionStorage 프로필 때문에 "다시 시도"를 눌러도 영영 400이다.
+        if (err instanceof ApiError && err.code === "INVALID_PROFILE" && profile) {
+          clearOnboardingResult();
+          setProfile(null);
           return;
         }
         setError(
