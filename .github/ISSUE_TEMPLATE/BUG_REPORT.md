@@ -1,44 +1,31 @@
 ---
-name: Bug report
-about: 발견한 문제를 제보해 주세요
-title: "[Bug] "
+name: 🪨 길이 막혔어요 (버그)
+about: 동작이 이상하거나 화면이 깨지는 걸 봤을 때
+title: "fix: "
 labels: bug
 assignees: ""
 ---
 
-## Describe the bug
+## 🪨 무슨 일이 있었나요
 
-<!-- 어떤 문제가 발생했는지 명확하고 간단하게 작성해 주세요. -->
+<!-- 한두 줄로. "AI 코스짜기에서 지도가 안 뜸" 정도면 충분해요. -->
 
-## To Reproduce
-
-<!-- 문제를 재현할 수 있는 순서를 작성해 주세요. -->
+## 🥾 따라가면 재현되는 길
 
 1. `...` 화면으로 이동
-2. `...` 버튼 클릭
-3. `...`까지 스크롤
-4. 오류 확인
+2. `...` 클릭
+3. 여기서 문제 발생
 
-## Expected behavior
+## 🧭 원래는 이래야 해요
 
-<!-- 원래 어떻게 동작해야 하는지 작성해 주세요. -->
+<!-- 기대한 동작 -->
 
-## Screenshot
+## 📸 스크린샷 · 콘솔 로그
 
-<!-- 가능하면 문제를 확인할 수 있는 이미지나 영상을 첨부해 주세요. -->
+<!-- 이미지, 영상, 브라우저 콘솔 에러. 서버 쪽이면 `docker compose logs backend --tail 100` 결과. -->
 
-## Environment
+## 🌦️ 환경
 
-**Desktop**
-
-- OS: <!-- 예: Windows 11, macOS 15 -->
-- Browser: <!-- 예: Chrome, Safari -->
-- Version: <!-- 예: 140 -->
-
-**Smartphone**
-
-- Device: <!-- 예: iPhone 16, Galaxy S25 -->
-- OS: <!-- 예: iOS 19, Android 16 -->
-- Browser: <!-- 예: Safari, Chrome -->
-- Version: <!-- 예: 140 -->
-
+- 어디서: <!-- 운영 sumeungil.co.kr / 로컬 dev -->
+- 기기·브라우저: <!-- 예: Windows 11 Chrome 140, iPhone 16 Safari -->
+- 로그인 상태: <!-- 비로그인 / Google / Kakao -->
