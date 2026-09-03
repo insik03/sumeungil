@@ -22,6 +22,7 @@ import RecommendSpotCard, { SpotCardSkeleton } from "./recommend/SpotCard";
 import SaveToggleButton from "./recommend/SaveToggleButton";
 import RerankBanners from "./recommend/RerankBanners";
 import SpotMap from "./recommend/SpotMap";
+import RegionMapSection from "./RegionMapSection";
 import SpotTypeFilter from "./recommend/SpotTypeFilter";
 import SortControl from "./recommend/SortControl";
 import {
@@ -276,6 +277,11 @@ export default function RecommendContent() {
             : "지금은 예상 혼잡도가 낮은 순으로 보여드리고 있어요. 취향을 알려주시면 더 꼭 맞는 순서로 바꿔드려요."}
         </p>
       </section>
+
+      {/* 2026-09-03(대표 지시 "지도 합친거 왜 여행지 추천에 안 들어감") — /course 상단과 같은
+          지역 지도 섹션. 8/29엔 코스짜기에만 넣으라는 지시였고 이 화면은 요청이 없어 빠져 있었다.
+          선택 지역(sigunguCd)을 그대로 넘기므로 RegionPicker로 지역을 바꾸면 지도도 따라간다. */}
+      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
 
       <section className="section" aria-labelledby="recommendHeading">
         <span className="eyebrow-pill eyebrow-pill--azure">프로필 맞춤 추천</span>
