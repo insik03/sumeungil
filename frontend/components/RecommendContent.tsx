@@ -23,6 +23,7 @@ import SaveToggleButton from "./recommend/SaveToggleButton";
 import RerankBanners from "./recommend/RerankBanners";
 import SpotMap from "./recommend/SpotMap";
 import RegionMapSection from "./RegionMapSection";
+import { useLoggedInName } from "../lib/useLoggedInName";
 import SpotTypeFilter from "./recommend/SpotTypeFilter";
 import SortControl from "./recommend/SortControl";
 import {
@@ -55,6 +56,8 @@ export default function RecommendContent() {
   const searchParams = useSearchParams();
   const paramRegionCode = searchParams.get("region_code");
 
+  // 지역 지도는 /course와 같이 로그인한 사용자에게만(대표: "공개 화면에 둘 거 아님 로그인에 넣으셈").
+  const loggedIn = useLoggedInName();
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 렌더부터 쿼리 지역으로 시작한다(기본 지역으로 한 번 조회한 뒤 다시 조회하는
   // 이중 호출을 피하기 위함). URL 쿼리는 SSR에서도 동일하게 읽혀 하이드레이션이 안전하다 —
@@ -280,8 +283,9 @@ export default function RecommendContent() {
 
       {/* 2026-09-03(대표 지시 "지도 합친거 왜 여행지 추천에 안 들어감") — /course 상단과 같은
           지역 지도 섹션. 8/29엔 코스짜기에만 넣으라는 지시였고 이 화면은 요청이 없어 빠져 있었다.
-          선택 지역(sigunguCd)을 그대로 넘기므로 RegionPicker로 지역을 바꾸면 지도도 따라간다. */}
-      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
+          선택 지역(sigunguCd)을 그대로 넘기므로 RegionPicker로 지역을 바꾸면 지도도 따라간다.
+          이 화면은 비로그인 공개라 지도만 로그인 사용자에게 보인다(/course와 같은 기준). */}
+      {loggedIn && <RegionMapSection regionCode={selectedRegion.sigunguCd} />}
 
       <section className="section" aria-labelledby="recommendHeading">
         <span className="eyebrow-pill eyebrow-pill--azure">프로필 맞춤 추천</span>
