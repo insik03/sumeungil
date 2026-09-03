@@ -1,4 +1,4 @@
-# 숨은길 frontend (Next.js 14 App Router) — Oracle Always Free ARM (aarch64) 배포용
+# 숨은길 frontend (Next.js 15 App Router) — Oracle Always Free ARM (aarch64) 배포용
 #
 # ARM64 메모: node:20-alpine 은 멀티아치(linux/amd64 + linux/arm64)라 ARM VM 에서 그대로
 # 빌드하면 arm64 레이어가 자동 선택된다. --platform 불필요.
@@ -16,13 +16,13 @@
 # ###########################################################################
 
 # ---------- 1) deps: 의존성만 설치(락파일 기준, 재현 가능) ----------
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ---------- 2) build: next build ----------
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 # 빌드타임 주입값. 값이 없으면 lib/api.ts 의 폴백(http://localhost:8000)이 구워져
@@ -44,7 +44,7 @@ COPY . .
 RUN npm run build
 
 # ---------- 3) runner: 프로덕션 의존성 + 빌드 산출물만 ----------
-FROM node:20-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

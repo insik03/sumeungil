@@ -194,14 +194,13 @@ export function Area({
   }, [lines, dataKey]);
 
   const pathRef = useRef<SVGPathElement>(null);
-  const { pathLength, pathD } = usePathStrokeMetrics(pathRef, [
+  const { pathLength, pathD } = usePathStrokeMetrics(
+    pathRef,
     renderData,
     innerWidth,
     dashFromIndex,
-    showLine,
-    showSeriesContent,
-    showLoadingPulse,
-  ]);
+    `${showLine}:${showSeriesContent}:${showLoadingPulse}`
+  );
 
   // Unique IDs for this area
   const uniqueId = useId();

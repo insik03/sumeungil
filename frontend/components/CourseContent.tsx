@@ -13,7 +13,6 @@ import {
   fetchArrangeCourse,
   fetchCourse,
   fetchMyOnboardingProfile,
-  saveMyCourse,
 } from "../lib/api";
 import { logout } from "../lib/authStorage";
 import { loadOnboardingResult, saveOnboardingResult } from "../lib/onboardingStorage";
@@ -21,8 +20,8 @@ import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import LoginRequiredGate from "./LoginRequiredGate";
+import RegionMapSection from "./RegionMapSection";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
-import SaveToggleButton from "./recommend/SaveToggleButton";
 import CourseMap from "./course/CourseMap";
 import CourseStepCard from "./course/CourseStepCard";
 import CourseStepPhotoStrip from "./course/CourseStepPhotoStrip";
@@ -426,7 +425,8 @@ export default function CourseContent() {
   // 2026-08-17(대표 지시) — AI 코스짜기(추천·직접만들기 둘 다)는 로그인 필수.
   const loggedIn = useLoggedInName();
 
-  const [mode, setMode] = useState<CourseMode>("ai");
+  // 마이페이지의 "내 코스 만들기" 타일이 ?mode=custom으로 바로 이 탭에 진입시킨다.
+  const [mode, setMode] = useState<CourseMode>(searchParams.get("mode") === "custom" ? "custom" : "ai");
 
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 조회부터 쿼리 지역으로 나간다(기본 지역 조회 후 재조회하는 이중 호출 방지).
@@ -748,6 +748,12 @@ export default function CourseContent() {
           message="AI 코스짜기는 로그인 후 이용할 수 있어요. 로그인하면 만든 코스를 저장해 다시 볼 수도 있어요."
         />
       ) : (
+      <>
+      {/* 2026-08-29(대표 지시) — "지도를 AI 코스짜기에도 넣어줘". 처음엔 로그인 게이트보다
+          위(미리보기)에 뒀는데 대표가 "로그인해야 볼 수 있게 해야지"로 재지시 — 로그인
+          이후에만 보이도록 이 안(게이트 통과 후 분기)으로 옮겼다. 홈과 같은 컴포넌트 재사용은
+          그대로(RegionMapSection.tsx, 새로 안 만듦). */}
+      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
       <section className="section" aria-labelledby="courseHeading">
         <div className="course-mode-switch" role="tablist" aria-label="코스 만들기 방식">
           <button
@@ -996,6 +1002,7 @@ export default function CourseContent() {
           </>
         )}
       </section>
+      </>
       )}
     </>
   );

@@ -254,10 +254,7 @@ export function formatHeatmapTooltipWeekday(date: Date): string {
 }
 
 /** Tooltip contribution line — e.g. `3 contributions`. */
-export function formatHeatmapContributionLabel(
-  count: number,
-  _date?: Date
-): string {
+export function formatHeatmapContributionLabel(count: number): string {
   const word = count === 1 ? "contribution" : "contributions";
   return `${count} ${word}`;
 }

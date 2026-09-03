@@ -174,7 +174,7 @@ export default function RecommendContent() {
         )
           .then((s) => setRatingSummaries(s))
           .catch(() => {
-            // 실패해도 조용히 무시 — RatingBadge가 "-"/0 폴백을 그대로 보여준다.
+            // 실패해도 조용히 무시 — RatingBadge가 "후기 없음" 상태를 보여준다.
           });
       })
       .catch((err: unknown) => {

@@ -34,7 +34,7 @@ interface SpotCardProps {
   spot: SpotCardType;
   /** 사용자 본인 OnboardingResult.tags에서 뽑은 value→label 맵. matched_tags 표시용(§C.7-4). */
   tagLabelMap: Record<string, string>;
-  /** §40(신규) — 별점·리뷰 자리(표시만). 호출부가 넘기지 않으면 RatingBadge가 "-"/0으로 표기한다. */
+  /** §40(신규) — 별점·리뷰 자리. 요약이 없으면 RatingBadge가 "후기 없음"으로 표기한다. */
   rating?: number | null;
   reviewCount?: number;
 }

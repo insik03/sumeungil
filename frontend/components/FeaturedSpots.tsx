@@ -55,7 +55,7 @@ export function PlaceholderGlyph() {
 
 interface FeaturedSpotCardProps {
   spot: FeaturedSpot;
-  /** §40(신규) — 별점·리뷰 자리(표시만). 호출부가 넘기지 않으면 RatingBadge가 "-"/0으로 표기한다. */
+  /** §40(신규) — 별점·리뷰 자리. 요약이 없으면 RatingBadge가 "후기 없음"으로 표기한다. */
   rating?: number | null;
   reviewCount?: number;
 }
@@ -157,7 +157,7 @@ interface FeaturedSectionProps {
   /** null = 로딩 중(스켈레톤 표시). 빈 배열이면 섹션 자체를 렌더하지 않는다(조용히 숨김). */
   items: FeaturedSpot[] | null;
   /** §41(신규) — 일괄 조회한 별점 요약. id별로 없으면(호출 실패·아직 로딩 중) RatingBadge가
-   * 조용히 "-"/0으로 폴백한다(지시서 요구사항 — 카드 실패가 섹션 전체를 막지 않는다). */
+   * 조용히 "후기 없음"으로 폴백한다(카드 실패가 섹션 전체를 막지 않는다). */
   summaries?: Record<string, ReviewSummary>;
 }
 
@@ -225,7 +225,7 @@ export default function FeaturedSpots({ regionCode, diverse }: FeaturedSpotsProp
         fetchReviewsSummaryBulk("spot", ids, controller.signal)
           .then((s) => setSummaries(s))
           .catch(() => {
-            // 실패해도 조용히 무시 — RatingBadge가 "-"/0 폴백을 그대로 보여준다(화면 깨짐 금지).
+            // 실패해도 조용히 무시 — RatingBadge가 "후기 없음" 상태를 보여준다(화면 깨짐 금지).
           });
       })
       .catch(() => {

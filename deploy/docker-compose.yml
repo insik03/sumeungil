@@ -2,7 +2,7 @@
 #
 # 서비스 6개를 VM 한 대에 올린다:
 #   nginx      : 유일하게 호스트 80 포트를 여는 엣지. 나머지는 내부 네트워크에서만 접근 가능.
-#   frontend   : Next.js 14 (next start)
+#   frontend   : Next.js 15 (next start)
 #   backend    : FastAPI (uvicorn, 워커 1개 — 인메모리 캐시/레이트리밋 때문)
 #   postgres   : 저장소(리뷰·공유코스·로그인 계정·온보딩 프로필·AI 코스). 2026-08-17 SQLite에서
 #                전환(대표 지시) — backend 만 접근하고 호스트 포트는 열지 않는다.
@@ -82,11 +82,8 @@ services:
     # config.py 는 /app/.env 가 없으면 프로세스 환경변수를 그대로 읽는다.
     env_file:
       - .env
-    # !!! 사용자 데이터 보존 (부록 R, 2026-08-01) !!!
-    #   후기·공유 코스는 SQLite 파일 하나(/app/data/sumeungil.db)에 저장된다.
-    #   컨테이너 파일시스템은 `up -d --build` 때마다 새로 만들어지므로, 이 볼륨이 없으면
-    #   배포할 때마다 사용자가 쓴 글이 **전부 사라진다**(복구 불가).
-    #   경로를 바꾸려면 .env 의 SQLITE_PATH 와 아래 마운트 지점을 함께 바꿔야 한다.
+    # 과거 SQLite 이관본을 잠시 보존하는 레거시 볼륨. 현재 사용자 데이터의 정본은
+    # postgres 서비스의 postgres-data 볼륨이다.
     volumes:
       - sumeungil-data:/app/data
     expose:
@@ -118,6 +115,31 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - sumeungil
+
+  # PostgreSQL 자동 백업. 기동 직후 1회, 이후 기본 24시간마다 custom-format dump를 만들고
+  # pg_restore로 읽기 검증한다. BACKUP_S3_URI를 설정하면 AES-256 서버측 암호화로 S3 호환
+  # 외부 저장소에도 올린다. 로컬 사본은 deploy/backups/에 기본 14일 보관한다.
+  postgres-backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: sumeungil-postgres-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /backups/.last-success && last=$$(cat /backups/.last-success) && now=$$(date +%s) && test $$((now-last)) -lt $${BACKUP_MAX_AGE_SECONDS:-93600} && { test -z \"$${BACKUP_S3_URI:-}\" || { test -f /backups/.last-offsite-success && remote=$$(cat /backups/.last-offsite-success) && test $$((now-remote)) -lt $${BACKUP_MAX_AGE_SECONDS:-93600}; }; }"]
+      interval: 30m
+      timeout: 10s
+      retries: 3
+      start_period: 5m
     networks:
       - sumeungil
 

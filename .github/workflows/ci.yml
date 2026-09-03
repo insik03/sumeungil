@@ -1,0 +1,80 @@
+name: 빌드 및 회귀 검증
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE: http://localhost:8000
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sumeungil_test
+          POSTGRES_USER: sumeungil
+          POSTGRES_PASSWORD: verify-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sumeungil -d sumeungil_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://sumeungil:verify-only@localhost:5432/sumeungil_test
+      PUBLIC_DATA_API_KEY: verify-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q app scripts
+      - name: 결정적 회귀 스크립트 실행
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in scripts/verify_*.py; do
+            case "$script" in
+              scripts/verify_injection_hardening.py|scripts/verify_onboarding_llm.py)
+                echo "skip $script (실제 Ollama 모델 필요)"
+                ;;
+              *)
+                echo "run $script"
+                python "$script"
+                ;;
+            esac
+          done

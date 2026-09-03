@@ -76,8 +76,9 @@ export default function CoursesFeedContent() {
   const [likeNotes, setLikeNotes] = useState<Record<string, boolean>>({});
   const noteTimers = useRef<Record<string, number>>({});
   useEffect(() => {
+    const timers = noteTimers.current;
     return () => {
-      Object.values(noteTimers.current).forEach((id) => window.clearTimeout(id));
+      Object.values(timers).forEach((id) => window.clearTimeout(id));
     };
   }, []);
   const showLikeNote = (shareCode: string) => {

@@ -16,7 +16,7 @@ export default function SeasonalPage() {
   return (
     <div className="page">
       <main>
-        <SeasonalSection />
+        <SeasonalSection headingLevel="h1" />
       </main>
       <Footer />
     </div>

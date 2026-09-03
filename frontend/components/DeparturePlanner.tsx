@@ -57,7 +57,12 @@ function toDateInputValue(d: Date): string {
 /** 혼잡도 예측 원천(KTO)의 실측 커버 상한. 이 범위 밖은 서버가 available:false 를 준다. */
 const PLANNER_MAX_DAYS_AHEAD = 29;
 
-export default function DeparturePlanner() {
+interface DeparturePlannerProps {
+  headingLevel?: "h1" | "h2";
+}
+
+export default function DeparturePlanner({ headingLevel = "h2" }: DeparturePlannerProps) {
+  const Heading = headingLevel;
   const [today] = useState(() => new Date());
   const minDate = useMemo(() => toDateInputValue(today), [today]);
   // QA 약식(2026-07-31) M-1: 상한이 180일이었으나 원천 실측 커버는 혼잡도 29일·날씨 3일이라
@@ -110,9 +115,9 @@ export default function DeparturePlanner() {
   return (
     <section className="section planner" aria-labelledby="plannerHeading">
       <span className="eyebrow-pill eyebrow-pill--mint">출발일 플래너</span>
-      <h2 className="section__title" id="plannerHeading">
+      <Heading className="section__title" id="plannerHeading">
         언제 떠나세요?
-      </h2>
+      </Heading>
       <p className="planner__lead">
         지역과 앞으로 한 달 안의 날짜를 고르면 그날 예상 혼잡도를 보여드려요. 날짜가 앞으로
         사흘 안이면 날씨 예보도 함께 확인할 수 있어요.
