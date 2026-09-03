@@ -94,9 +94,18 @@ export default function HomeContent() {
   // 서버 HTML과 클라이언트 첫 렌더가 달라져 하이드레이션 에러가 난다(실측으로 확인).
   // mount 후 effect에서 반영한다.
   const [selectedRegion, setSelectedRegionState] = useState<RegionSearchItem | null>(null);
+  // 2026-09-03(대표 "렉 걸리는 이유") — 기억해둔 지역을 mount 후에야 알 수 있다 보니, 첫 렌더가
+  // null(지역 미선택)로 나가면서 Hero가 전국 9개 도 병렬 호출을 쏘고 FeaturedSpots·CoursePromo·
+  // FestivalBanner도 전국 기준으로 한 번 요청한 뒤, 바로 지역이 복원되면 전부 abort하고 다시
+  // 요청했다(네트워크 탭에 featured 12건 취소 → 재요청으로 실측). worker 1개짜리 백엔드에
+  // 홈 한 번 열 때마다 요청이 두 배로 몰려 각 호출이 700ms대로 늘어지는 게 체감 렉의 원인.
+  // 그래서 "지역 복원이 끝났다"는 신호가 서기 전엔 데이터 섹션을 아예 그리지 않는다 —
+  // SSR과 첫 클라이언트 렌더는 둘 다 false라 하이드레이션은 그대로 안전하다.
+  const [regionResolved, setRegionResolved] = useState(false);
   useEffect(() => {
     const last = loadLastRegion();
     if (last) setSelectedRegionState(last);
+    setRegionResolved(true);
   }, []);
 
   // 2026-08-17(대표 지시) — 온보딩 결과 확인("이 취향으로 계속하기")은 이제 /recommend로
@@ -134,16 +143,20 @@ export default function HomeContent() {
         </div>
       )}
       <HeroGreeting />
-      <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} />
+      <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} regionResolved={regionResolved} />
       {/* 2026-08-29(대표 지시) — 지역 지도(RegionMapSection)를 홈에서 뺐다. 히어로 옆(1차) →
           히어로 밖 독립 섹션(2차)을 거쳐 결국 "홈에는 없어도 된다"로 정리 — /course(로그인
           후)에만 남는다(CourseContent.tsx). 컴포넌트 자체는 지우지 않았다, 거기서 재사용 중. */}
-      <ServiceQuickMenu regionCode={regionCode} />
-      <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />
-      {/* 부록 U.3(2026-08-01, 대표 지시) — 예상 혼잡 전광판은 congestion 화면으로 옮겼다.
-          그 화면이 전국 지도 아래에 같은 전광판을 두므로, 홈에 남겨두면 두 번 나온다. */}
-      <CoursePromo regionCode={regionCode} />
-      <FestivalBanner regionCode={regionCode} />
+      {regionResolved && (
+        <>
+          <ServiceQuickMenu regionCode={regionCode} />
+          <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />
+          {/* 부록 U.3(2026-08-01, 대표 지시) — 예상 혼잡 전광판은 congestion 화면으로 옮겼다.
+              그 화면이 전국 지도 아래에 같은 전광판을 두므로, 홈에 남겨두면 두 번 나온다. */}
+          <CoursePromo regionCode={regionCode} />
+          <FestivalBanner regionCode={regionCode} />
+        </>
+      )}
     </>
   );
 }
