@@ -12,6 +12,9 @@
 2. [01-interface-contract.md](01-interface-contract.md) — 백-프론트 인터페이스 계약 (부록 T~X 포함)
 3. [deploy/DEPLOY.md](deploy/DEPLOY.md) — 배포·HTTPS·관리자 콘솔 절차
 4. [APPROVALS.md](APPROVALS.md) — 결재 로그 (게이트 통과 이력)
+5. [STATUS.md](STATUS.md) — 대표님 확인용 현재 구현 현황
+
+지나간 단계별 PRD·설계·QA·보안·법률 리뷰는 [docs/](docs/)에 있다 — 지금 뭘 해야 하는지는 위 5개면 충분하고, docs/는 "그때 왜 그렇게 정했는지" 찾을 때만 연다.
 
 ## 로컬 실행
 
