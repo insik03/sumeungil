@@ -132,6 +132,21 @@ empty_secret_auth = UserAuth(
 )
 check("USER_SESSION_SECRET 미설정 → enabled=False(라우터 자체가 안 켜짐)", empty_secret_auth.enabled is False)
 
+# === 1b. 슬라이딩 세션 재발급 (2026-09-04 대표 C안) ==================================
+section("1b. 슬라이딩 세션 — /me 가 남은 수명 절반 아래에서만 쿠키 재발급")
+
+c1b, u1b = make_login("sub-slide", "slide@example.com", "슬라이딩")
+r = c1b.get("/api/v1/auth/me")
+check("갓 발급한 세션 /me → Set-Cookie 없음(재발급 안 함)", r.status_code == 200 and "set-cookie" not in r.headers)
+old_token, _ = auth.issue_token(user_id=u1b["id"], email=u1b["email"], now=int(time.time()) - auth.session_ttl_sec * 3 // 4)
+c1b.cookies.set(auth.cookie_name, old_token)
+r = c1b.get("/api/v1/auth/me")
+sc = r.headers.get("set-cookie", "")
+check("수명 3/4 지난 세션 /me → 같은 이름 쿠키 재발급 + HttpOnly", auth.cookie_name in sc and "HttpOnly" in sc, sc[:80])
+new_token = sc.split(";")[0].split("=", 1)[1] if "=" in sc else ""
+new_id = auth.verify_token(new_token)
+check("재발급 토큰의 만료가 옛 토큰보다 뒤", new_id is not None and new_id.exp > auth.verify_token(old_token).exp)
+
 # 2026-08-17 카카오 추가 — enabled(세션 인프라)와 google_enabled/kakao_enabled(provider별
 # 설정 여부)가 서로 독립인지 확인. 한쪽 provider만 미설정이어도 다른 쪽은 영향받지 않는다.
 partial_auth = UserAuth(
