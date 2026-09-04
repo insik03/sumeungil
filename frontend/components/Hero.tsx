@@ -198,7 +198,7 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
     const cardRect = card.getBoundingClientRect();
     track.scrollTo({
       left: track.scrollLeft + (cardRect.left - trackRect.left) - (trackRect.width - cardRect.width) / 2,
-      behavior: "auto",
+      behavior: "instant",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides]);
@@ -224,8 +224,11 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
       const n = slides.length;
       if (looped && (activeIndex >= n || activeIndex < 0)) {
         // 복제 장에 도착 — 같은 그림의 실제 장으로 소리 없이 점프한 뒤 인덱스를 정규화.
+        // 2026-09-04 대표 재지적("6 다음에 1이 오른쪽에서 나와야") — 원인: 트랙 CSS 가
+        // scroll-behavior:smooth 라 behavior:"auto" 는 CSS 값을 따라 **부드럽게 되감겼다**.
+        // 그래서 마지막 장 뒤에 1로 "쭉 돌아가는" 게 보였다. "instant" 는 CSS 를 무시한다.
         const real = ((activeIndex % n) + n) % n;
-        scrollTrackTo(trackChildIndex(real), "auto");
+        scrollTrackTo(trackChildIndex(real), "instant");
         setActiveIndex(real);
         // 점프 직후 발생하는 scroll 이벤트가 인덱스를 되돌리지 않게 한 프레임 더 잠근다.
         window.setTimeout(() => {
