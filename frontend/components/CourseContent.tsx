@@ -347,7 +347,6 @@ function CourseTimelinePanel({
                 spots={status === "success" && data ? data.spots : []}
                 spotsLoading={status === "loading"}
                 maxStops={status === "success" && data ? data.spots.length : 3}
-                routeLabel="AI 코스 경로"
               />
             </>
           ) : (

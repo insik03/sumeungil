@@ -25,7 +25,6 @@ interface RegionMapSectionProps {
   spotsLoading?: boolean;
   /** 경로로 이을 최대 스팟 수 — 기본 3. spots 를 준 코스 화면은 코스 길이만큼. */
   maxStops?: number;
-  routeLabel?: string;
 }
 
 // RegionRouteMap용 후보 풀 크기. 시/도 전체에서 좌표 있는 스팟을 걸러 최대 3곳만
@@ -52,7 +51,6 @@ export default function RegionMapSection({
   spots: givenSpots,
   spotsLoading: givenLoading,
   maxStops,
-  routeLabel,
 }: RegionMapSectionProps) {
   const selectedSido = useMemo(() => {
     const sidoCode = regionCode?.slice(0, 2);
@@ -99,7 +97,6 @@ export default function RegionMapSection({
           onSelectSido={() => {}}
           hidePicker
           maxStops={maxStops}
-          routeLabel={routeLabel}
         />
       </div>
     );
