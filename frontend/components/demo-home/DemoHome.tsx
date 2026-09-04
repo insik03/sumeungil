@@ -154,7 +154,6 @@ export default function DemoHome() {
             selectedSido={selectedSido}
             spots={routeSpots}
             spotsLoading={spots === null}
-            mood={mood}
             onSelectSido={setSelectedSido}
           />
         </div>
