@@ -34,10 +34,21 @@ interface RegionMapAsset {
   districts: DistrictBoundary[];
 }
 
+/**
+ * 지도가 실제로 쓰는 스팟 필드만 뽑은 최소 타입(2026-09-04). FeaturedSpot(홈·추천의 featured 픽)과
+ * CourseSpot(AI 코스 결과, SpotCard 확장)이 둘 다 이 모양을 만족해 같은 지도에 그릴 수 있다 —
+ * 대표 지시 "추천 경로도 AI 코스랑 같이": 코스 화면에서는 featured 대신 실제 코스 스팟을 잇는다.
+ */
+export type RouteSpot = Pick<FeaturedSpot, "id" | "name" | "location" | "congestion">;
+
 interface RegionRouteMapProps {
   selectedSido: SidoRegion;
-  spots: FeaturedSpot[];
+  spots: RouteSpot[];
   spotsLoading: boolean;
+  /** 경로로 이을 최대 스팟 수. 기본 3(홈·추천의 "대표 3곳"). AI 코스는 코스 길이만큼 넘긴다. */
+  maxStops?: number;
+  /** 경로가 있을 때 제목에 쓸 문구. 기본 "실좌표로 잇는 추천 경로". */
+  routeLabel?: string;
   /** 데모 홈의 무드 캡션용. 없으면(실제 홈 임베드) 무드 없이 스팟 개수만 보여준다. */
   mood?: string;
   onSelectSido: (sido: SidoRegion) => void;
@@ -50,7 +61,7 @@ interface RegionRouteMapProps {
 }
 
 interface ProjectedStop {
-  spot: FeaturedSpot;
+  spot: RouteSpot;
   x: number;
   y: number;
   labelWidth: number;
@@ -101,12 +112,12 @@ function ringPath(ring: Coordinate[], project: ReturnType<typeof createProjector
     .join(" ") + " Z";
 }
 
-function hasUsableLocation(spot: FeaturedSpot): boolean {
+function hasUsableLocation(spot: RouteSpot): boolean {
   const location = spot.location;
   return !!location && Number.isFinite(location.lat) && Number.isFinite(location.lng);
 }
 
-function isInsideBounds(spot: FeaturedSpot, bounds: MapBounds): boolean {
+function isInsideBounds(spot: RouteSpot, bounds: MapBounds): boolean {
   if (!hasUsableLocation(spot)) return false;
   const { lat, lng } = spot.location;
   return lat >= bounds.minLat && lat <= bounds.maxLat && lng >= bounds.minLng && lng <= bounds.maxLng;
@@ -116,7 +127,7 @@ function shortMapLabel(name: string): string {
   return name.length > 13 ? `${name.slice(0, 12)}…` : name;
 }
 
-function congestionText(spot: FeaturedSpot): string {
+function congestionText(spot: RouteSpot): string {
   const index = spot.congestion?.index;
   if (index != null) return `예상 혼잡 ${Math.round(index)}%`;
   const labels: Record<string, string> = { low: "여유", mid: "보통", high: "혼잡" };
@@ -130,6 +141,8 @@ export default function RegionRouteMap({
   mood,
   onSelectSido,
   hidePicker = false,
+  maxStops = 3,
+  routeLabel = "실좌표로 잇는 추천 경로",
 }: RegionRouteMapProps) {
   const [asset, setAsset] = useState<RegionMapAsset | null>(null);
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -171,7 +184,7 @@ export default function RegionRouteMap({
         path: ringPath(ring, project),
       }))
     );
-    const routeStops = spots.filter((spot) => isInsideBounds(spot, asset.bounds)).slice(0, 3);
+    const routeStops = spots.filter((spot) => isInsideBounds(spot, asset.bounds)).slice(0, Math.max(1, maxStops));
     const projectedStops: ProjectedStop[] = routeStops.map((spot, index) => {
       const point = project([spot.location.lng, spot.location.lat]);
       return {
@@ -179,15 +192,16 @@ export default function RegionRouteMap({
         ...point,
         labelWidth: Math.min(164, Math.max(72, shortMapLabel(spot.name).length * 11 + 18)),
         labelOnLeft: point.x > MAP_WIDTH * 0.66,
-        // 실제 좌표가 밀집한 도심에서도 세 라벨이 한 줄에 포개지지 않도록 번호별로 엇갈린다.
-        labelOffsetY: index === 1 ? -34 : index === 2 ? 34 : 0,
+        // 실제 좌표가 밀집한 도심에서도 라벨이 한 줄에 포개지지 않도록 번호별로 엇갈린다
+        // (0·위·아래 를 3개 주기로 반복 — 코스가 3곳을 넘어도 같은 규칙).
+        labelOffsetY: index % 3 === 1 ? -34 : index % 3 === 2 ? 34 : 0,
       };
     });
     const routePath = projectedStops
       .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
       .join(" ");
     return { outerPath, districtPaths, projectedStops, routePath };
-  }, [asset, spots, hidePicker]);
+  }, [asset, spots, hidePicker, maxStops]);
 
   const routeNames = geometry?.projectedStops.map((point) => point.spot.name) ?? [];
   const mapSummary = routeNames.length
@@ -227,7 +241,7 @@ export default function RegionRouteMap({
           {selectedSido.shortName}
           {asset ? ` · 시군구 ${asset.districts.length}곳` : " · 경계 불러오는 중"}
         </span>
-        <b>{routeNames.length > 1 ? "실좌표로 잇는 추천 경로" : "실제 행정 경계를 따라 보기"}</b>
+        <b>{routeNames.length > 1 ? routeLabel : "실제 행정 경계를 따라 보기"}</b>
       </div>
 
       <svg className={styles.regionMap} viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} aria-hidden="true">

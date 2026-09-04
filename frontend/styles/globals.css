@@ -3220,7 +3220,7 @@ input:focus-visible,
    NAVER 지도(SpotMap)와 지역 지도(RegionMapSection inline)를 세로로 쌓는다. 두 지도는 같은 높이
    (--rec-map-h)를 갖고, 칸 높이는 내용에 맞춘다. 모바일은 토글이 열렸을 때만 보인다. */
 .recommend-layout__map--stacked {
-  --rec-map-h: 260px;
+  --rec-map-h: 340px; /* 2026-09-04 대표 "경계 사진 너무 작다" — 260→340 */
 }
 .recommend-layout__map--stacked.is-open {
   height: auto;
@@ -3259,7 +3259,8 @@ input:focus-visible,
   }
   /* 두 지도가 뷰포트 안에 같이 들어가도록 칸 높이를 반씩 나눈다(각 최소 300px). */
   .recommend-layout__map--stacked {
-    --rec-map-h: max(300px, calc((100vh - 76px - var(--sp-10) - var(--sp-3)) / 2));
+    /* 2026-09-04 — sticky 를 뺐으니 뷰포트 반에 묶일 이유가 없다. 최소 480px 로 키운다. */
+    --rec-map-h: max(480px, calc((100vh - 76px - var(--sp-10) - var(--sp-3)) / 2));
     display: flex;
     flex-direction: column;
     gap: var(--sp-3);
