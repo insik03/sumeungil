@@ -1,5 +1,6 @@
 "use client";
 
+import GeminiMark from "../GeminiMark";
 import { useEffect, useState } from "react";
 import {
   OnboardingResult,
@@ -11,14 +12,6 @@ import { loadLastRegion } from "../../lib/lastRegionStorage";
 import { useLoggedInName } from "../../lib/useLoggedInName";
 
 /** AI 라벨 아이콘 — CourseContent.tsx의 .ai-summary__label과 동일 글리프 재사용(신규 아이콘 없음). */
-function SparkleIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" fill="currentColor" />
-    </svg>
-  );
-}
-
 type Phase = "idle" | "checking" | "ready" | "none";
 
 /**
@@ -82,7 +75,7 @@ export default function PersonalizedTips() {
   return (
     <div className="tips-group tips-group--ai">
       <span className="tips-category-label tips-group__label">
-        <SparkleIcon /> AI 맞춤 팁
+        <GeminiMark /> 맞춤 팁
       </span>
       <div className="tips-grid">
         {tips.map((tip) => (
