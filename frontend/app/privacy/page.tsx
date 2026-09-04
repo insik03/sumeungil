@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         <section className="section legal-content">
           <h1 className="section__title">개인정보처리방침</h1>
           <p className="legal-content__updated">
-            시행일자: 2026년 8월 17일 (최종 개정: 2026년 8월 31일 — 방문 통계 반영)
+            시행일자: 2026년 8월 17일 (최종 개정: 2026년 9월 4일 — 세션 보유기간 변경)
           </p>
 
           <p>
@@ -117,8 +117,8 @@ export default function PrivacyPage() {
 
           <h2>4. 보유 및 이용 기간</h2>
           <p>
-            로그인 세션 쿠키는 발급 후 <strong>7일</strong>이 지나거나 로그아웃하면 자동으로
-            사라집니다.
+            로그인 세션 쿠키는 <strong>마지막으로 서비스를 이용한 뒤 24시간</strong>이 지나거나
+            로그아웃하면 자동으로 사라집니다. 이용 중에는 만료가 자동으로 연장됩니다.
           </p>
           <p>
             계정 정보(이메일·표시 이름·계정 고유 식별자), 온보딩 취향, 저장한 AI 코스, 좋아요를

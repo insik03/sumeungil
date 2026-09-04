@@ -335,7 +335,16 @@ function CourseTimelinePanel({
                 legs={status === "success" && data ? data.legs : []}
                 regionLabel={data?.region.region_name ?? ""}
               />
-              <RegionMapSection regionCode={regionCode} inline />
+              {/* 2026-09-04(대표) — 경계 지도의 경로를 featured 픽이 아니라 **이 코스의 실제 스팟**으로.
+                  NAVER CourseMap 과 같은 data.spots 를 잇는다(코스 길이만큼, 순서 그대로). */}
+              <RegionMapSection
+                regionCode={regionCode}
+                inline
+                spots={status === "success" && data ? data.spots : []}
+                spotsLoading={status === "loading"}
+                maxStops={status === "success" && data ? data.spots.length : 3}
+                routeLabel="AI 코스 경로"
+              />
             </>
           ) : (
             <div className="spot-map spot-map--placeholder" aria-hidden="true" />

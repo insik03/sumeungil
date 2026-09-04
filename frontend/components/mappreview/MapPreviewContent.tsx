@@ -133,13 +133,10 @@ export default function MapPreviewContent() {
         )}
       </div>
 
-      <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16, minHeight: 420, marginTop: 24 }}>
-        {!picked && (
-          <p style={{ opacity: 0.75 }}>
-            위에서 시·도를 선택하면 그 지역 정보가 여기에 나와요.
-          </p>
-        )}
-        {picked && (
+      {/* 2026-09-04(대표 "선택을 안했을 때 창이 비어 보인다") — 지역을 고르기 전엔 이 상세 칸을
+          아예 그리지 않는다. 안내 문구는 위 소제목("시·도를 눌러보세요")이 이미 하고 있다. */}
+      {picked && (
+        <div style={{ border: "1px solid #e3e8ee", borderRadius: 20, padding: 16, marginTop: 24 }}>
             <>
               {/* 클릭하면 **랜드마크가 제일 먼저** 보이게 한다(대표 지시).
                   배경은 그 지역의 **실제 관광 사진**(한국관광공사 TourAPI). 사진에 찍힌 곳의
@@ -285,8 +282,8 @@ export default function MapPreviewContent() {
                 </Link>
               </div>
             </>
-          )}
-      </div>
+        </div>
+      )}
 
       {/* §47.4(2026-08-20) — CongestionBoard는 그대로 최하단에 유지(marquee 모드, 선택 지역
           기준). 이전엔 !picked일 때만 등장하던 "예상 혼잡 현황판"(section--mint +

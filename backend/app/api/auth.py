@@ -169,6 +169,19 @@ def _popup_close_html(
     )
 
 
+def _set_session_cookie(response: Response, auth: UserAuth, token: str) -> None:
+    """로그인 완료·/me 슬라이딩 재발급이 같은 플래그로 쿠키를 심는다."""
+    response.set_cookie(
+        key=auth.cookie_name,
+        value=token,
+        max_age=auth.session_ttl_sec,
+        httponly=True,
+        secure=auth.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
 def _clear_state_cookie(response: Response) -> None:
     """state nonce 쿠키를 지운다 — 성공/실패 무관하게 콜백 응답에 항상 붙여 1회용을
     보장한다(2026-08-17 보안검토 M-1)."""
@@ -234,15 +247,7 @@ async def _complete_oauth_login(
         ok=True, name=user["display_name"], is_new=is_new, next_path=next_path
     )
     _clear_state_cookie(response)
-    response.set_cookie(
-        key=auth.cookie_name,
-        value=token,
-        max_age=auth.session_ttl_sec,
-        httponly=True,
-        secure=auth.cookie_secure,
-        samesite="lax",
-        path="/",
-    )
+    _set_session_cookie(response, auth, token)
     return response
 
 
@@ -367,9 +372,13 @@ async def logout():
 
 
 @router.get("/me", response_model=UserSessionResponse)
-async def me(request: Request):
+async def me(request: Request, response: Response):
     """프론트 가드용. 유효한 세션이면 표시 이름, 아니면 authenticated:false(401 아님 —
     비로그인은 실패가 아니라 정상 상태다).
+
+    2026-09-04(대표 C안) — **슬라이딩 세션**: 프론트가 페이지 부팅마다 이걸 부르므로
+    (authStorage.syncSessionFromServer) 남은 수명이 절반 아래면 여기서 쿠키를 새로 발급한다.
+    쓰는 동안은 안 풀리고, TTL(기본 24h) 동안 안 들어오면 풀린다.
 
     2026-08-17 보안검토 m-4 — email은 응답에 담지 않는다. 프론트(authStorage.ts)가 쓰는
     값은 표시 이름뿐이라, 최소노출 원칙상 필요 없는 개인정보를 API 응답에 얹지 않는다."""
@@ -382,6 +391,9 @@ async def me(request: Request):
     if user is None:
         # 세션은 유효한데 계정 행이 사라진 상태(수동 DB 조작 등) — 비로그인으로 취급.
         return UserSessionResponse(authenticated=False)
+    if auth.should_refresh(identity):
+        token, _ = auth.issue_token(user_id=identity.user_id, email=identity.email)
+        _set_session_cookie(response, auth, token)
     return UserSessionResponse(authenticated=True, name=user["display_name"])
 
 

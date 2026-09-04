@@ -40,8 +40,10 @@ flowchart LR
 
 | 채널 | 무엇이 오나 | 보내는 쪽 | 웹훅 시크릿/변수 |
 |---|---|---|---|
-| `#서버-알림` (기존 `#알림-봇` 이름만 바꿔도 됨) | 서버 다운/복구(30분 헬스체크), 5xx·이상행동 알림, 아침 운영 요약, `/서버상태`, main 푸시·릴리스(=배포) | health-watch.yml · backend 미들웨어 · slack-notify-ko.yml(push/release) | `SLACK_WEBHOOK_URL` (GitHub Secrets + 서버 `.env`, 기존 그대로) |
-| `#깃허브-알림` (신규) | PR 열림/머지/닫힘, 이슈 열림/닫힘 | slack-notify-ko.yml(pull_request/issues) | `SLACK_WEBHOOK_GITHUB` (GitHub Secrets 만) |
+| `#서버-알림` (기존 `#알림-봇` 이름만 바꿔도 됨) | 서버 다운/복구(30분 헬스체크), 5xx·이상행동 알림, 아침 운영 요약, `/서버상태` | health-watch.yml · backend 미들웨어 | `SLACK_WEBHOOK_URL` (GitHub Secrets + 서버 `.env`, 기존 그대로) |
+| `#깃허브-알림` (신규) | main 푸시(커밋), PR 열림/머지/닫힘, 이슈 열림/닫힘, 릴리스 | slack-notify-ko.yml 전부 | `SLACK_WEBHOOK_GITHUB` (GitHub Secrets 만) |
+
+> 2026-09-04 변경: 처음엔 main 푸시·릴리스를 "배포 신호"로 보고 서버 채널에 뒀으나, 대표가 "서버 알림에 커밋이 올라온다"고 해서 GitHub 에서 오는 알림은 전부 `#깃허브-알림` 으로 옮겼다. 서버 채널은 서버 상태만.
 
 설정 순서:
 1. 슬랙에서 `#깃허브-알림` 채널을 만든다.
