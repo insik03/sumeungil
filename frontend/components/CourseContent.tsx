@@ -218,6 +218,8 @@ interface CourseTimelinePanelProps {
   fallbackTitle: string;
   /** 2026-08-17(Phase C) — "코스 저장하기" 호출 시 함께 보낼 mode(ai/custom 요청 구분용). */
   saveMode: "ai" | "custom";
+  /** 2026-09-04 — 지도 칸에 NAVER 지도 아래로 쌓는 지역 지도(RegionMapSection inline)용 지역 코드. */
+  regionCode: string;
 }
 
 /**
@@ -239,6 +241,7 @@ function CourseTimelinePanel({
   errorHint,
   fallbackTitle,
   saveMode,
+  regionCode,
 }: CourseTimelinePanelProps) {
   // §28(신규) — 스텝 앵커 id. CourseStepPhotoStrip의 썸네일 클릭 시 이 id로 스크롤 이동한다
   // (course-timeline__item에 그대로 부여, 별도 상태 없이 인덱스로만 생성).
@@ -322,13 +325,18 @@ function CourseTimelinePanel({
       )}
 
       <div className="recommend-layout">
-        <div className={`recommend-layout__map${showMap ? " is-open" : ""}`}>
+        {/* 2026-09-04(대표) — 지역 지도를 NAVER 코스 지도 **바로 아래 같은 크기**로 쌓는다
+            (/recommend 의 --stacked 와 같은 CSS). 이 패널은 로그인 게이트 뒤에만 그려지므로 조건 없음. */}
+        <div className={`recommend-layout__map recommend-layout__map--stacked${showMap ? " is-open" : ""}`}>
           {showMap ? (
-            <CourseMap
-              spots={status === "success" && data ? data.spots : []}
-              legs={status === "success" && data ? data.legs : []}
-              regionLabel={data?.region.region_name ?? ""}
-            />
+            <>
+              <CourseMap
+                spots={status === "success" && data ? data.spots : []}
+                legs={status === "success" && data ? data.legs : []}
+                regionLabel={data?.region.region_name ?? ""}
+              />
+              <RegionMapSection regionCode={regionCode} inline />
+            </>
           ) : (
             <div className="spot-map spot-map--placeholder" aria-hidden="true" />
           )}
@@ -761,11 +769,8 @@ export default function CourseContent() {
         />
       ) : (
       <>
-      {/* 2026-08-29(대표 지시) — "지도를 AI 코스짜기에도 넣어줘". 처음엔 로그인 게이트보다
-          위(미리보기)에 뒀는데 대표가 "로그인해야 볼 수 있게 해야지"로 재지시 — 로그인
-          이후에만 보이도록 이 안(게이트 통과 후 분기)으로 옮겼다. 홈과 같은 컴포넌트 재사용은
-          그대로(RegionMapSection.tsx, 새로 안 만듦). */}
-      <RegionMapSection regionCode={selectedRegion.sigunguCd} />
+      {/* 2026-08-29 — 지역 지도는 로그인 후에만(대표 지시). 2026-09-04 — 독립 섹션 대신 아래
+          CourseTimelinePanel 의 지도 칸에서 NAVER 지도 바로 밑에 같은 크기로 쌓는다(/recommend 와 동일). */}
       <section className="section" aria-labelledby="courseHeading">
         <div className="course-mode-switch" role="tablist" aria-label="코스 만들기 방식">
           <button
@@ -895,6 +900,7 @@ export default function CourseContent() {
 
             <CourseTimelinePanel
               status={status}
+              regionCode={selectedRegion.sigunguCd}
               data={data}
               error={error}
               tagLabelMap={tagLabelMap}
@@ -996,6 +1002,7 @@ export default function CourseContent() {
                 )}
                 <CourseTimelinePanel
                   status={arrangeStatus}
+                  regionCode={selectedRegion.sigunguCd}
                   data={arrangeData}
                   error={arrangeError}
                   tagLabelMap={tagLabelMap}

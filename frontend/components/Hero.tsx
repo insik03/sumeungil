@@ -168,7 +168,10 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
   useEffect(() => {
     if (slides.length < 2 || prefersReducedMotion()) return;
     const timer = setInterval(() => {
-      setActiveIndex((i) => (i + 1) % slides.length);
+      // 2026-09-04(대표: "마지막에서 첫 번째로 되돌아가는 게 어색하다") — n 은 트랙 끝에 붙인
+      // "첫 장의 복제"라, 마지막→첫 장도 앞으로 미끄러진다. 도착 후 아래 effect 가 소리 없이 실제
+      // 첫 장(0)으로 점프해 다음 바퀴를 잇는다(무한 순환).
+      setActiveIndex((i) => (i >= slides.length ? 1 : i + 1));
     }, AUTO_ROTATE_MS);
     return () => clearInterval(timer);
   }, [slides.length]);
@@ -177,28 +180,63 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
   // ★ scrollIntoView 금지: 모든 스크롤 조상(페이지 세로 포함)을 움직여 5초마다 화면이
   //   캐러셀로 끌려가는 버그가 있었고, scroll-snap mandatory와 충돌해 정작 가로 이동은
   //   씹혔다(대표 리포트 2건의 공통 원인). 트랙 자신만 scrollTo로 가로 이동시킨다.
+  // 무한 순환(2026-09-04): 슬라이드가 2장 이상이면 트랙을 [마지막 복제, s0..s(n-1), 첫 복제] 로
+  // 그린다. activeIndex 는 -1(마지막 복제)~n(첫 복제) 범위를 잠깐 가질 수 있고, 그 두 위치에
+  // 부드럽게 도착한 뒤에는 애니메이션 없이 실제 장으로 점프한다 — 사용자 눈엔 끊김 없이 계속
+  // 앞으로 도는 것으로 보인다. 점(dots)은 항상 실제 인덱스((activeIndex+n)%n)로 표시한다.
+  const looped = slides.length > 1;
+  const trackChildIndex = (logical: number) => (looped ? logical + 1 : logical);
+  // 슬라이드가 새로 들어오면 트랙의 첫 자식은 "마지막 장 복제"라, 애니메이션 없이 실제 첫 장으로
+  // 맞춰 둔다(안 하면 첫 화면이 마지막 장으로 보인다). activeIndex 는 이미 0 이라 아래 effect 가
+  // 다시 돌지 않으므로 여기서 직접 한다.
   useEffect(() => {
+    if (!looped) return;
     const track = trackRef.current;
-    const card = track?.children[activeIndex] as HTMLElement | undefined;
+    const card = track?.children[1] as HTMLElement | undefined;
     if (!track || !card) return;
+    const trackRect = track.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    track.scrollTo({
+      left: track.scrollLeft + (cardRect.left - trackRect.left) - (trackRect.width - cardRect.width) / 2,
+      behavior: "auto",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides]);
+  const scrollTrackTo = (childIdx: number, behavior: ScrollBehavior) => {
+    const track = trackRef.current;
+    const card = track?.children[childIdx] as HTMLElement | undefined;
+    if (!track || !card) return false;
     const trackRect = track.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
     const left =
       track.scrollLeft + (cardRect.left - trackRect.left) - (trackRect.width - cardRect.width) / 2;
+    track.scrollTo({ left, behavior });
+    return true;
+  };
+
+  useEffect(() => {
+    if (!scrollTrackTo(trackChildIndex(activeIndex), prefersReducedMotion() ? "auto" : "smooth")) return;
     // smooth 스크롤이 도착할 때까지 스와이프 동기화를 잠근다(도착 전 동기화가 인덱스를 되돌리는 것 방지).
     programmaticScrollRef.current = true;
     window.clearTimeout(programmaticTimerRef.current);
-    track.scrollTo({
-      left,
-      behavior: prefersReducedMotion() ? "auto" : "smooth",
-    });
-    programmaticTimerRef.current = window.setTimeout(
-      () => {
-        programmaticScrollRef.current = false;
-      },
-      prefersReducedMotion() ? 120 : 800
-    );
+    const settleMs = prefersReducedMotion() ? 120 : 800;
+    programmaticTimerRef.current = window.setTimeout(() => {
+      const n = slides.length;
+      if (looped && (activeIndex >= n || activeIndex < 0)) {
+        // 복제 장에 도착 — 같은 그림의 실제 장으로 소리 없이 점프한 뒤 인덱스를 정규화.
+        const real = ((activeIndex % n) + n) % n;
+        scrollTrackTo(trackChildIndex(real), "auto");
+        setActiveIndex(real);
+        // 점프 직후 발생하는 scroll 이벤트가 인덱스를 되돌리지 않게 한 프레임 더 잠근다.
+        window.setTimeout(() => {
+          programmaticScrollRef.current = false;
+        }, 60);
+        return;
+      }
+      programmaticScrollRef.current = false;
+    }, settleMs);
     return () => window.clearTimeout(programmaticTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex]);
 
   // 사용자가 직접 스와이프했을 때도 인디케이터가 따라가도록 트랙 중앙에 가장 가까운 카드를 찾는다.
@@ -222,7 +260,8 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
           closest = i;
         }
       });
-      setActiveIndex((prev) => (prev === closest ? prev : closest));
+      const logical = looped ? closest - 1 : closest;
+      setActiveIndex((prev) => (prev === logical ? prev : logical));
     });
   };
 
@@ -459,13 +498,17 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
           )}
 
           {slidesStatus !== "loading" &&
-            slides.map((spot) => {
+            (looped ? [slides[slides.length - 1], ...slides, slides[0]] : slides).map((spot, idx, arr) => {
               const hasPhoto = !!spot.image_url;
+              // 첫/마지막 원소는 순환용 복제 — 화면엔 보이지만 접근성 트리·탭 순서에서는 뺀다.
+              const isClone = looped && (idx === 0 || idx === arr.length - 1);
               return (
                 <Link
-                  key={spot.id}
+                  key={isClone ? `clone-${idx}-${spot.id}` : spot.id}
                   href={`/spot/${spot.id}`}
                   role="listitem"
+                  aria-hidden={isClone || undefined}
+                  tabIndex={isClone ? -1 : undefined}
                   className={`hero-carousel__card${hasPhoto ? "" : " hero-carousel__card--noimg"}`}
                   style={
                     hasPhoto
@@ -491,9 +534,9 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
                   key={spot.id}
                   type="button"
                   role="tab"
-                  aria-selected={i === activeIndex}
+                  aria-selected={i === ((activeIndex % slides.length) + slides.length) % slides.length}
                   aria-label={`${i + 1}번째 슬라이드: ${spot.name}`}
-                  className={`hero-carousel__dot${i === activeIndex ? " is-active" : ""}`}
+                  className={`hero-carousel__dot${i === ((activeIndex % slides.length) + slides.length) % slides.length ? " is-active" : ""}`}
                   onClick={() => setActiveIndex(i)}
                 />
               ))}
