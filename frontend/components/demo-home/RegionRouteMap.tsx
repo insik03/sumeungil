@@ -47,10 +47,6 @@ interface RegionRouteMapProps {
   spotsLoading: boolean;
   /** 경로로 이을 최대 스팟 수. 기본 3(홈·추천의 "대표 3곳"). AI 코스는 코스 길이만큼 넘긴다. */
   maxStops?: number;
-  /** 경로가 있을 때 제목에 쓸 문구. 기본 "실좌표로 잇는 추천 경로". */
-  routeLabel?: string;
-  /** 데모 홈의 무드 캡션용. 없으면(실제 홈 임베드) 무드 없이 스팟 개수만 보여준다. */
-  mood?: string;
   onSelectSido: (sido: SidoRegion) => void;
   /**
    * 실제 홈 임베드용(대표 지시 2026-08-29 — 데모와 원래 홈을 자연스럽게 합치기). 이 컴포넌트를
@@ -138,11 +134,9 @@ export default function RegionRouteMap({
   selectedSido,
   spots,
   spotsLoading,
-  mood,
   onSelectSido,
   hidePicker = false,
   maxStops = 3,
-  routeLabel = "실좌표로 잇는 추천 경로",
 }: RegionRouteMapProps) {
   const [asset, setAsset] = useState<RegionMapAsset | null>(null);
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -236,14 +230,9 @@ export default function RegionRouteMap({
         </div>
       )}
 
-      <div className={styles.mapHeading} aria-hidden="true">
-        <span>
-          {selectedSido.shortName}
-          {asset ? ` · 시군구 ${asset.districts.length}곳` : " · 경계 불러오는 중"}
-        </span>
-        <b>{routeNames.length > 1 ? routeLabel : "실제 행정 경계를 따라 보기"}</b>
-      </div>
-
+      {/* 2026-09-05(대표 "추천경로 텍스트 박스가 지도를 가린다") — 지도 위에 얹혀 있던 제목 박스
+          (지역·시군구 수·경로 라벨)와 하단 캡션(무드·스팟 수)을 뺐다. 지도는 그림만, 설명은
+          스크린리더용 figcaption 이 계속 맡는다. */}
       <svg className={styles.regionMap} viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} aria-hidden="true">
         <defs>
           <pattern id={gridId} width="22" height="22" patternUnits="userSpaceOnUse">
@@ -325,15 +314,6 @@ export default function RegionRouteMap({
           <small>{congestionText(leadStop)}</small>
         </div>
       )}
-      <p className={styles.routeCaption} aria-hidden="true">
-        {mood ? (
-          <>
-            <b>{mood}</b>에 맞춘
-            <br />
-          </>
-        ) : null}
-        {routeNames.length ? `실제 스팟 ${routeNames.length}곳` : "좌표 있는 스팟을 찾는 중"}
-      </p>
       <figcaption className={styles.srOnly}>{mapSummary}</figcaption>
     </figure>
   );

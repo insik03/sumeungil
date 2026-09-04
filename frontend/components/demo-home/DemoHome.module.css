@@ -91,12 +91,8 @@
 .cityChip:hover { border-color: var(--ink); color: var(--ink); transform: translateY(-1px); }
 .cityChip:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
 .cityChipActive, .cityPicker :global(.chip.is-active) { border-color: var(--ink); color: white; background: var(--ink); }
-.mapHeading { position: absolute; top: 88px; left: 24px; z-index: 5; display: flex; flex-direction: column; gap: 3px; padding-left: 12px; border-left: 2px solid var(--signal); }
 /* .routeStageBare(위) 참고 — 도시선택 칩바가 없는 임베드에서는 그 칩바가 남기던 위쪽 공백이
    그대로 남으므로 제목을 그만큼 끌어올린다. */
-.routeStageBare .mapHeading { top: 22px; }
-.mapHeading span { color: var(--ink-soft); font-size: 10px; letter-spacing: .08em; }
-.mapHeading b { font-size: 13px; }
 .regionMap { position: absolute; inset: 0; width: 100%; height: 100%; }
 .mapGrid { fill: none; stroke: rgba(var(--ink-rgb), .055); stroke-width: 1; }
 .mapRegion { fill: rgba(var(--river-rgb), .38); }
@@ -118,8 +114,6 @@
 .hotspot { position: absolute; left: 3%; bottom: 7%; z-index: 6; width: 154px; padding: 14px; border: 1px solid var(--ink); background: var(--paper); transform: rotate(-2deg); box-shadow: 5px 5px 0 var(--signal); }
 .hotspot span, .hotspot small { display: block; color: var(--ink-soft); font-size: 10px; }
 .hotspot strong { display: -webkit-box; overflow: hidden; margin: 5px 0 2px; font-size: 16px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.routeCaption { position: absolute; right: 4%; bottom: 24px; z-index: 6; padding-left: 16px; border-left: 2px solid var(--signal); font-size: 16px; line-height: 1.55; }
-.routeCaption b { font-weight: 900; }
 .srOnly { position: absolute; overflow: hidden; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .proof { position: relative; display: grid; grid-template-columns: .75fr 1.25fr; gap: 8vw; padding: 96px clamp(20px, 7vw, 110px) 112px; color: white; background: var(--ink); isolation: isolate; }
@@ -199,9 +193,7 @@
   .routeStage { min-height: 520px; margin: 0 -5px; }
   .cityPicker { top: 12px; right: 12px; left: 12px; grid-template-columns: minmax(0,1fr); padding: 7px; }
   .cityPicker > span { display: none; }
-  .mapHeading { top: 82px; left: 15px; }
   .hotspot { left: 2%; bottom: 5%; width: 139px; }
-  .routeCaption { right: 2%; bottom: 18px; font-size: 14px; }
   .proof { padding: 76px 20px 84px; }
   .proof dl { grid-template-columns: 1fr; }
   .proof dl > div { min-height: 132px; padding-left: 0; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.16); }
