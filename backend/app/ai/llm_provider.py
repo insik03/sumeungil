@@ -111,7 +111,11 @@ class OllamaProvider(LLMProvider):
 
     async def extract_tags(self, free_text: str, chips: list[str] | None = None) -> RawLLMExtraction:
         messages, _ = prompts.build_messages(free_text)
+        content = await self._request_content(messages)
+        return _parse_extraction(content)
 
+    async def _request_content(self, messages: list[dict[str, str]]) -> str:
+        """전송부만 — Gemini 구현체가 이 메서드만 바꿔 끼운다(파싱·검증은 공통)."""
         payload = {
             "model": self._model,
             "format": _tag_extraction_schema(),
@@ -140,32 +144,74 @@ class OllamaProvider(LLMProvider):
         except (ValueError, KeyError, TypeError) as exc:
             logger.warning("ollama 응답 envelope 파싱 실패: %s", exc)
             raise LLMExtractionError("ollama response envelope malformed") from exc
+        return content
+
+
+def _parse_extraction(content: str) -> RawLLMExtraction:
+    """content(JSON 문자열) → RawLLMExtraction. Ollama/Gemini 공통 — 실패는 전부 LLMExtractionError."""
+    try:
+        raw = json.loads(content)
+    except json.JSONDecodeError as exc:
+        # JSON 강제에도 불구하고 파싱 실패 시 → §B.3 룰 폴백 대상(정상 경로)
+        logger.warning("LLM content가 유효 JSON이 아님(길이=%d): %s", len(content), exc)
+        raise LLMExtractionError("llm content is not valid json") from exc
+
+    if not isinstance(raw, dict):
+        raise LLMExtractionError(f"llm content json이 object가 아님: {type(raw)}")
+
+    try:
+        return RawLLMExtraction.model_validate(raw)
+    except ValidationError as exc:
+        logger.warning("LLM JSON이 예상 구조와 다름: %s", exc)
+        raise LLMExtractionError("llm content failed schema validation") from exc
+
+
+class GeminiProvider(OllamaProvider):
+    """Google Gemini 구현체 (2026-09-03). 프롬프트·스키마·파싱은 Ollama 와 같고 전송부만 다르다.
+
+    자유서술은 prompts.build_messages 안에서 sanitize_free_text(PII 마스킹 포함)를 거친 뒤
+    들어온다. 툴/함수 호출 없음, 시스템 프롬프트는 systemInstruction 로만.
+    """
+
+    def __init__(self, api_key: str, model: str, timeout_sec: float, temperature: float = 0.0) -> None:
+        # 부모의 base_url/keep_alive 는 쓰지 않는다 — 시그니처만 맞춰 둔다.
+        super().__init__(base_url="", model=model, timeout_sec=timeout_sec, temperature=temperature)
+        self._api_key = api_key
+
+    async def _request_content(self, messages: list[dict[str, str]]) -> str:
+        from . import gemini_client  # 지연 import — ollama 만 쓰는 배포에서 모듈 로드를 피한다
 
         try:
-            raw = json.loads(content)
-        except json.JSONDecodeError as exc:
-            # format:"json" 강제에도 불구하고 파싱 실패 시 → §B.3 룰 폴백 대상(정상 경로)
-            logger.warning("ollama content가 유효 JSON이 아님(길이=%d): %s", len(content), exc)
-            raise LLMExtractionError("ollama content is not valid json") from exc
-
-        if not isinstance(raw, dict):
-            raise LLMExtractionError(f"ollama content json이 object가 아님: {type(raw)}")
-
-        try:
-            return RawLLMExtraction.model_validate(raw)
-        except ValidationError as exc:
-            logger.warning("ollama JSON이 예상 구조와 다름: %s", exc)
-            raise LLMExtractionError("ollama content failed schema validation") from exc
+            return await gemini_client.chat(
+                messages,
+                api_key=self._api_key,
+                model=self._model,
+                timeout_sec=self._timeout_sec,
+                temperature=self._temperature,
+                response_schema=_tag_extraction_schema(),
+            )
+        except gemini_client.GeminiError as exc:
+            logger.warning("gemini 호출 실패(룰 폴백): %s", exc)
+            raise LLMExtractionError(str(exc)) from exc
 
 
 def create_provider_from_settings(settings) -> LLMProvider:  # noqa: ANN001 (app.config.Settings)
-    """`app.config.settings`로부터 기본 OllamaProvider를 만든다.
+    """`app.config.settings`로부터 LLM_PROVIDER 에 맞는 구현체를 만든다.
 
     backend deps.py에서 `get_llm_provider()`로 감싸 싱글턴화해 쓰면 된다:
         from app.ai.llm_provider import create_provider_from_settings
         @lru_cache(maxsize=1)
         def get_llm_provider(): return create_provider_from_settings(settings)
     """
+    if getattr(settings, "llm_provider", "ollama") == "gemini":
+        if not settings.gemini_api_key:
+            logger.warning("LLM_PROVIDER=gemini 인데 GEMINI_API_KEY 가 비어 있다 — 온보딩은 룰 폴백으로만 돈다")
+        return GeminiProvider(
+            api_key=settings.gemini_api_key,
+            model=settings.gemini_model,
+            timeout_sec=settings.gemini_timeout_sec,
+            temperature=settings.ollama_temperature,
+        )
     return OllamaProvider(
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,

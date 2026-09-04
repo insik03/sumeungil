@@ -395,8 +395,76 @@ class OllamaSummarizer(Summarizer):
         return title, summary
 
 
+class GeminiSummarizer(OllamaSummarizer):
+    """Google Gemini 구현체 (2026-09-03). 프롬프트·후처리·캐시 규약은 부모 그대로, `_chat` 전송부만 교체.
+
+    스팟 요약·코스 요약에 들어가는 텍스트는 KTO 공공데이터(관광지 소개·스팟 이름)라 개인정보가
+    없다 — 그래도 로그엔 남기지 않는다(부모 규약 동일).
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        timeout_sec: float,
+        temperature: float = 0.0,
+        max_input_chars: int = 1500,
+        course_timeout_sec: float | None = None,
+        course_max_input_chars: int = 1200,
+    ) -> None:
+        super().__init__(
+            base_url="",
+            model=model,
+            timeout_sec=timeout_sec,
+            temperature=temperature,
+            max_input_chars=max_input_chars,
+            course_timeout_sec=course_timeout_sec,
+            course_max_input_chars=course_max_input_chars,
+        )
+        self._api_key = api_key
+
+    async def _chat(
+        self,
+        system_prompt: str,
+        user_content: str,
+        timeout_sec: float,
+        tag: str,
+        format_schema: dict | None = None,
+    ) -> str | None:
+        from . import gemini_client  # 지연 import
+
+        try:
+            return await gemini_client.chat(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                api_key=self._api_key,
+                model=self._model,
+                timeout_sec=timeout_sec,
+                temperature=self._temperature,
+                response_schema=format_schema,
+            )
+        except gemini_client.GeminiError as exc:
+            logger.info("%s Gemini 호출 실패(요약 생략): %s", tag, exc)
+            return None
+
+
 def create_summarizer_from_settings(settings) -> Summarizer:  # noqa: ANN001 (app.config.Settings)
-    """`app.config.settings` 로부터 기본 OllamaSummarizer 생성(deps 에서 싱글턴화 권장)."""
+    """`app.config.settings` 로부터 LLM_PROVIDER 에 맞는 Summarizer 생성(deps 에서 싱글턴화 권장)."""
+    if getattr(settings, "llm_provider", "ollama") == "gemini":
+        return GeminiSummarizer(
+            api_key=settings.gemini_api_key,
+            model=settings.gemini_model,
+            timeout_sec=min(settings.summary_timeout_sec, settings.gemini_timeout_sec),
+            temperature=settings.ollama_temperature,
+            max_input_chars=settings.summary_max_overview_chars,
+            course_timeout_sec=min(
+                getattr(settings, "course_summary_timeout_sec", None) or settings.summary_timeout_sec,
+                settings.gemini_timeout_sec,
+            ),
+            course_max_input_chars=getattr(settings, "course_summary_max_chars", 1200),
+        )
     return OllamaSummarizer(
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,

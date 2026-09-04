@@ -77,6 +77,20 @@ class Settings:
             and "*" not in self.cors_origins
         )
 
+        # --- LLM 제공자 선택 (2026-09-03, 대표 결정 "전부 제미나이로") ---
+        # "ollama"(로컬, 기본) | "gemini"(Google Gemini API). 온보딩 태그추출·스팟/코스 요약·
+        # 개인화 팁 네 경로가 전부 이 스위치를 따른다. gemini 인데 키가 비어 있으면 부팅은
+        # 되지만 모든 LLM 경로가 폴백(룰/요약 생략/정적 팁)으로만 돈다 — 시작 시 경고 로그.
+        # 운영 서버(CPU 2코어)의 로컬 추론이 초당 2.5토큰이라 요약·팁이 타임아웃 폴백으로
+        # 빠지던 문제의 해법. 국외이전 관련 조치는 07-legal-review-gemini-api-전환.md §3
+        # (PII 프리필터는 injection_guard.sanitize_free_text, 처리방침 §10 문구).
+        self.llm_provider: str = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+        self.gemini_api_key: str = os.getenv("GEMINI_API_KEY", "").strip()
+        # 모델명은 Google AI Studio 의 현재 목록에서 확인 후 .env 로 고정한다.
+        self.gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        # 외부 API 라 로컬 CPU 추론보다 훨씬 빠르다 — 15초면 넉넉하고, 더 길면 프론트 체감만 나빠진다.
+        self.gemini_timeout_sec: float = float(os.getenv("GEMINI_TIMEOUT_SEC", "15"))
+
         # --- MVP-3 온보딩 LLM (로컬 Ollama) ---
         # 08-interface-contract.md 부록B B.0/B.4 — 로컬 실행, API 키·국외이전 없음.
         self.ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()

@@ -127,7 +127,30 @@ def sanitize_free_text(text: str) -> str:
     if len(cleaned) > MAX_INPUT_CHARS:
         cleaned = cleaned[:MAX_INPUT_CHARS]
 
-    return cleaned
+    return mask_pii(cleaned)
+
+
+# --- PII 프리필터 (2026-09-03, 07-legal-review-gemini-api-전환.md §3-1) ---
+# 자유서술이 Google Gemini(국외)로 나가게 되면서, 사용자가 자발적으로 적어 넣는 고위험
+# 패턴(주민등록번호·전화번호·이메일)을 전송 전에 마스킹한다. 법률 스크리닝이 "주의"를
+# 유지하는 조건으로 건 유일한 필수 조치. 이름처럼 정규식으로 못 잡는 것은 커버하지 않는다
+# ("완벽한 PII 차단"이 아니라 "고위험 패턴 완화"가 목표 — 같은 문서 §3 표 비고).
+# 로컬 Ollama 경로에도 똑같이 적용된다 — 취향 추출에 전화번호가 필요할 일은 없다.
+# \b 는 쓰지 않는다 — 파이썬 유니코드 정규식에서 한글도 \w 라 "5678로" 처럼 숫자 뒤에 조사가 붙으면 경계가 안 잡힌다.
+_PII_RRN_RE = re.compile(r"(?<!\d)\d{6}\s?-?\s?[1-4]\d{6}(?!\d)")  # 주민등록번호 (전화번호보다 먼저)
+_PII_PHONE_RE = re.compile(r"(?<!\d)01[016789]\s?-?\s?\d{3,4}\s?-?\s?\d{4}(?!\d)")
+_PII_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PII_MASK = "***"
+
+
+def mask_pii(text: str) -> str:
+    """주민번호 → 전화번호 → 이메일 순으로 `***` 치환. 없으면 원문 그대로."""
+    if not text:
+        return text
+    out = _PII_RRN_RE.sub(PII_MASK, text)
+    out = _PII_PHONE_RE.sub(PII_MASK, out)
+    out = _PII_EMAIL_RE.sub(PII_MASK, out)
+    return out
 
 
 def detect_injection_patterns(text: str) -> list[str]:

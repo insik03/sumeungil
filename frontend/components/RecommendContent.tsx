@@ -291,12 +291,6 @@ export default function RecommendContent() {
         </p>
       </section>
 
-      {/* 2026-09-03(대표 지시 "지도 합친거 왜 여행지 추천에 안 들어감") — /course 상단과 같은
-          지역 지도 섹션. 8/29엔 코스짜기에만 넣으라는 지시였고 이 화면은 요청이 없어 빠져 있었다.
-          선택 지역(sigunguCd)을 그대로 넘기므로 RegionPicker로 지역을 바꾸면 지도도 따라간다.
-          이 화면은 비로그인 공개라 지도만 로그인 사용자에게 보인다(/course와 같은 기준). */}
-      {loggedIn && <RegionMapSection regionCode={selectedRegion.sigunguCd} />}
-
       <section className="section" aria-labelledby="recommendHeading">
         <span className="eyebrow-pill eyebrow-pill--azure">프로필 맞춤 추천</span>
         <h2 className="section__title" id="recommendHeading">
@@ -338,9 +332,17 @@ export default function RecommendContent() {
         </button>
 
         <div className="recommend-layout">
-          <div className={`recommend-layout__map${showMap ? " is-open" : ""}`}>
+          {/* 2026-09-03(대표) — 지역 지도는 별도 섹션이 아니라 NAVER 지도(SpotMap) **바로 아래에
+              같은 크기로** 쌓는다. 로그인 사용자에게만(비로그인 공개 화면이라 /course와 같은 기준).
+              --stacked 일 때 두 지도가 칸을 반씩 나눠 갖는다(globals.css .recommend-layout__map--stacked). */}
+          <div
+            className={`recommend-layout__map${showMap ? " is-open" : ""}${loggedIn ? " recommend-layout__map--stacked" : ""}`}
+          >
             {showMap ? (
-              <SpotMap items={status === "success" && data ? data.items : []} regionLabel={regionLabel} />
+              <>
+                <SpotMap items={status === "success" && data ? data.items : []} regionLabel={regionLabel} />
+                {loggedIn && <RegionMapSection regionCode={selectedRegion.sigunguCd} inline />}
+              </>
             ) : (
               <div className="spot-map spot-map--placeholder" aria-hidden="true" />
             )}

@@ -136,7 +136,7 @@ def tile(cy, name, title, sub, sub2=None, color=None):
     text(DX + 96, cy + 10, sub, 12, 400, "#57606A", "start")
     if sub2: text(DX + 96, cy + 28, sub2, 12, 400, "#57606A", "start")
 tile(DY + 118, "postgresql", "postgres 16", "회원 · 취향 · AI코스 · 후기", "공유코스 · 문의 · 방문로그")
-tile(DY + 262, "ollama", "ollama · Qwen", "로컬 추론 · 외부 전송 없음", "취향 추출 · 코스 요약 · 여행 팁")
+tile(DY + 262, "ollama", "ollama · Qwen", "로컬 LLM · 폴백용", "LLM_PROVIDER=ollama 일 때만")
 tile(DY + 406, "prometheus", "prometheus", "backend /metrics 수집", "Grafana는 nginx /prom/ 경유")
 tile(DY + 550, "python", "postgres-backup", "pg_dump 매일 · 로컬 14일 보관", "S3 호환 버킷으로 오프사이트")
 
@@ -160,12 +160,16 @@ caption(RX + 6, 478, "Public Data")
 
 # 외부 서비스
 box(RX, 490, RW, 190, 22)
-text(RX + 22, 520, "외부 서비스 — backend만 호출", 14, 700, "#1F2328", "start")
+text(RX + 22, 520, "외부 서비스 — backend만 호출 · 키는 서버에만", 14, 700, "#1F2328", "start")
 # Tmap: 경로 핀 아이콘 (자체 드로잉)
-add(f'<g transform="translate({RX+70},590)"><path d="M0,-22 C-12,-22 -20,-13 -20,-3 C-20,10 0,26 0,26 C0,26 20,10 20,-3 C20,-13 12,-22 0,-22 Z" fill="#E8371E"/><circle cx="0" cy="-4" r="7" fill="#FFFFFF"/></g>')
-text(RX + 70, 636, "SK Tmap 경로", 14, 600)
-text(RX + 70, 654, "도보 · 자동차 이동시간", 12, 400, "#57606A")
-node("google", RX + 235, 586, "Google OAuth", "로그인", 40)
+add(f'<g transform="translate({RX+52},590)"><path d="M0,-22 C-12,-22 -20,-13 -20,-3 C-20,10 0,26 0,26 C0,26 20,10 20,-3 C20,-13 12,-22 0,-22 Z" fill="#E8371E"/><circle cx="0" cy="-4" r="7" fill="#FFFFFF"/></g>')
+text(RX + 52, 636, "SK Tmap", 14, 600)
+text(RX + 52, 654, "도보·차 이동시간", 12, 400, "#57606A")
+node("google", RX + 165, 586, "Google OAuth", "로그인", 36)
+# Gemini(2026-09-03 전환): 취향 추출·요약·팁 — 자유서술은 PII 마스킹 후 전송
+add(f'<g transform="translate({RX+275},586)"><path d="M0,-20 C2,-9 9,-2 20,0 C9,2 2,9 0,20 C-2,9 -9,2 -20,0 C-9,-2 -2,-9 0,-20 Z" fill="#4285F4"/></g>')
+text(RX + 275, 636, "Gemini API", 14, 600)
+text(RX + 275, 654, "취향 추출·요약·팁", 12, 400, "#57606A")
 add(f'<rect x="{RX+360}" y="566" width="40" height="40" rx="10" fill="#FFCD00"/>')
 icon("kakao", RX + 380, 586, 26, "#3C1E1E")
 text(RX + 380, 636, "Kakao OAuth", 14, 600)
@@ -205,7 +209,7 @@ arrow([(676, 548), (620, 548), (620, 110), (160, 110), (160, 130)], "alert", "�
 arrow([(118, 850), (48, 850), (48, 150), (106, 150)], "alert", "장애 · 복구 알림", lx=80, ly=300, lanchor="middle")
 # backend → 외부 API: 도커 박스 위쪽으로 나가 오른쪽 거터(x=1230)에서 갈라진다
 arrow([(722, 496), (800, 496), (800, 205), (RX, 205)], "ext", "관광지 · 혼잡도 · 날씨 · 축제", lx=1030, ly=197, dash="6 4")
-arrow([(1230, 205), (1230, 586), (RX, 586)], "ext", "Tmap · OAuth", lx=1230, ly=560, dash="6 4")
+arrow([(1230, 205), (1230, 586), (RX, 586)], "ext", "Tmap · Gemini · OAuth", lx=1230, ly=560, dash="6 4")
 # backup → S3
 arrow([(DX + DW, DY + 550), (1230, DY + 550), (1230, 840), (RX + 314, 840)], "backup", "오프사이트", lx=1230, ly=810, dash="4 4")
 # Grafana → nginx /prom/ → prometheus (두 박스 사이 틈으로)
