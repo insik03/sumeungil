@@ -244,26 +244,67 @@ class OllamaTipsGenerator:
         }
         if self._keep_alive:
             payload["keep_alive"] = self._keep_alive
+        content = await self._chat_content(payload, timeout_sec)
+        parsed = _parse_tips(content) if isinstance(content, str) else []
+        return _filter_unsupported_tips(parsed, features)
+
+    async def _chat_content(self, payload: dict, timeout_sec: float) -> str | None:
+        """전송부만 — Gemini 구현체가 이 메서드만 바꿔 끼운다. 실패는 None(정적 폴백)."""
         # 툴/함수 호출을 전혀 부여하지 않는다(방어계층 4 — 온보딩 Provider 와 동일).
         try:
             async with httpx.AsyncClient(timeout=timeout_sec) as client:
                 resp = await client.post(f"{self._base_url}/api/chat", json=payload)
         except httpx.HTTPError as exc:
             logger.info("tips: Ollama 호출 실패(정적 폴백): %s", exc)
-            return []
+            return None
         if resp.status_code != 200:
             logger.info("tips: Ollama 비정상 상태코드 %s(정적 폴백)", resp.status_code)
-            return []
+            return None
         try:
             content = resp.json()["message"]["content"]
         except (ValueError, KeyError, TypeError) as exc:
             logger.info("tips: Ollama 응답 envelope 파싱 실패(정적 폴백): %s", exc)
-            return []
-        parsed = _parse_tips(content) if isinstance(content, str) else []
-        return _filter_unsupported_tips(parsed, features)
+            return None
+        return content if isinstance(content, str) else None
+
+
+class GeminiTipsGenerator(OllamaTipsGenerator):
+    """Google Gemini 구현체 (2026-09-03). 프롬프트·파싱·검증 필터는 부모 그대로, 전송부만 교체.
+
+    trip_context 에는 태그 코드·카테고리 분포·혼잡 레벨·강수확률만 들어간다(자유텍스트 미투입,
+    02-ai-strategy-현황.md) — 개인정보 없음.
+    """
+
+    def __init__(self, api_key: str, model: str, temperature: float = 0.0, timeout_cap_sec: float = 15.0) -> None:
+        super().__init__(base_url="", model=model, temperature=temperature)
+        self._api_key = api_key
+        self._timeout_cap_sec = timeout_cap_sec
+
+    async def _chat_content(self, payload: dict, timeout_sec: float) -> str | None:
+        from . import gemini_client  # 지연 import
+
+        try:
+            return await gemini_client.chat(
+                payload["messages"],
+                api_key=self._api_key,
+                model=self._model,
+                timeout_sec=min(timeout_sec, self._timeout_cap_sec),
+                temperature=self._temperature,
+                response_schema=payload.get("format"),
+            )
+        except gemini_client.GeminiError as exc:
+            logger.info("tips: Gemini 호출 실패(정적 폴백): %s", exc)
+            return None
 
 
 def create_tips_generator_from_settings(settings) -> TipsGenerator:  # noqa: ANN001
+    if getattr(settings, "llm_provider", "ollama") == "gemini":
+        return GeminiTipsGenerator(
+            api_key=settings.gemini_api_key,
+            model=settings.gemini_model,
+            temperature=settings.ollama_temperature,
+            timeout_cap_sec=settings.gemini_timeout_sec,
+        )
     return OllamaTipsGenerator(
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
@@ -274,6 +315,7 @@ def create_tips_generator_from_settings(settings) -> TipsGenerator:  # noqa: ANN
 
 
 __all__ = (
+    "GeminiTipsGenerator",
     "GeneratedTip",
     "OllamaTipsGenerator",
     "TIPS_SYSTEM_PROMPT",

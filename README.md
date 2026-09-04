@@ -6,7 +6,7 @@
 
 [![Service](https://img.shields.io/badge/서비스-sumeungil.co.kr-176B55?style=for-the-badge&logo=safari&logoColor=white)](https://sumeungil.co.kr)
 ![Contest](https://img.shields.io/badge/2026_관광데이터_활용_공모전-출품작-E8A33D?style=for-the-badge)
-![Local AI](https://img.shields.io/badge/AI-100%25_Local-111827?style=for-the-badge&logo=ollama&logoColor=white)
+![Gemini](https://img.shields.io/badge/AI-Google_Gemini-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white)
 
 실시간 혼잡도와 여행 취향을 결합해 관광지를 추천하고, 하루 코스와 이동 경로까지 한 번에 구성합니다.
 
@@ -34,12 +34,12 @@ ollama는 인증이 없고, backend를 직접 노출하면 레이트리밋을 �
 | 화면 | 경로 | 외부 호출 | LLM |
 |---|---|---|---|
 | 혼잡도 전광판 · 지역 추천 | nginx → backend → 캐시(인메모리, TTL) → 없으면 TourAPI·집중률·기상청 | 공공데이터포털 | 없음 — 취향·혼잡도·거리·날씨 점수화만 |
-| AI 취향 분석(온보딩) | 자유 서술 → 인젝션 가드 → ollama JSON 태그 → 실패 시 규칙 기반 폴백 → postgres 프로필 저장 | 없음 | 1회 · 로그인 필수 · 6회/분 |
-| AI 코스짜기 | 스팟 선정 → Tmap 구간 이동시간 **동시 호출**(`asyncio.gather`) → ollama 코스 요약(동시 1건 세마포어, 타임아웃 시 요약 없이 응답) → 로그인 시 저장 | SK Tmap | 요약 1회 · 24h 캐시 |
-| 개인화 여행 팁 | 취향·지역·날짜 키로 캐시 → 없으면 ollama → 실패 시 정적 팁 | 없음 | 조건부 · 킬스위치 |
+| AI 취향 분석(온보딩) | 자유 서술 → 인젝션 가드·PII 마스킹 → Gemini JSON 태그 → 실패 시 규칙 기반 폴백 → postgres 프로필 저장 | Gemini API | 1회 · 로그인 필수 · 6회/분 |
+| AI 코스짜기 | 스팟 선정 → Tmap 구간 이동시간 **동시 호출**(`asyncio.gather`) → Gemini 코스 요약(타임아웃 시 요약 없이 응답) → 로그인 시 저장 | SK Tmap · Gemini | 요약 1회 · 24h 캐시 |
+| 개인화 여행 팁 | 취향·지역·날짜 키로 캐시 → 없으면 Gemini → 실패 시 정적 팁 | Gemini API | 조건부 · 킬스위치 |
 | 로그인 | Google · Kakao OAuth 콜백 → 세션 쿠키(HttpOnly) | OAuth | 없음 |
 
-LLM이 도는 경로는 셋뿐이고(온보딩 · 코스 요약 · 여행 팁) 모두 **실패해도 화면이 깨지지 않는 폴백**이
+LLM(Gemini, `LLM_PROVIDER=ollama`면 로컬)이 도는 경로는 셋뿐이고(온보딩 · 코스 요약 · 여행 팁) 모두 **실패해도 화면이 깨지지 않는 폴백**이
 있다. nginx도 이 세 경로(`/api/v1/onboarding/`, `/api/v1/courses/`, `/api/v1/tips/`)만 따로 긴 타임아웃을 준다.
 backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이기 때문이다 — 트래픽이 늘면 `cache/base.py`
 인터페이스 뒤를 Redis로 바꾸고 워커를 늘린다.
@@ -68,7 +68,8 @@ backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이
   <img alt="Python" src="https://img.shields.io/badge/Python_3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" />
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
   <img alt="Pydantic" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white" />
-  <img alt="Ollama" src="https://img.shields.io/badge/Ollama-Local_LLM-111111?style=for-the-badge&logo=ollama&logoColor=white" />
+  <img alt="Gemini" src="https://img.shields.io/badge/Gemini_API-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white" />
+  <img alt="Ollama" src="https://img.shields.io/badge/Ollama-Fallback-111111?style=for-the-badge&logo=ollama&logoColor=white" />
   <img alt="Qwen" src="https://img.shields.io/badge/Qwen3.5-2B--4B_Q4-615CED?style=for-the-badge" />
 </p>
 
@@ -87,7 +88,7 @@ backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이
 |---|---|
 | **Next.js · React · TypeScript** | 반응형 웹 UI, 지도와 추천 결과 렌더링 |
 | **FastAPI · Pydantic** | REST API, 입력 계약 검증, 추천·코스 도메인 로직 |
-| **Ollama · Qwen3.5** | 외부 전송 없는 로컬 취향 추출, 요약, 개인화 여행 팁 |
+| **Gemini API** (Ollama 폴백) | 취향 추출, 스팟·코스 요약, 개인화 여행 팁 — `LLM_PROVIDER`로 전환. 자유서술은 PII 마스킹 후 전송 |
 | **PostgreSQL** | 회원, 취향 프로필, AI 코스, 후기와 공유 데이터 저장 |
 | **TourAPI · 기상청 · 지도 API** | 관광지, 혼잡도, 날씨, 이동 경로 원천 데이터 |
 | **Docker · Nginx** | 단일 VM(x86_64) 컨테이너 배포, TLS와 리버스 프록시 |
@@ -101,7 +102,7 @@ backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이
 cd backend
 pip install -r requirements.txt
 cp .env.example .env   # 필요한 키는 프로젝트 관리자에게 요청
-ollama pull qwen3.5:4b-q4_K_M
+# LLM_PROVIDER=ollama 로 로컬 모델을 쓸 때만: ollama pull qwen3.5:4b-q4_K_M
 python -m uvicorn app.main:app --port 8000
 ```
 
