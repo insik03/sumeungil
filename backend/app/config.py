@@ -86,8 +86,10 @@ class Settings:
         # (PII 프리필터는 injection_guard.sanitize_free_text, 처리방침 §10 문구).
         self.llm_provider: str = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
         self.gemini_api_key: str = os.getenv("GEMINI_API_KEY", "").strip()
-        # 모델명은 Google AI Studio 의 현재 목록에서 확인 후 .env 로 고정한다.
-        self.gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        # 모델명은 Google AI Studio 의 현재 목록에서 확인 후 .env 로 고정한다. 2026-09-03 운영
+        # 실측: gemini-2.5-flash 는 "no longer available to new users"(404) — API 가 안내한
+        # gemini-3.6-flash 로 기본값을 맞췄다.
+        self.gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
         # 외부 API 라 로컬 CPU 추론보다 훨씬 빠르다 — 15초면 넉넉하고, 더 길면 프론트 체감만 나빠진다.
         self.gemini_timeout_sec: float = float(os.getenv("GEMINI_TIMEOUT_SEC", "15"))
 

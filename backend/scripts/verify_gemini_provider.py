@@ -52,6 +52,7 @@ g = gemini_client.to_gemini_schema(_tag_extraction_schema())
 check("additionalProperties 제거", "additionalProperties" not in json.dumps(g))
 check("nullable 변환", g["properties"]["unmatched_note"] == {"type": "string", "nullable": True}, str(g["properties"]["unmatched_note"]))
 check("required 유지", "value_confidence" in g.get("required", []))
+check("모르는 키(uniqueItems 등) 제거", "uniqueItems" not in json.dumps(g) and "pattern" not in json.dumps(g))
 nested = gemini_client.to_gemini_schema({"type": "array", "items": {"type": ["integer", "null"], "additionalProperties": False}})
 check("중첩 items 변환", nested == {"type": "array", "items": {"type": "integer", "nullable": True}}, str(nested))
 
