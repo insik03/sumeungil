@@ -1,5 +1,6 @@
 import { OnboardingAxis, OnboardingResult } from "../../lib/api";
 import { RESULT_AXIS_ORDER } from "./constants";
+import GeminiMark from "../GeminiMark";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.5; // §B.5-4 — 표시 전용 재량. 스코어링에는 쓰지 않는다(§B.1 confidence 규칙).
 
@@ -34,7 +35,11 @@ export default function OnboardingResultView({
     <section className="onboard-section" aria-label="취향 분석 결과">
       <div className="onboard-card">
         <div className="onboard-result__head">
-          <h2 className="onboard-result__title">이렇게 이해했어요</h2>
+          <h2 className="onboard-result__title">
+            {/* 룰 폴백(fallback_used)이면 Gemini 가 만든 게 아니므로 마크를 붙이지 않는다 */}
+            {!result.fallback_used && <GeminiMark label="" />}
+            이렇게 이해했어요
+          </h2>
           <p className="onboard-result__sub">
             {displayName ? `${displayName}님이 알려주신 내용을` : "알려주신 내용을"} AI가 이렇게
             정리했어요. 다르면 다시 입력해도 괜찮아요.
