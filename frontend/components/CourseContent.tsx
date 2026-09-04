@@ -20,6 +20,7 @@ import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseCartStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import LoginRequiredGate from "./LoginRequiredGate";
+import GeminiMark from "./GeminiMark";
 import RegionMapSection from "./RegionMapSection";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
 import CourseMap from "./course/CourseMap";
@@ -263,7 +264,16 @@ function CourseTimelinePanel({
           total_distance_m이 null/0이면 총거리 항목 자체를 숨긴다(0m 표기 금지, 부록 I.12-2). */}
       {status === "success" && data && data.spots.length > 0 && (
         <div className="course-result-head">
-          <h3 className="course-result-head__title">{data.ai_title || fallbackTitle}</h3>
+          <h3 className="course-result-head__title">
+            {/* ai_title 이 있을 때만 Gemini 마크 — 폴백 제목은 우리가 만든 문구라 붙이지 않는다 */}
+            {data.ai_title ? (
+              <>
+                <GeminiMark label="" /> {data.ai_title}
+              </>
+            ) : (
+              fallbackTitle
+            )}
+          </h3>
           <div className="course-result-head__meta">
             {data.region.region_name && (
               <span className="course-result-head__meta-item">{data.region.region_name}</span>
@@ -299,13 +309,7 @@ function CourseTimelinePanel({
       {status === "success" && data?.ai_summary && (
         <div className="ai-summary">
           <span className="ai-summary__label">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"
-                fill="currentColor"
-              />
-            </svg>
-            AI 코스 요약
+            <GeminiMark /> 코스 요약
           </span>
           <p className="ai-summary__text">{data.ai_summary}</p>
         </div>

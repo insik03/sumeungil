@@ -1,5 +1,6 @@
 "use client";
 
+import GeminiMark from "../GeminiMark";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ApiError, SpotCard, SpotDetail, fetchSpotDetail } from "../../lib/api";
@@ -294,13 +295,7 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
           // (globals.css .ai-summary 근거 주석). "AI가 생성한 콘텐츠"라는 정직 표시는 유지, 색은 그대로 재사용.
           <div className="ai-summary">
             <span className="ai-summary__label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"
-                  fill="currentColor"
-                />
-              </svg>
-              AI 3줄 요약
+              <GeminiMark /> 3줄 요약
             </span>
             <p className="ai-summary__text">{data.ai_summary}</p>
           </div>
