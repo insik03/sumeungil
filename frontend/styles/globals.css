@@ -4700,6 +4700,9 @@ input:focus-visible,
 }
 /* 2026-09-03 — Gemini 가 만든 텍스트 앞에 붙는 마크(components/GeminiMark.tsx). 4각 별 + "Gemini".
    부모 글자 크기를 따라가고(em) 색만 Google 블루. label="" 이면 별만 남는다(제목 앞용). */
+.gemini-mark--generic {
+  color: var(--ink-soft, #5c7686);
+}
 .gemini-mark {
   display: inline-flex;
   align-items: center;

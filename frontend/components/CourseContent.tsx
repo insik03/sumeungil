@@ -337,8 +337,12 @@ function CourseTimelinePanel({
               />
               {/* 2026-09-04(대표) — 경계 지도의 경로를 featured 픽이 아니라 **이 코스의 실제 스팟**으로.
                   NAVER CourseMap 과 같은 data.spots 를 잇는다(코스 길이만큼, 순서 그대로). */}
+              {/* QA(2026-09-05 P1): 선택기(regionCode)가 아니라 **코스 응답의 지역**을 쓴다 — 내 코스
+                  만들기에서 서울 스팟으로 짰는데 선택기가 부산이면 서울 좌표가 경계 밖으로 걸러져
+                  경로가 사라졌다. ponytail: 경계는 시/도 하나뿐이라 여러 시/도가 섞인 코스는 그
+                  시/도 안의 스팟만 이어진다 — 전 구간은 위 NAVER 지도가 맡는다. */}
               <RegionMapSection
-                regionCode={regionCode}
+                regionCode={(status === "success" && data?.region.region_code) || regionCode}
                 inline
                 spots={status === "success" && data ? data.spots : []}
                 spotsLoading={status === "loading"}

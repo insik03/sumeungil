@@ -110,6 +110,7 @@ class SpotDetail(BaseModel):
     is_hidden_gem: bool = False
     overview: str | None = None               # TourAPI detailCommon2 소개글. 없으면 null(지어내지 않음)
     ai_summary: str | None = None             # ★ Phase2: 로컬 LLM 3줄 요약(평문). overview 없거나 LLM 실패 시 null
+    ai_provider: str | None = None            # 요약을 만든 LLM("gemini"/"ollama"). 사전 생성분·구 캐시는 null(출처 미상)
     image_url: str | None = None              # TourAPI firstimage(대표이미지, https 승격). 없으면 null
     # ★ 부록 H.3 additive(2026-07-29): 사진 출처 표기. image_url 이 있을 때만 채워진다.
     #   "한국관광공사" | "한국관광공사 포토갤러리 / 촬영: {촬영자}". 없으면 null(프론트는 미표기).

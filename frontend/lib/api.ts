@@ -741,6 +741,8 @@ export interface SpotDetail {
    * "AI 3줄 요약" 블록 자체를 렌더하지 않고 overview만 기존과 동일하게 보여준다(지어내지 않음).
    */
   ai_summary: string | null;
+  /** 요약을 만든 LLM("gemini"/"ollama"). null/미존재 = 출처 미상(사전 생성분·구버전 백엔드) → 일반 "AI" 마크. */
+  ai_provider?: string | null;
   /** §31(신규) — "방문 타이밍" 카드 전용. null이면 카드 자체를 숨긴다(관광지·자연 외 카테고리는 항상 null). */
   visit_tip: VisitTip | null;
   /**
