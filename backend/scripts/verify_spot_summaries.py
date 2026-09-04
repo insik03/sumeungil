@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.cache.memory import MemoryCache  # noqa: E402
 from app.clients.tourapi_detail_client import TourApiDetailError  # noqa: E402
+from app.config import settings  # noqa: E402
 from app.services import spot_detail_service  # noqa: E402
 
 import scripts.build_spot_summaries as bss  # noqa: E402
@@ -152,14 +153,16 @@ async def test_ai_summary_priority(tmp_dir: Path) -> None:
     try:
         cache = MemoryCache()
         summarizer = StubSummarizer("라이브 요약")
-        result = await spot_detail_service._get_ai_summary(1001, "원문 소개글", summarizer, cache)
+        result, provider = await spot_detail_service._get_ai_summary(1001, "원문 소개글", summarizer, cache)
         check("사전생성 파일 없음 → 라이브 LLM 폴백 정상 동작", result == "라이브 요약", result)
         check("라이브 LLM 1회 호출됨", summarizer.calls == 1, summarizer.calls)
+        check("라이브 요약의 provider = settings.llm_provider", provider == settings.llm_provider, provider)
 
         # 런타임 캐시 히트 확인(같은 content_id 재조회 시 LLM 재호출 없음)
-        result2 = await spot_detail_service._get_ai_summary(1001, "원문 소개글", summarizer, cache)
+        result2, provider2 = await spot_detail_service._get_ai_summary(1001, "원문 소개글", summarizer, cache)
         check("런타임 캐시 히트 → LLM 재호출 없음", summarizer.calls == 1, summarizer.calls)
         check("캐시된 값 그대로 반환", result2 == "라이브 요약", result2)
+        check("캐시 히트도 provider 유지", provider2 == settings.llm_provider, provider2)
 
         # c-2: 깨진 사전생성 파일 → graceful
         broken_path = tmp_dir / "broken.json"
@@ -167,7 +170,7 @@ async def test_ai_summary_priority(tmp_dir: Path) -> None:
         spot_detail_service.PREGENERATED_SUMMARIES_PATH = broken_path
         spot_detail_service._pregenerated_summaries.cache_clear()
         summarizer2 = StubSummarizer("또 라이브 요약")
-        result3 = await spot_detail_service._get_ai_summary(2002, "다른 소개글", summarizer2, MemoryCache())
+        result3, _ = await spot_detail_service._get_ai_summary(2002, "다른 소개글", summarizer2, MemoryCache())
         check("깨진 사전생성 파일 → 죽지 않고 라이브로 폴백", result3 == "또 라이브 요약", result3)
 
         # c-3: 사전 생성 파일에 값이 있으면 overview 유무·LLM 과 무관하게 그 값 반환(LLM 호출 0)
@@ -187,12 +190,13 @@ async def test_ai_summary_priority(tmp_dir: Path) -> None:
         spot_detail_service.PREGENERATED_SUMMARIES_PATH = good_path
         spot_detail_service._pregenerated_summaries.cache_clear()
         summarizer3 = StubSummarizer("호출되면 안 됨")
-        result4 = await spot_detail_service._get_ai_summary(3003, None, summarizer3, MemoryCache())
+        result4, provider4 = await spot_detail_service._get_ai_summary(3003, None, summarizer3, MemoryCache())
         check("사전생성 있음 → overview=None 이어도 그 값 반환", result4 == "사전 생성된 요약입니다", result4)
         check("사전생성 있음 → LLM 호출 0", summarizer3.calls == 0, summarizer3.calls)
+        check("사전생성분은 provider=None(출처 미상 → 프론트 일반 AI 마크)", provider4 is None, provider4)
 
         # 사전생성에 없는 id 는 기존 경로(overview 없으면 None)
-        result5 = await spot_detail_service._get_ai_summary(9999, None, summarizer3, MemoryCache())
+        result5, _ = await spot_detail_service._get_ai_summary(9999, None, summarizer3, MemoryCache())
         check("사전생성에 없는 id + overview 없음 → None", result5 is None, result5)
     finally:
         spot_detail_service.PREGENERATED_SUMMARIES_PATH = orig_path

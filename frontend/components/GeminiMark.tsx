@@ -6,11 +6,24 @@
  * 4각 별은 Gemini 로고 형태를 단순화한 자체 드로잉(상표 이미지를 그대로 쓰지 않는다). 색은
  * Google 블루 한 가지.
  *
- * ponytail: 백엔드가 `LLM_PROVIDER=ollama` 로 되돌아가도 이 마크는 그대로 "Gemini" 로 보인다 —
- * 응답에 provider 필드가 없기 때문. 되돌릴 일이 생기면 그때 응답에 `ai_provider` 를 추가하고
- * 여기서 분기한다(지금은 전 경로 Gemini 라 분기가 없다).
+ * provider(QA 2026-09-05 P2): 응답에 `ai_provider` 가 있는 곳(스팟 상세)은 그 값으로 분기한다 —
+ * "gemini" 가 아니면(ollama 배치 산출물·출처 미상) Gemini 별 대신 일반 "AI" 마크. prop 을 안 주는
+ * 호출부(코스·팁·온보딩)는 라이브 생성이라 현재 provider 가 곧 Gemini 다.
  */
-export default function GeminiMark({ label = "Gemini" }: { label?: string }) {
+export default function GeminiMark({
+  label = "Gemini",
+  provider = "gemini",
+}: {
+  label?: string;
+  provider?: string | null;
+}) {
+  if (provider !== "gemini") {
+    return (
+      <span className="gemini-mark gemini-mark--generic" aria-label="AI가 생성">
+        ✦ AI
+      </span>
+    );
+  }
   return (
     <span className="gemini-mark" aria-label="Gemini가 생성">
       <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">

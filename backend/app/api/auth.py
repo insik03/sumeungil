@@ -377,8 +377,10 @@ async def me(request: Request, response: Response):
     비로그인은 실패가 아니라 정상 상태다).
 
     2026-09-04(대표 C안) — **슬라이딩 세션**: 프론트가 페이지 부팅마다 이걸 부르므로
-    (authStorage.syncSessionFromServer) 남은 수명이 절반 아래면 여기서 쿠키를 새로 발급한다.
-    쓰는 동안은 안 풀리고, TTL(기본 24h) 동안 안 들어오면 풀린다.
+    (authStorage.syncSessionFromServer) 여기서 매번 쿠키를 새로 발급해 만료를 "지금+TTL" 로
+    민다. 쓰는 동안은 안 풀리고, TTL(기본 24h) 동안 안 들어오면 풀린다.
+    QA(2026-09-05 P1): 처음엔 "남은 수명 절반 아래일 때만" 갱신했는데, 그러면 로그인 11시간째
+    이용자가 13시간 뒤 풀려 방침의 "마지막 이용 후 24시간" 과 어긋났다 → 호출마다 갱신.
 
     2026-08-17 보안검토 m-4 — email은 응답에 담지 않는다. 프론트(authStorage.ts)가 쓰는
     값은 표시 이름뿐이라, 최소노출 원칙상 필요 없는 개인정보를 API 응답에 얹지 않는다."""
@@ -391,9 +393,8 @@ async def me(request: Request, response: Response):
     if user is None:
         # 세션은 유효한데 계정 행이 사라진 상태(수동 DB 조작 등) — 비로그인으로 취급.
         return UserSessionResponse(authenticated=False)
-    if auth.should_refresh(identity):
-        token, _ = auth.issue_token(user_id=identity.user_id, email=identity.email)
-        _set_session_cookie(response, auth, token)
+    token, _ = auth.issue_token(user_id=identity.user_id, email=identity.email)
+    _set_session_cookie(response, auth, token)
     return UserSessionResponse(authenticated=True, name=user["display_name"])
 
 

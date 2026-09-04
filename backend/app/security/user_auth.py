@@ -259,11 +259,5 @@ class UserAuth:
             return None
         return UserIdentity(user_id=user_id, email=email or None, exp=exp)
 
-    def should_refresh(self, identity: UserIdentity, *, now: int | None = None) -> bool:
-        """남은 수명이 TTL 의 절반 아래면 True — /me 가 이때만 쿠키를 재발급한다(매 요청마다
-        Set-Cookie 를 붙이지 않기 위한 문턱). ponytail: 절반 고정, 조정할 일 생기면 설정으로."""
-        current = int(time.time()) if now is None else int(now)
-        return identity.exp - current < self.session_ttl_sec // 2
-
 
 __all__ = ("UserAuth", "UserIdentity", "STATE_TTL_SEC")
