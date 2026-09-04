@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FeaturedSpot, fetchFeatured } from "../lib/api";
 import { DEFAULT_SIDO_CODE, SIDO_REGIONS } from "./regions/constants";
-import RegionRouteMap from "./demo-home/RegionRouteMap";
+import RegionRouteMap, { RouteSpot } from "./demo-home/RegionRouteMap";
 
 interface RegionMapSectionProps {
   /** 선택된 지역(sigungu_cd). FeaturedSpots/CoursePromo와 동일 원칙. */
@@ -15,6 +15,17 @@ interface RegionMapSectionProps {
    * (.recommend-layout__map--stacked)가 정한다 — 여기서는 높이를 강제하지 않는다.
    */
   inline?: boolean;
+  /**
+   * 2026-09-04(대표: "추천 경로도 네이버맵이랑 연동해서 AI 코스랑 같이") — 이 값을 주면 featured
+   * 픽을 받아오지 않고 이 스팟들(예: AI 코스 결과)을 순서대로 잇는다. NAVER CourseMap 과 같은
+   * 데이터를 쓰므로 두 지도가 같은 경로를 보여준다.
+   */
+  spots?: RouteSpot[];
+  /** spots 를 줄 때의 로딩 상태(코스 생성 중이면 true). */
+  spotsLoading?: boolean;
+  /** 경로로 이을 최대 스팟 수 — 기본 3. spots 를 준 코스 화면은 코스 길이만큼. */
+  maxStops?: number;
+  routeLabel?: string;
 }
 
 // RegionRouteMap용 후보 풀 크기. 시/도 전체에서 좌표 있는 스팟을 걸러 최대 3곳만
@@ -35,7 +46,14 @@ const MAP_SPOTS_LIMIT = 12;
  * Hero.tsx의 검색/칩이 지역 선택 UI를 갖고 있으므로 지도 자체 도시 선택 칩은 계속 숨긴다
  * (hidePicker) — 지도는 선택된 지역을 그대로 반영하는 동반 콘텐츠다.
  */
-export default function RegionMapSection({ regionCode, inline = false }: RegionMapSectionProps) {
+export default function RegionMapSection({
+  regionCode,
+  inline = false,
+  spots: givenSpots,
+  spotsLoading: givenLoading,
+  maxStops,
+  routeLabel,
+}: RegionMapSectionProps) {
   const selectedSido = useMemo(() => {
     const sidoCode = regionCode?.slice(0, 2);
     return (
@@ -45,27 +63,31 @@ export default function RegionMapSection({ regionCode, inline = false }: RegionM
     );
   }, [regionCode]);
 
-  const [spots, setSpots] = useState<FeaturedSpot[]>([]);
-  const [spotsLoading, setSpotsLoading] = useState(true);
+  const [fetchedSpots, setFetchedSpots] = useState<FeaturedSpot[]>([]);
+  const [fetchedLoading, setFetchedLoading] = useState(true);
+  const useGiven = givenSpots !== undefined;
+  const spots: RouteSpot[] = useGiven ? givenSpots : fetchedSpots;
+  const spotsLoading = useGiven ? !!givenLoading : fetchedLoading;
 
   useEffect(() => {
+    if (useGiven) return; // 코스 스팟을 직접 받은 경우 featured 조회는 하지 않는다
     const controller = new AbortController();
-    setSpotsLoading(true);
+    setFetchedLoading(true);
     // areaCd(시/도 전체 풀)로 받는다 — regionCode(구 단위)를 쓰면 지도가 커버하는 범위보다
     // 좁아져 코스선을 그릴 좌표가 쉽게 바닥난다.
     fetchFeatured(undefined, MAP_SPOTS_LIMIT, controller.signal, false, selectedSido.sidoCode)
       .then((res) => {
         if (controller.signal.aborted) return;
-        setSpots([...res.hidden_picks, ...res.trending].filter((s) => !!s.image_url));
-        setSpotsLoading(false);
+        setFetchedSpots([...res.hidden_picks, ...res.trending].filter((s) => !!s.image_url));
+        setFetchedLoading(false);
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setSpots([]);
-        setSpotsLoading(false);
+        setFetchedSpots([]);
+        setFetchedLoading(false);
       });
     return () => controller.abort();
-  }, [selectedSido.sidoCode]);
+  }, [selectedSido.sidoCode, useGiven]);
 
   if (inline) {
     return (
@@ -76,6 +98,8 @@ export default function RegionMapSection({ regionCode, inline = false }: RegionM
           spotsLoading={spotsLoading}
           onSelectSido={() => {}}
           hidePicker
+          maxStops={maxStops}
+          routeLabel={routeLabel}
         />
       </div>
     );
