@@ -96,6 +96,8 @@ class UserIdentity:
     # 2026-08-17(카카오 추가) — 이메일이 없을 수 있다(카카오는 이메일 동의가 선택이고,
     # 동의해도 미인증 계정이면 애초에 신뢰 안 함 — user_repo.py 계정 통합 규칙 참고).
     email: str | None
+    # 토큰 만료 시각(epoch 초). /me 의 슬라이딩 재발급이 "남은 수명"을 계산하는 데 쓴다.
+    exp: int = 0
 
 
 class UserAuth:
@@ -255,7 +257,13 @@ class UserAuth:
         current = int(time.time()) if now is None else int(now)
         if exp <= current:
             return None
-        return UserIdentity(user_id=user_id, email=email or None)
+        return UserIdentity(user_id=user_id, email=email or None, exp=exp)
+
+    def should_refresh(self, identity: UserIdentity, *, now: int | None = None) -> bool:
+        """남은 수명이 TTL 의 절반 아래면 True — /me 가 이때만 쿠키를 재발급한다(매 요청마다
+        Set-Cookie 를 붙이지 않기 위한 문턱). ponytail: 절반 고정, 조정할 일 생기면 설정으로."""
+        current = int(time.time()) if now is None else int(now)
+        return identity.exp - current < self.session_ttl_sec // 2
 
 
 __all__ = ("UserAuth", "UserIdentity", "STATE_TTL_SEC")

@@ -373,8 +373,11 @@ class Settings:
         # 길게 둘 이유가 없어 최소 조치로 7일로 단축한다. 완전한 해법(로그아웃 즉시 전
         # 세션 무효화)은 users 테이블에 session_epoch 컬럼을 추가해야 하며 이번 스코프
         # 밖 — 후속 과제로 남긴다.
+        # 2026-09-04(대표 C안: "짧게, 쓰면 연장") — 7일 고정 → **24시간 슬라이딩**. /me 가
+        # 남은 수명이 절반 아래면 쿠키를 재발급하므로(api/auth.py) 매일 쓰는 사람은 계속
+        # 로그인 상태, 하루 안 쓰면 풀린다. 탈취 시 노출 시간도 7일→1일로 준다.
         self.user_session_ttl_sec: int = int(
-            os.getenv("USER_SESSION_TTL_SEC", str(7 * 24 * 60 * 60))
+            os.getenv("USER_SESSION_TTL_SEC", str(24 * 60 * 60))
         )
         self.user_cookie_name: str = os.getenv("USER_COOKIE_NAME", "sumeungil_user").strip()
         self.user_cookie_secure: bool = (
