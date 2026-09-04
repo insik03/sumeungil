@@ -17,6 +17,9 @@ import os
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # CP949 콘솔에서 em dash 출력 오류 방지
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ["LLM_PROVIDER"] = "gemini"
 os.environ["GEMINI_API_KEY"] = ""

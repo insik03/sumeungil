@@ -30,6 +30,7 @@ from ..ai import tag_registry
 from ..ai.summarizer import Summarizer
 from ..cache.base import Cache
 from ..clients import tourapi_detail_client
+from ..config import settings
 from ..clients.tourapi_detail_client import TourApiDetailError
 from ..regions.seed import REGIONS
 from ..repositories.congestion_repo import CongestionRepository
@@ -312,8 +313,12 @@ async def _get_ai_summary(
     overview: str | None,
     summarizer: Summarizer | None,
     cache: Cache,
-) -> str | None:
-    """ai_summary 조립. **① 사전 생성 파일 → ② 런타임 캐시 → ③ 라이브 LLM** 순.
+) -> tuple[str | None, str | None]:
+    """ai_summary 조립 → (summary, provider). **① 사전 생성 파일 → ② 런타임 캐시 → ③ 라이브 LLM** 순.
+
+    provider(QA 2026-09-05 P2): 라이브/런타임 캐시는 만든 시점의 settings.llm_provider
+    ("gemini"/"ollama"), 사전 생성 파일은 배치 산출물이라 None(출처 미상 → 프론트는 일반 "AI"
+    마크). 프론트가 모든 요약에 Gemini 마크를 붙이던 오표시를 막는다.
 
     - 사전 생성 파일에 있으면 그대로 반환(LLM 호출 0, overview 유무와 무관 — 배치 시점엔
       overview 가 있었다는 뜻이므로 지금 원천이 잠깐 흔들려도 정상 표시된다).
@@ -325,22 +330,23 @@ async def _get_ai_summary(
     pregenerated = _pregenerated_summaries().get(str(content_id))
     if pregenerated:
         logger.debug("ai_summary source=pregenerated content_id=%s", content_id)
-        return pregenerated
+        return pregenerated, None
 
     if not overview or summarizer is None:
-        return None
+        return None, None
 
     key = f"spot_summary:{content_id}"
     cached = await cache.get(key)
     if cached is not None:
         logger.debug("ai_summary source=runtime_cache content_id=%s", content_id)
-        return cached.get("summary")
+        return cached.get("summary"), cached.get("provider")  # 구 캐시 항목엔 provider 없음 → None
 
     summary = await summarizer.summarize(overview)  # 내부에서 모든 오류를 None 으로 흡수
+    provider = settings.llm_provider if summary else None
     if summary:
-        await cache.set(key, {"summary": summary}, SUMMARY_CACHE_TTL_SEC)
-        logger.debug("ai_summary source=live_llm content_id=%s", content_id)
-    return summary
+        await cache.set(key, {"summary": summary, "provider": provider}, SUMMARY_CACHE_TTL_SEC)
+        logger.debug("ai_summary source=live_llm(%s) content_id=%s", provider, content_id)
+    return summary, provider
 
 
 # ---------- visit_tip (부록 M additive) — 이 스팟의 한적한 날/붐비는 날 ----------
@@ -416,7 +422,7 @@ async def build_spot_detail(
     visit_tip = await _visit_tip(spot, congestion_repo)
 
     fields = await _get_detail_fields(content_id, cache)  # overview+대표이미지 한 번에
-    ai_summary = await _get_ai_summary(content_id, fields.get("overview"), summarizer, cache)
+    ai_summary, ai_provider = await _get_ai_summary(content_id, fields.get("overview"), summarizer, cache)
 
     # 사진: 상세는 이미 detailCommon2 를 부른 뒤라 firstimage 가 있으면 그걸 그대로 쓰고,
     # 없을 때만 폴백 체인(시드 → detailImage2 → 갤러리)을 탄다.
@@ -441,6 +447,7 @@ async def build_spot_detail(
         is_hidden_gem=spot.is_hidden_gem,
         overview=fields.get("overview"),
         ai_summary=ai_summary,
+        ai_provider=ai_provider,
         image_url=photo.url,
         photo_credit=photo.credit,
         images=images,
