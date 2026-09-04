@@ -3609,8 +3609,13 @@ input:focus-visible,
    나란히 둬 스텝 하나의 세로 높이를 줄인다 — 화면에 더 많은 스텝이 한 번에 들어와 코스 전체를
    스캔하기 쉬워진다. 안쪽 .spot-card는 대표 지시("카드 크기는 바뀌지 않게")로 자체 크기·패딩을
    그대로 두고(185px 좁은 폭에서도 배지 1열 스택되도록 이미 설계됨) box-shadow/radius만 죽인다. */
+/* 2026-09-04(대표: "관광지 사진들이 너무 잘린 느낌") — 예전엔 사진이 104/140px 세로 띠라
+   가로 사진의 양옆이 거의 다 잘렸다. 모바일은 사진을 위에 가로 꽉(16:9)으로 두고 글을 아래에,
+   640px+ 는 나란히 두되 사진 칸을 카드의 42%(최소 200px)·4:3 으로 키워 원본 비율에 가깝게
+   보여준다. object-fit:cover 는 유지(빈 여백보다 낫다) — 대신 상자가 커져 잘리는 양이 준다. */
 .course-step-card {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   background: var(--white);
   border-radius: var(--r-lg);
@@ -3619,14 +3624,21 @@ input:focus-visible,
 }
 .course-step-card__media {
   position: relative;
-  width: 104px;
-  flex: 0 0 104px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  flex: 0 0 auto;
   background: var(--gray-100);
 }
 @media (min-width: 640px) {
+  .course-step-card {
+    flex-direction: row;
+  }
   .course-step-card__media {
-    width: 140px;
-    flex-basis: 140px;
+    width: 42%;
+    min-width: 200px;
+    max-width: 320px;
+    aspect-ratio: 4 / 3;
+    align-self: stretch;
   }
 }
 .course-step-card__img {
@@ -3680,7 +3692,7 @@ input:focus-visible,
   font-weight: 500;
   line-height: 1.6;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;  /* 사진 칸이 커진 만큼 글도 3줄까지 — 좌우 높이 균형 */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
