@@ -1,7 +1,7 @@
 name: 슬랙 한국어 알림
 
 # GitHub 공식 Slack 앱은 알림 문구가 영어로 고정이다(마켓플레이스 지원 언어: 영어).
-# 그래서 이벤트를 직접 받아 한국어 문구를 만들어 #알림-봇 웹훅으로 보낸다.
+# 그래서 이벤트를 직접 받아 한국어 문구를 만들어 #깃허브-알림 웹훅으로 보낸다.
 #
 # ⚠️ 공식 앱에서 `/github subscribe insik03/sumeungil` 를 하지 말 것 —
 #    같은 사건이 영어로 한 번 더 와서 알림이 두 배가 된다. 공식 앱은 링크 미리보기와
@@ -131,12 +131,11 @@ jobs:
           esac
 
           # 페이로드도 jq 로 만든다 — 제목에 " 나 개행이 있어도 JSON 이 깨지지 않게.
-          # 채널 분리(2026-09-03): PR·이슈는 #깃허브-알림(SLACK_WEBHOOK_GITHUB), push·release·수동실행은
-          # 서버 채널(SLACK_WEBHOOK_URL). GITHUB 웹훅이 비어 있으면 서버 채널로 폴백해 알림이 사라지지 않게 한다.
-          case "$GITHUB_EVENT_NAME" in
-            pull_request|issues) TARGET="${SLACK_WEBHOOK_GITHUB:-$SLACK_WEBHOOK_URL}" ;;
-            *)                   TARGET="$SLACK_WEBHOOK_URL" ;;
-          esac
+          # 채널 분리(2026-09-03 → 09-04 대표 "여전히 서버 알림에 커밋이 올라옴"): 이 워크플로가 만드는
+          # 알림(push·PR·이슈·release)은 **전부 #깃허브-알림**(SLACK_WEBHOOK_GITHUB). 서버 채널
+          # (SLACK_WEBHOOK_URL)은 헬스체크·5xx·운영 요약 같은 "서버 상태"만 받는다. GITHUB 웹훅이
+          # 비어 있으면 서버 채널로 폴백해 알림이 사라지지 않게 한다.
+          TARGET="${SLACK_WEBHOOK_GITHUB:-$SLACK_WEBHOOK_URL}"
           payload=$(jq -nc --arg t "$text" '{text: $t, unfurl_links: false}')
           code=$(curl -sS -o /tmp/slack_resp.txt -w '%{http_code}' -X POST \
             -H 'Content-type: application/json' --data "$payload" "$TARGET")
