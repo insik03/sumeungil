@@ -5,7 +5,6 @@ import Link from "next/link";
 import { animate, stagger } from "animejs";
 import {
   BookOpenText,
-  CalendarDays,
   Compass,
   Flower2,
   Gauge,
@@ -42,7 +41,6 @@ const QUICK_MENU_ITEMS: QuickMenuItem[] = [
   },
   { key: "course", label: "AI 코스", href: "/course", icon: Route, regionAware: true },
   { key: "regions", label: "지역별 여행", href: "/regions", icon: MapPinned },
-  { key: "plan", label: "출발일 플래너", href: "/plan", icon: CalendarDays },
   { key: "seasonal", label: "계절 여행", href: "/seasonal", icon: Flower2 },
   { key: "board", label: "전국 혼잡 현황", href: "/congestion", icon: Gauge },
   { key: "stamp", label: "방문 스탬프", href: "/saved", icon: Stamp },

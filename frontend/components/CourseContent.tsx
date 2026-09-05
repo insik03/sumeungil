@@ -370,6 +370,11 @@ function CourseTimelinePanel({
                     </div>
                     <div className="course-timeline__content">
                       <span className="course-timeline__slot-badge">{spot.slot_label}</span>
+                      {spot.pick_reason && (
+                        <p className="course-timeline__reason">
+                          <GeminiMark /> {spot.pick_reason}
+                        </p>
+                      )}
                       <div className="spot-card-wrap">
                         <Link
                           className="spot-card-link"
@@ -453,6 +458,9 @@ export default function CourseContent() {
   const [mode, setMode] = useState<CourseMode>(searchParams.get("mode") === "custom" ? "custom" : "ai");
 
   const [profile, setProfile] = useState<ProfileState>(undefined);
+  // 2026-09-05(대표) — 자유서술 원문. 서버가 태그 대신 이 문장으로 AI 후보 선택을 한다. 서버 프로필에는
+  // 원문이 없으므로 이번 세션 sessionStorage 에서만 읽는다(없으면 기존 태그 경로).
+  const [wish, setWish] = useState<string | null>(null);
   // 지연 초기화 — 첫 조회부터 쿼리 지역으로 나간다(기본 지역 조회 후 재조회하는 이중 호출 방지).
   // URL 쿼리는 SSR에서도 동일하게 읽혀 하이드레이션이 안전하다 — 마지막으로 고른 지역(세션
   // 기억)은 sessionStorage라 서버에서 못 읽으므로 초기 state에 넣지 않는다(하이드레이션
@@ -541,6 +549,7 @@ export default function CourseContent() {
   // 폴백한다. 비로그인이면(사실 이 화면 자체가 게이트로 막혀 있지만 방어적으로) 기존대로
   // sessionStorage만 본다.
   useEffect(() => {
+    setWish(loadOnboardingResult()?.text ?? null);
     if (!loggedIn) {
       setProfile(loadOnboardingResult()?.result ?? null);
       return;
@@ -578,7 +587,8 @@ export default function CourseContent() {
             tags: profile.tags,
           }
         : null,
-      controller.signal
+      controller.signal,
+      wish
     )
       .then((res) => {
         setData(res);
@@ -599,6 +609,7 @@ export default function CourseContent() {
         if (err instanceof ApiError && err.code === "INVALID_PROFILE" && profile) {
           clearOnboardingResult();
           setProfile(null);
+          setWish(null);
           return;
         }
         setError(
@@ -608,7 +619,7 @@ export default function CourseContent() {
       });
 
     return () => controller.abort();
-  }, [profile, selectedRegion, retryTick, loggedIn]);
+  }, [profile, wish, selectedRegion, retryTick, loggedIn]);
 
   // §C.7-4와 동일 원칙: matched_tags(registry 코드) → 사용자 본인 프로필 tags 라벨로 치환.
   // arrange 결과(match_reasons가 있다면)도 같은 프로필 라벨을 그대로 재사용한다.
@@ -649,7 +660,8 @@ export default function CourseContent() {
       .then((res) => {
         // §B.5-7과 동일 원칙 — sessionStorage 갱신 + profile state 갱신. profile이 바뀌면
         // 위 fetchCourse effect가 이미 [profile, ...] 의존성으로 자동 재호출한다(재구현 불필요).
-        saveOnboardingResult(res);
+        saveOnboardingResult(res, trimmed);
+        setWish(trimmed);
         setProfile(res);
         setOpinionStatus("success");
       })
