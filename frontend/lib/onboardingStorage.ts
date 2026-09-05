@@ -10,12 +10,19 @@ const STORAGE_KEY = "sumeungil:onboarding-result:v1";
 export interface StoredOnboardingResult {
   result: OnboardingResult;
   savedAt: string; // ISO — 진단/표시용
+  /** 2026-09-05 — 자유서술 원문. AI 코스짜기가 태그 대신 이 문장으로 후보 스팟을 고른다(wish). 칩만 골랐으면 없음. */
+  text?: string;
 }
 
-export function saveOnboardingResult(result: OnboardingResult): void {
+export function saveOnboardingResult(result: OnboardingResult, text?: string | null): void {
   if (typeof window === "undefined") return;
   try {
-    const payload: StoredOnboardingResult = { result, savedAt: new Date().toISOString() };
+    const trimmed = (text ?? "").trim();
+    const payload: StoredOnboardingResult = {
+      result,
+      savedAt: new Date().toISOString(),
+      ...(trimmed ? { text: trimmed } : {}),
+    };
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // sessionStorage 비활성(시크릿 모드 등) — 조용히 무시. 화면 흐름을 막지 않는다.

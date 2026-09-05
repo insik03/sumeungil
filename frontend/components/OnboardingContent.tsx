@@ -120,7 +120,7 @@ export default function OnboardingContent() {
     analyzeOnboarding(payload, controller.signal)
       .then((res) => {
         // §B.5-7: 서버 저장 없이 sessionStorage에만 보관. 다음 단계(추천)가 여기서 읽는다.
-        saveOnboardingResult(res);
+        saveOnboardingResult(res, payload.text);
         setResult(res);
         setStep("result");
       })
