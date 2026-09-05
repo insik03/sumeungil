@@ -800,6 +800,8 @@ export async function fetchSpotDetail(
 /** §C.2 SpotCard + 코스 내 시간대 라벨(예: "아침 카페","오전 명소","점심","오후 산책","저녁 명소"). */
 export interface CourseSpot extends SpotCard {
   slot_label: string;
+  /** 2026-09-05 — AI 가 자유서술에 맞춰 고른 경우 그 이유 한 줄. 슬롯 휴리스틱 코스는 없음. 텍스트노드로만 렌더. */
+  pick_reason?: string | null;
   /**
    * 부록 I.12(신규) — TourAPI detailCommon2.firstimage(https 승격). featured/스팟상세와 동일 값·
    * 동일 캐시. optional로 둔 이유는 ai_summary와 동일(구버전 백엔드가 이 필드를 안 내려줘도
@@ -870,6 +872,8 @@ export interface CourseRequest {
   region_code: string;
   /** §C.3/§C.7-7과 동일 원칙 — sessionStorage 프로필을 그대로 재전송, 조작·재계산 금지. */
   profile?: RecommendProfilePayload | null;
+  /** 2026-09-05 — 자유서술 원문. 있으면 서버가 태그 대신 AI 로 실제 후보 스팟을 고른다. */
+  wish?: string | null;
 }
 
 /**
@@ -879,9 +883,10 @@ export interface CourseRequest {
 export async function fetchCourse(
   regionCode: string,
   profile?: RecommendProfilePayload | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  wish?: string | null
 ): Promise<CourseResponse> {
-  const payload: CourseRequest = { region_code: regionCode, profile: profile ?? null };
+  const payload: CourseRequest = { region_code: regionCode, profile: profile ?? null, wish: wish || null };
 
   let res: Response;
   try {

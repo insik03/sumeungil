@@ -42,6 +42,9 @@ class CourseSpot(SpotCard):
     """
 
     slot_label: str
+    # 2026-09-05(대표) — 자유서술(wish)로 AI 가 후보 중에서 고른 경우, 왜 이 상황에 맞는지 한 줄.
+    # 슬롯 휴리스틱 코스는 null. 프론트는 텍스트노드로만 렌더한다.
+    pick_reason: str | None = None
     # TourAPI 대표이미지(https 승격) — featured/spot detail 과 **같은 체인·같은 캐시·같은 값**.
     image_url: str | None = None
     # ★ 부록 H.3 additive(2026-07-29): 사진 출처 표기. image_url 있을 때만. 없으면 null.
@@ -69,6 +72,9 @@ class CourseResponse(BaseModel):
 class CourseRequest(BaseModel):
     region_code: str | None = None
     profile: ProfileInput | None = None  # 선택. 부록 C.3/C.4 재검증 그대로 재사용
+    # 2026-09-05(대표) — 온보딩/코스 화면의 자유서술 원문("비 오는 날 연인이랑 갈 만한 곳"). 있으면
+    # 태그 대신 AI 가 실제 후보 스팟을 보고 고른다(ai/course_picker.py). 길이 상한은 온보딩과 동일.
+    wish: str | None = Field(default=None, max_length=300)
 
 
 class ArrangeRequest(BaseModel):

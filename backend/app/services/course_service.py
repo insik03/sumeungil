@@ -17,6 +17,7 @@ import asyncio
 import logging
 import random
 
+from ..ai import course_picker, tag_registry
 from ..ai.summarizer import Summarizer
 from ..cache.base import Cache
 from ..clients import tmap_client
@@ -27,7 +28,7 @@ from ..repositories.spot_repo import SpotRepository
 from ..schemas.courses import CourseLeg, CourseResponse, CourseSpot, RouteMode
 from ..schemas.places import RecommendRegion
 from ..spots.region_map import get_tourapi_region
-from . import course_enrich_service, course_summary_service, recommend_service
+from . import course_enrich_service, course_summary_service, recommend_service, spot_detail_service
 
 logger = logging.getLogger("sumeungil.services.course")
 
@@ -151,9 +152,13 @@ async def _leg_between(a, b, cache: Cache) -> CourseLeg:
     )
 
 
-def _build_notice(personalized: bool, count: int) -> str | None:
+def _build_notice(personalized: bool, count: int, ai_picked: bool = False) -> str | None:
     if count == 0:
         return "이 지역은 아직 코스로 묶을 숨은 스팟을 준비 중이에요. 곧 추가할게요."
+    if ai_picked:
+        if count < _TARGET_MIN:
+            return f"요청에 맞는 곳이 {count}곳뿐이라 그만큼만 담았어요."
+        return f"요청에 맞춰 AI가 {count}곳을 골라 하루 흐름으로 묶었어요."
     if count < _TARGET_MIN:
         return f"이 지역은 코스로 묶을 스팟이 아직 적어 {count}곳만 담았어요."
     if personalized:
@@ -168,6 +173,7 @@ async def build_course_response(
     congestion_repo: CongestionRepository,
     cache: Cache,
     summarizer: Summarizer | None = None,
+    wish: str | None = None,
 ) -> CourseResponse:
     prof = recommend_service.validate_profile(profile)  # 구조 위반 시 ProfileValidationError
     personalized = prof is not None
@@ -200,10 +206,25 @@ async def build_course_response(
             sum(s.spot.lng for s in scored) / len(scored),
         )
 
-    # 슬롯 순서대로 1곳씩 선택(중복 제거, anchor 근접 우선). 있는 카테고리로만.
+    # 2026-09-05(대표 "취향 하드코딩 말고 Gemini 가 우리 관광지를 보고 고르게") — 자유서술이 있으면
+    # 품질 상위 후보(저혼잡·숨은·취향점수 순)를 LLM 에 보여 주고 상황에 맞는 곳을 고르게 한다.
+    # 후보 밖 id 는 course_picker 가 걸러내므로 지어낸 장소는 못 들어온다. 실패·비활성이면 아래
+    # 슬롯 휴리스틱 그대로(코스는 항상 나온다).
+    picked = await _pick_with_llm(wish, scored, personalized, summarizer)
+    reasons: dict[int, str] = {}
+
     chosen: list[tuple[str, object]] = []
     used_ids: set[int] = set()
-    for label, cats in _SLOTS:
+    if picked is not None:
+        by_id = {s.spot.id: s for s in scored}
+        for p in picked.picks:
+            chosen.append((p.slot_label, by_id[p.id]))
+            used_ids.add(p.id)
+            if p.reason:
+                reasons[p.id] = p.reason
+
+    # 슬롯 순서대로 1곳씩 선택(중복 제거, anchor 근접 우선). 있는 카테고리로만. (LLM 이 고른 경우 건너뜀)
+    for label, cats in ([] if picked is not None else _SLOTS):
         if len(chosen) >= _TARGET_MAX:
             break
         cand = [s for c in cats for s in by_cat.get(c, []) if s.spot.id not in used_ids]
@@ -217,7 +238,9 @@ async def build_course_response(
     course_spots: list[CourseSpot] = []
     for label, sc in chosen:
         card = recommend_service._to_card(sc)
-        course_spots.append(CourseSpot(**card.model_dump(), slot_label=label))
+        course_spots.append(
+            CourseSpot(**card.model_dump(), slot_label=label, pick_reason=reasons.get(sc.spot.id))
+        )
 
     # 구간(leg)끼리도 서로 독립적이라 전부 동시에 보낸다(스팟 5곳=4구간 기준 순차 대비
     # 최대 4배 단축 — 대표 실사용 "코스 짜는 시간이 너무 오래 걸린다" 지적으로 발견·수정).
@@ -251,5 +274,39 @@ async def build_course_response(
         ai_summary=ai_summary,
         ai_title=ai_title,
         total_distance_m=course_enrich_service.total_walk_distance_m(legs),
-        notice=_build_notice(personalized, len(course_spots)),
+        notice=_build_notice(personalized, len(course_spots), ai_picked=picked is not None),
     )
+
+
+async def _pick_with_llm(
+    wish: str | None,
+    scored: list,
+    personalized: bool,
+    summarizer: Summarizer | None,
+) -> course_picker.PickResult | None:
+    """자유서술 + 품질 상위 후보 → LLM 선택. 후보 재료는 전부 시드·캐시에 있는 사실만."""
+    wish_text = (wish or "").strip()
+    if not wish_text or summarizer is None or not scored:
+        return None
+    ranked = sorted(scored, key=lambda s: _quality_key(s, personalized))[: course_picker.CANDIDATE_LIMIT]
+    pre = spot_detail_service._pregenerated_summaries()  # 배치 사전 생성 요약(있는 스팟만)
+    candidates = []
+    for s in ranked:
+        themes = s.spot.themes or {}
+        candidates.append(
+            course_picker.Candidate(
+                id=s.spot.id,
+                name=s.spot.name,
+                category=s.spot.category,
+                tag_labels=tuple(
+                    label for label in (tag_registry.label_for(a, v) for a, v in s.spot.tags) if label
+                ),
+                pet_allowed=themes.get("pet_allowed"),
+                barrier_free=themes.get("barrier_free"),
+                is_hidden_gem=s.spot.is_hidden_gem,
+                congestion_level=s.congestion.level if s.congestion else None,
+                summary=pre.get(str(s.spot.id)),
+            )
+        )
+    timeout = getattr(summarizer, "_course_timeout_sec", None) or settings.course_summary_timeout_sec
+    return await course_picker.pick_course_spots(summarizer, wish_text, candidates, timeout_sec=timeout)

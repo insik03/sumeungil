@@ -68,6 +68,7 @@ async def recommend_course(
             congestion_repo=congestion_repo,
             cache=cache,
             summarizer=summarizer,
+            wish=req.wish,
         )
     except ProfileValidationError as exc:
         logger.warning("프로필 구조 위반 → 400 INVALID_PROFILE: %s", exc)
