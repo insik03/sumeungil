@@ -14,6 +14,7 @@
  * 저장 스키마: sessionStorage 온보딩·localStorage 저장코스와 동일한 네임스페이스·버전 규칙.
  */
 import { API_BASE } from "./api";
+import { clearOnboardingResult } from "./onboardingStorage";
 
 const NICKNAME_KEY = "sumeungil:nickname:v1";
 
@@ -53,6 +54,9 @@ export function setLoggedInName(name: string): void {
  *  (실패해도 로컬 상태는 이미 지워졌으니 화면은 정상 — fire-and-forget). */
 export function logout(): void {
   if (!isBrowser()) return;
+  // 2026-09-05 리뷰 P1 — 온보딩 결과(자유서술 원문 포함)는 이 계정의 것이라 같이 지운다. 안 지우면
+  // 같은 탭에서 다른 계정으로 로그인했을 때 이전 사용자의 여행 문장이 새 계정의 코스 요청(wish)에 실린다.
+  clearOnboardingResult();
   try {
     window.localStorage.removeItem(NICKNAME_KEY);
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
@@ -84,7 +88,8 @@ export async function syncSessionFromServer(): Promise<void> {
       if (data.name !== cached) setLoggedInName(data.name);
     } else if (!data.authenticated && cached) {
       // 서버는 비로그인인데 로컬엔 이름이 남아있다 — 세션 만료 등. 조용히 로컬만 정리
-      // (서버 쿠키는 이미 없으니 /logout 호출은 불필요).
+      // (서버 쿠키는 이미 없으니 /logout 호출은 불필요). 온보딩 결과도 같이(리뷰 P1).
+      clearOnboardingResult();
       window.localStorage.removeItem(NICKNAME_KEY);
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
     }
@@ -100,6 +105,7 @@ export async function syncSessionFromServer(): Promise<void> {
  *  서버 삭제가 실제로 끝난 뒤에 취소를 완료로 쳐야 한다. */
 export async function deleteAccount(): Promise<void> {
   if (!isBrowser()) return;
+  clearOnboardingResult(); // 리뷰 P1 — 탈퇴한 계정의 자유서술이 다음 계정에 섞이지 않게
   try {
     window.localStorage.removeItem(NICKNAME_KEY);
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
