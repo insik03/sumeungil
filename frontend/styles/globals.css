@@ -1243,7 +1243,7 @@ input:focus-visible,
    라벨은 아래 nowrap+ellipsis 로 이미 한 줄 고정이라 줄 수 편차로 높이가 갈리지 않는다). */
 .quick-menu__grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 2026-09-05 출발일 플래너 제거 → 8칸: 4×2 / 데스크톱 8×1 */
+  grid-template-columns: repeat(3, 1fr); /* 2026-09-05 출발일 플래너 제거 → 9칸: 3×3 / 데스크톱 9×1 */
   gap: var(--sp-3) 2px;
 }
 .quick-menu__item {
@@ -1319,7 +1319,7 @@ input:focus-visible,
 @media (min-width: 640px) {
   /* §38 — 8→10 타일. 넓은 화면에서는 한 줄에 10개를 그대로 편다(기존 8열 규칙의 연장). */
   .quick-menu__grid {
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(9, 1fr);
   }
 }
 @media (min-width: 1024px) {
