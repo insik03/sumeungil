@@ -33,6 +33,8 @@ logger = logging.getLogger("sumeungil.ai.course_picker")
 # LLM 에 보여 줄 후보 상한 — 품질 상위(저혼잡·숨은·취향 점수)로 잘라서 넘긴다. 40곳 × ~120자 ≈ 5k자.
 CANDIDATE_LIMIT = 30  # 2026-09-05 프로브: 40곳이면 15s 타임아웃에 걸릴 수 있어 30으로
 PICK_MIN, PICK_MAX = 2, 5
+# 리뷰 P2(2026-09-05): 프롬프트의 "반드시 4~5곳"을 파서도 보장한다 — 후보가 이만큼 있으면 이 미만은 폴백.
+PICK_TARGET_MIN = 4
 SLOT_LABEL_MAX, REASON_MAX = 10, 60
 SUMMARY_MAX = 90  # 후보 한 곳당 소개 요약 절단(토큰 절약)
 
@@ -147,8 +149,13 @@ def build_user_prompt(wish: str, candidates: list[Candidate]) -> str:
     return f"<user_wish>\n{sanitized}\n</user_wish>\n\n<candidates>\n{lines}\n</candidates>"
 
 
-def parse_result(content: str | None, allowed_ids: set[int]) -> PickResult | None:
-    """LLM 출력 → 후보 id 화이트리스트 재검증. 실패·부족은 None."""
+def required_picks(candidate_count: int) -> int:
+    """후보가 PICK_TARGET_MIN(4) 이상이면 4곳, 그보다 적으면 PICK_MIN(2)곳을 요구한다."""
+    return PICK_TARGET_MIN if candidate_count >= PICK_TARGET_MIN else PICK_MIN
+
+
+def parse_result(content: str | None, allowed_ids: set[int], min_picks: int = PICK_MIN) -> PickResult | None:
+    """LLM 출력 → 후보 id 화이트리스트 재검증. 실패·부족(min_picks 미만)은 None."""
     if not content:
         return None
     try:
@@ -181,8 +188,8 @@ def parse_result(content: str | None, allowed_ids: set[int]) -> PickResult | Non
         )
         if len(picks) >= PICK_MAX:
             break
-    if len(picks) < PICK_MIN:
-        logger.info("코스 선택기: 유효 선택 %d곳(<%d) — 슬롯 휴리스틱으로 폴백", len(picks), PICK_MIN)
+    if len(picks) < min_picks:
+        logger.info("코스 선택기: 유효 선택 %d곳(<%d) — 슬롯 휴리스틱으로 폴백", len(picks), min_picks)
         return None
     note = raw.get("note")
     return PickResult(picks=picks, note=_one_line(note, 120) or None)
@@ -209,8 +216,8 @@ async def pick_course_spots(
         "course_pick",
         response_schema(),
     )
-    return parse_result(content, {c.id for c in candidates})
+    return parse_result(content, {c.id for c in candidates}, min_picks=required_picks(len(candidates)))
 
 
 __all__ = ("Candidate", "Pick", "PickResult", "pick_course_spots", "build_user_prompt", "parse_result",
-           "CANDIDATE_LIMIT", "PICK_MIN", "PICK_MAX")
+           "required_picks", "CANDIDATE_LIMIT", "PICK_MIN", "PICK_MAX", "PICK_TARGET_MIN")
