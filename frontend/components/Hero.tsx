@@ -185,14 +185,19 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
   // 부드럽게 도착한 뒤에는 애니메이션 없이 실제 장으로 점프한다 — 사용자 눈엔 끊김 없이 계속
   // 앞으로 도는 것으로 보인다. 점(dots)은 항상 실제 인덱스((activeIndex+n)%n)로 표시한다.
   const looped = slides.length > 1;
-  const trackChildIndex = (logical: number) => (looped ? logical + 1 : logical);
+  // 2026-09-05 대표 3차 지적("6→1이 여전히 어색") — 실측 원인: 복제를 한 장씩만 붙이면 끝 복제가
+  // 트랙의 **맨 끝 자식**이라 가운데로 스크롤할 수 없다(필요 위치 5044px > 최대 4842px). 브라우저가
+  // 끝에서 멈춘 뒤 실제 1장으로 점프하니 카드가 200px 옆으로 튀었다(1→6 역방향도 같은 이유).
+  // 양쪽에 **두 장씩** 복제해 끝 복제 뒤에도 카드 한 장 분량의 공간을 두면 항상 가운데에 도착한다.
+  const CLONES = 2;
+  const trackChildIndex = (logical: number) => (looped ? logical + CLONES : logical);
   // 슬라이드가 새로 들어오면 트랙의 첫 자식은 "마지막 장 복제"라, 애니메이션 없이 실제 첫 장으로
   // 맞춰 둔다(안 하면 첫 화면이 마지막 장으로 보인다). activeIndex 는 이미 0 이라 아래 effect 가
   // 다시 돌지 않으므로 여기서 직접 한다.
   useEffect(() => {
     if (!looped) return;
     const track = trackRef.current;
-    const card = track?.children[1] as HTMLElement | undefined;
+    const card = track?.children[CLONES] as HTMLElement | undefined;
     if (!track || !card) return;
     const trackRect = track.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
@@ -220,7 +225,13 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
     programmaticScrollRef.current = true;
     window.clearTimeout(programmaticTimerRef.current);
     const settleMs = prefersReducedMotion() ? 120 : 800;
-    programmaticTimerRef.current = window.setTimeout(() => {
+    const track = trackRef.current;
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(programmaticTimerRef.current);
+      track?.removeEventListener("scrollend", settle);
       const n = slides.length;
       if (looped && (activeIndex >= n || activeIndex < 0)) {
         // 복제 장에 도착 — 같은 그림의 실제 장으로 소리 없이 점프한 뒤 인덱스를 정규화.
@@ -237,8 +248,14 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
         return;
       }
       programmaticScrollRef.current = false;
-    }, settleMs);
-    return () => window.clearTimeout(programmaticTimerRef.current);
+    };
+    // scrollend 는 도착 즉시(Chrome 114+/Firefox 109+/Safari 18.4+), 타이머는 미지원 브라우저 폴백.
+    track?.addEventListener("scrollend", settle, { once: true });
+    programmaticTimerRef.current = window.setTimeout(settle, settleMs);
+    return () => {
+      window.clearTimeout(programmaticTimerRef.current);
+      track?.removeEventListener("scrollend", settle);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex]);
 
@@ -263,7 +280,7 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
           closest = i;
         }
       });
-      const logical = looped ? closest - 1 : closest;
+      const logical = looped ? closest - CLONES : closest;
       setActiveIndex((prev) => (prev === logical ? prev : logical));
     });
   };
@@ -501,10 +518,10 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
           )}
 
           {slidesStatus !== "loading" &&
-            (looped ? [slides[slides.length - 1], ...slides, slides[0]] : slides).map((spot, idx, arr) => {
+            (looped ? [...slides.slice(-CLONES), ...slides, ...slides.slice(0, CLONES)] : slides).map((spot, idx, arr) => {
               const hasPhoto = !!spot.image_url;
-              // 첫/마지막 원소는 순환용 복제 — 화면엔 보이지만 접근성 트리·탭 순서에서는 뺀다.
-              const isClone = looped && (idx === 0 || idx === arr.length - 1);
+              // 양끝 CLONES 장은 순환용 복제 — 화면엔 보이지만 접근성 트리·탭 순서에서는 뺀다.
+              const isClone = looped && (idx < CLONES || idx >= arr.length - CLONES);
               return (
                 <Link
                   key={isClone ? `clone-${idx}-${spot.id}` : spot.id}
