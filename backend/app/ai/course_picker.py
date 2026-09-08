@@ -100,6 +100,7 @@ class Candidate:
     category: str
     tag_labels: tuple[str, ...] = ()
     pet_allowed: bool | None = None
+    pet_note: str | None = None
     barrier_free: bool | None = None
     is_hidden_gem: bool = False
     congestion_level: str | None = None
@@ -130,7 +131,7 @@ def _describe(c: Candidate) -> str:
     if c.tag_labels:
         parts.append("태그: " + ", ".join(c.tag_labels))
     if c.pet_allowed:
-        parts.append("반려동물 가능")
+        parts.append("반려동물 가능" + (f"({_one_line(c.pet_note, 40)})" if c.pet_note else ""))
     if c.barrier_free:
         parts.append("무장애")
     if c.is_hidden_gem:

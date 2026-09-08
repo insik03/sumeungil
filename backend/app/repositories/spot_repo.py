@@ -46,6 +46,8 @@ class SpotRecord:
     image_url: str | None = None
     image_resolved: bool = False        # 시드에 image_url 판정값이 실려 있는가
     cpyrht_div_cd: str | None = None    # 원천 저작권 구분 코드 원본(Type1/Type3…). 해석하지 않음
+    # 2026-09-07 — 반려동물 동반 조건 한 줄(detailPetTour2: 동반 유형·견종·준비물). 코스 선택기 근거용.
+    pet_note: str | None = None
 
 
 def _valid_tags(tag_values: list) -> list[tuple[str, str]]:
@@ -143,6 +145,7 @@ class JsonSpotRepository(SpotRepository):
                     image_url=raw.get("image_url") or None,
                     image_resolved="image_url" in raw,
                     cpyrht_div_cd=raw.get("cpyrht_div_cd") or None,
+                    pet_note=raw.get("pet_note") or None,
                 )
             except (KeyError, TypeError, ValueError) as exc:
                 logger.warning("스팟 레코드 스킵(파싱 오류): %s", exc)

@@ -302,6 +302,7 @@ async def _pick_with_llm(
                     label for label in (tag_registry.label_for(a, v) for a, v in s.spot.tags) if label
                 ),
                 pet_allowed=themes.get("pet_allowed"),
+                pet_note=getattr(s.spot, "pet_note", None),
                 barrier_free=themes.get("barrier_free"),
                 is_hidden_gem=s.spot.is_hidden_gem,
                 congestion_level=s.congestion.level if s.congestion else None,
