@@ -99,6 +99,7 @@ interface HeroProps {
    * 다른 호출자가 없어 기본값은 true(즉시 요청).
    */
   regionResolved?: boolean;
+  children?: React.ReactNode;
 }
 
 /**
@@ -112,7 +113,7 @@ interface HeroProps {
  * 이 로직을 감싸는 마크업(부킹형 큰 카드 → 컴팩트 인라인 바)뿐이다. 빠른 추천 칩은 §30에서
  * 4→17개로 확장하며 사전조회(prefetch) 방식을 버렸다(위 sidoToRegionItem 주석 참고).
  */
-export default function Hero({ selectedRegion, onSelectRegion, regionResolved = true }: HeroProps) {
+export default function Hero({ selectedRegion, onSelectRegion, regionResolved = true, children }: HeroProps) {
   const [value, setValue] = useState("");
 
   // ---- 캐러셀 슬라이드 ----
@@ -299,6 +300,7 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
     "idle"
   );
   const [searchResults, setSearchResults] = useState<RegionSearchItem[]>([]);
+  const [activeResult, setActiveResult] = useState(-1);
   const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -340,6 +342,7 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
 
   const selectRegion = (region: RegionSearchItem, label: string) => {
     setValue(label);
+    setActiveResult(-1);
     setDropdownOpen(false);
     onSelectRegion(region);
   };
@@ -363,8 +366,8 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
   const inputRef = useRef<HTMLInputElement>(null);
 
   const status = selectedRegion
-    ? `${selectedRegion.label} 전광판을 보고 있어요`
-    : value
+    ? `${selectedRegion.label} 기준으로 여행지를 보여드려요`
+    : searchStatus === "loading" && dropdownOpen
     ? `"${value}" 검색 중`
     : "";
 
@@ -408,12 +411,34 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
             role="combobox"
             aria-expanded={dropdownOpen}
             aria-autocomplete="list"
-            aria-controls="destSearchListbox"
+            aria-controls={dropdownOpen && value.trim() ? "destSearchListbox" : undefined}
+            aria-activedescendant={dropdownOpen && searchStatus === "success" && activeResult >= 0 ? `dest-result-${activeResult}` : undefined}
             autoComplete="off"
             value={value}
             onChange={(e) => {
               setValue(e.target.value);
+              setActiveResult(-1);
+              setSearchResults([]);
+              setSearchStatus("loading");
               setDropdownOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setDropdownOpen(false);
+                setActiveResult(-1);
+              } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && searchStatus === "success" && searchResults.length) {
+                e.preventDefault();
+                setDropdownOpen(true);
+                const next = e.key === "ArrowDown"
+                  ? (activeResult + 1) % searchResults.length
+                  : (activeResult <= 0 ? searchResults.length - 1 : activeResult - 1);
+                setActiveResult(next);
+                document.getElementById(`dest-result-${next}`)?.scrollIntoView({ block: "nearest" });
+              } else if (e.key === "Enter" && dropdownOpen && activeResult >= 0 && searchResults[activeResult]) {
+                e.preventDefault();
+                const item = searchResults[activeResult];
+                selectRegion(item, item.label);
+              }
             }}
             onFocus={() => {
               if (value.trim().length > 0) setDropdownOpen(true);
@@ -452,10 +477,11 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
               </li>
             )}
             {searchStatus === "success" &&
-              searchResults.map((item) => (
-                <li key={item.region_id} role="option" aria-selected="false">
+              searchResults.map((item, index) => (
+                <li key={item.region_id} id={`dest-result-${index}`} role="option" aria-selected={activeResult === index}>
                   <button
                     type="button"
+                    tabIndex={-1}
                     className="dest-search__dropdown-item"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => selectRegion(item, item.label)}
@@ -496,6 +522,8 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
           {status}
         </div>
       </div>
+
+      {children}
 
       {/* §24 — 구석구석 히어로 문법: 컨테인드 라운드 사진 카드 캐러셀(풀블리드 아님).
           가운데 큰 카드 + 양옆 이웃 카드가 살짝 보이도록 트랙 좌우 여백을 남기고

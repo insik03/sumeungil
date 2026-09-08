@@ -8,7 +8,7 @@ import Footer from "../components/Footer";
  */
 export default function HomePage() {
   return (
-    <div className="page">
+    <div className="page page--home">
       <main>
         <HomeContent />
       </main>

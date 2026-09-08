@@ -2,6 +2,7 @@
    대상 웹폰트 실로딩. 03-design-spec.md "ui-ux-pro-max 적용 내역" 참고. */
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap");
 @import "./tokens.css";
+@import "./home-refinements.css";
 
 @tailwind base;
 @tailwind components;
@@ -144,6 +145,8 @@ input:focus-visible,
 }
 .gnb__logo {
   display: flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   gap: 6px;
   font-size: var(--text-lg);
@@ -280,6 +283,11 @@ input:focus-visible,
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+}
+@media (max-width: 359px) {
+  .gnb__actions > .btn--mint { display: none; }
+  .gnb__greeting { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+  .gnb__actions { gap: 2px; }
 }
 .gnb__greeting {
   font-size: var(--text-sm);
@@ -524,10 +532,10 @@ input:focus-visible,
   display: none;
   flex-direction: column;
   padding: var(--sp-4);
-  /* §22 — 네이비 그라디언트(정보색)를 잉크→딥그린(브랜드 포인트)으로. 전체화면 오버레이라
-     톤이 사이트 전역과 어긋나면 가장 눈에 띄는 자리라 함께 바꿨다. */
-  background: linear-gradient(165deg, var(--ink) 0%, var(--g-700) 55%, var(--g-600) 100%);
-  color: var(--white);
+  /* 2026-09-07 대표 지시 "흰색 바탕에 검정색 글씨로" — §22의 잉크→딥그린 그라디언트를 걷어내고
+     본문과 같은 흰 바탕·잉크 글씨. 강조색만 브랜드 그린으로 남긴다. */
+  background: var(--white);
+  color: var(--ink);
 }
 .mobile-nav.is-open {
   display: flex;
@@ -542,7 +550,7 @@ input:focus-visible,
   height: var(--touch-min);
   background: none;
   border: none;
-  color: var(--white);
+  color: var(--ink);
   font-size: 26px;
 }
 .mobile-nav__list {
@@ -558,17 +566,17 @@ input:focus-visible,
   font-size: var(--text-2xl);
   font-weight: 900;
   letter-spacing: -0.02em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(5, 14, 27, 0.1);
 }
 .mobile-nav__list a.is-active,
 .mobile-nav__list a.mobile-nav__group-top.is-active,
 .mobile-nav__list a.mobile-nav__group-child.is-active {
-  color: var(--g-400); /* 어두운 배경 위 강조 텍스트 전용 토큰(tokens.css) 재사용 */
+  color: var(--g-500); /* 흰 배경 위 강조 — 브랜드 그린 */
 }
 /* §39 — 드롭다운이 있는 상단 항목(여행지 추천/AI 여행 경로/혼잡도·시기)은 터치 기기에서
    hover가 없으므로 아코디언 대신 "그룹 제목 + 하위 링크"를 처음부터 펼쳐서 보여준다. */
 .mobile-nav__group {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(5, 14, 27, 0.1);
 }
 .mobile-nav__list a.mobile-nav__group-top {
   border-bottom: none;
@@ -584,11 +592,15 @@ input:focus-visible,
   font-size: var(--text-base);
   font-weight: 700;
   letter-spacing: normal;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--ink-muted);
   border-bottom: none;
 }
 .mobile-nav__cta {
   margin-top: var(--sp-8);
+  /* 2026-09-07 대표 "로그인이랑 시작하기 칸이 붙어 있는 느낌" — 버튼 사이 간격을 명시한다. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
 }
 
 @media (min-width: 1024px) {
