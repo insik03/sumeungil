@@ -292,7 +292,7 @@ export default function Header() {
 
       <div className={`mobile-nav${navOpen ? " is-open" : ""}`}>
         <div className="mobile-nav__top">
-          <div className="gnb__logo" style={{ color: "#fff" }}>
+          <div className="gnb__logo">
             <BrandMark />
             <span>숨은길</span>
           </div>
@@ -358,7 +358,7 @@ export default function Header() {
           {nickname ? (
             <>
               <Link
-                className="btn btn--white btn--block btn--lg"
+                className="btn btn--outline btn--block btn--lg"
                 href="/mypage"
                 onClick={() => setNavOpen(false)}
               >
@@ -377,7 +377,7 @@ export default function Header() {
             </>
           ) : (
             <button
-              className="btn btn--white btn--block btn--lg"
+              className="btn btn--outline btn--block btn--lg"
               type="button"
               onClick={() => {
                 setNavOpen(false);
