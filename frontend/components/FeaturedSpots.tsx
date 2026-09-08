@@ -209,6 +209,7 @@ interface FeaturedSpotsProps {
  */
 export default function FeaturedSpots({ regionCode, diverse }: FeaturedSpotsProps) {
   const [status, setStatus] = useState<FetchStatus>("loading");
+  const [retryCount, setRetryCount] = useState(0);
   const [data, setData] = useState<FeaturedResponse | null>(null);
   // §41(신규) — 두 섹션(trending/hidden_picks)을 합쳐 reviews/summary를 1회만 호출한다
   // (지시서: "카드 목록은 반드시 이걸로 일괄 조회 — 카드마다 개별 호출 금지").
@@ -234,9 +235,20 @@ export default function FeaturedSpots({ regionCode, diverse }: FeaturedSpotsProp
         setStatus("error");
       });
     return () => controller.abort();
-  }, [regionCode, diverse]);
+  }, [regionCode, diverse, retryCount]);
 
-  if (status === "error") return null;
+  if (status === "error") return (
+    <section className="section featured-section featured-section--error" aria-label="여행지 추천 안내">
+      <div role="status">
+        <h2 className="section__title">여행지를 불러오지 못했어요</h2>
+        <p>잠시 후 다시 시도해주세요. 지역별 여행에서도 여행지를 둘러볼 수 있어요.</p>
+      </div>
+      <div className="featured-section__actions">
+        <button className="btn btn--mint" type="button" onClick={() => setRetryCount((count) => count + 1)}>다시 불러오기</button>
+        <Link href="/regions">지역별 여행 보기 →</Link>
+      </div>
+    </section>
+  );
 
   return (
     <>
