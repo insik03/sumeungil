@@ -35,6 +35,7 @@ from pathlib import Path
 import httpx
 
 from ..clients.tourapi_client import (
+    fetch_service_page,
     TourApiError,
     TourApiQuotaError,
     fetch_area_based_list,
@@ -784,6 +785,115 @@ async def backfill_images(budget_limit: int, resume: bool = True) -> dict:
     return store
 
 
+# 반려동물·무장애 목록은 전국 1만 건 안팎이라 페이지 크기를 크게 잡아 콜 수를 아낀다(실측: 각 ~9.7k 건).
+ACCESS_NUM_OF_ROWS = 1000
+ACCESS_MAX_PAGES = 30
+PET_NOTE_MAX = 80
+
+
+def _pet_note(raw: dict) -> str | None:
+    """detailPetTour2 한 건 → 코스 선택기/화면용 한 줄 ("전구역 동반가능 · 전 견종 · 목줄 착용")."""
+    parts = [str(raw.get(k, "")).strip() for k in ("acmpyTypeCd", "acmpyPsblCpam", "acmpyNeedMtr")]
+    note = " · ".join(p for p in parts if p)
+    return note[:PET_NOTE_MAX] or None
+
+
+async def _fetch_all(service_path: str, extra: dict, budget: "_Budget", client: httpx.AsyncClient) -> list[dict]:
+    """목록 오퍼레이션 전 페이지 수집. 쿼터/예산 소진 시 그때까지 모은 것만 반환(부분 보강 허용)."""
+    out: list[dict] = []
+    page = 1
+    while page <= ACCESS_MAX_PAGES and budget.can_spend(1):
+        budget.spend(1)
+        items, total = await fetch_service_page(
+            service_path, extra, num_of_rows=ACCESS_NUM_OF_ROWS, page_no=page, client=client,
+        )
+        out.extend(items)
+        if not items or len(out) >= total:
+            break
+        page += 1
+    return out
+
+
+async def enrich_access(budget_limit: int) -> dict:
+    """기존 시드의 `themes.pet_allowed` / `themes.barrier_free` 를 관광공사 데이터로 채운다 (2026-09-07).
+
+    대표 지적: 두 필드가 시드 21k 전부 null 이라 "반려동물 동반"·"휠체어" 태그 필터가 아무것도
+    못 걸렀다. 원천:
+      - 반려동물: `KorService2/detailPetTour2` (contentId 없이 호출하면 반려동물 동반 가능 관광지
+        전체 목록, 실측 9,691건) → 매칭된 스팟 pet_allowed=True + pet_note(동반 유형·견종·준비물)
+      - 무장애: `KorWithService2/areaBasedList2` (열린관광지 목록, 실측 9,664건) → barrier_free=True
+    목록에 없는 스팟은 **None 그대로**(불가로 단정하지 않는다 — 원천이 "없음"을 주지 않으므로).
+    스팟 추가/삭제 없음, 다른 필드 불변. 콜 수는 페이지 1000건 기준 각 ~10회.
+    """
+    store = _load_existing()
+    spots: list[dict] = store.get("spots", [])
+    by_id: dict[int, dict] = {}
+    for s in spots:
+        try:
+            by_id[int(s["id"])] = s
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    budget = _Budget(budget_limit)
+    stopped_reason = ""
+    pet_items: list[dict] = []
+    with_items: list[dict] = []
+    async with httpx.AsyncClient(timeout=settings.upstream_timeout_sec) as client:
+        try:
+            pet_items = await _fetch_all("KorService2/detailPetTour2", {}, budget, client)
+            with_items = await _fetch_all("KorWithService2/areaBasedList2", {"arrange": "A"}, budget, client)
+        except TourApiQuotaError as exc:
+            logger.warning("원천 일일 쿼터 초과 — 접근성 보강 부분 중단: %s", exc)
+            stopped_reason = "quota"
+        except TourApiError as exc:
+            logger.warning("접근성 보강 원천 오류 — 부분 중단: %s", exc)
+            stopped_reason = "error"
+
+    pet_filled = with_filled = 0
+    for raw in pet_items:
+        cid = str(raw.get("contentid", "")).strip()
+        spot = by_id.get(int(cid)) if cid.isdigit() else None
+        if spot is None:
+            continue
+        themes = spot.setdefault("themes", {"pet_allowed": None, "barrier_free": None, "wellness": None})
+        if themes.get("pet_allowed") is not True:
+            pet_filled += 1
+        themes["pet_allowed"] = True
+        note = _pet_note(raw)
+        if note:
+            spot["pet_note"] = note
+    for raw in with_items:
+        cid = str(raw.get("contentid", "")).strip()
+        spot = by_id.get(int(cid)) if cid.isdigit() else None
+        if spot is None:
+            continue
+        themes = spot.setdefault("themes", {"pet_allowed": None, "barrier_free": None, "wellness": None})
+        if themes.get("barrier_free") is not True:
+            with_filled += 1
+        themes["barrier_free"] = True
+
+    pet_total = sum(1 for s in spots if (s.get("themes") or {}).get("pet_allowed") is True)
+    with_total = sum(1 for s in spots if (s.get("themes") or {}).get("barrier_free") is True)
+    store["access_enrich_stats"] = {
+        "ran_at": to_iso_kst(datetime.now(KST)),
+        "calls_used": budget.used,
+        "pet_source_items": len(pet_items),
+        "with_source_items": len(with_items),
+        "pet_filled_now": pet_filled,
+        "barrier_free_filled_now": with_filled,
+        "spots_pet_allowed": pet_total,
+        "spots_barrier_free": with_total,
+        "spots_total": len(spots),
+        "stopped_reason": stopped_reason or "completed",
+    }
+    logger.info(
+        "접근성 보강: 콜 %d, 원천 반려동물 %d건·무장애 %d건 → 시드 매칭 반려동물 %d곳(신규 %d)·무장애 %d곳(신규 %d) / 전체 %d. 종료사유=%s",
+        budget.used, len(pet_items), len(with_items), pet_total, pet_filled, with_total, with_filled,
+        len(spots), stopped_reason or "completed",
+    )
+    return store
+
+
 async def collect_area(area_code: str, budget_limit: int, resume: bool = False) -> dict:
     """특정 TourAPI area 만 additive 스윕(세종 보강 등). 기존 시드/지역 전부 보존."""
     code = str(area_code).strip()
@@ -818,13 +928,18 @@ def main() -> None:
                              " — 스팟 추가/삭제 없음. --no-resume 로 전체 재보강")
     parser.add_argument("--no-resume", action="store_true",
                         help="--backfill-images 에서 이미 보강한 지역도 다시 훑는다")
+    parser.add_argument("--enrich-access", action="store_true",
+                        help="기존 시드의 반려동물(pet_allowed)·무장애(barrier_free) 를 관광공사 목록으로 채운다"
+                             " — 스팟 추가/삭제 없음, 콜 ~20회")
     parser.add_argument("--prune-bad-geo", action="store_true",
                         help="API 호출 없이 한국 bbox 밖 좌표 스팟(원천 좌표 오류)을 시드에서 제거")
     args = parser.parse_args()
 
     _configure_logging()
 
-    if args.backfill_images:
+    if args.enrich_access:
+        store = asyncio.run(enrich_access(args.budget))
+    elif args.backfill_images:
         store = asyncio.run(backfill_images(args.budget, resume=not args.no_resume))
     elif args.canonicalize:
         store = _load_existing()
@@ -863,6 +978,11 @@ def main() -> None:
 
     total = len(store["spots"])
     print(f"[collector] 총 {total}개 스팟 적재 → {SEED_PATH}")
+    if args.enrich_access:
+        es = store.get("access_enrich_stats", {})
+        print(f"  접근성 보강: 콜 {es.get('calls_used')}, 반려동물 {es.get('spots_pet_allowed')}곳"
+              f"(신규 {es.get('pet_filled_now')}), 무장애 {es.get('spots_barrier_free')}곳"
+              f"(신규 {es.get('barrier_free_filled_now')}) / {es.get('spots_total')} / {es.get('stopped_reason')}")
     if args.backfill_images:
         bs = store.get("image_backfill_stats", {})
         print(f"  이미지 보강: 콜 {bs.get('calls_used')}/{bs.get('budget')}, "

@@ -127,6 +127,60 @@ async def fetch_area_based_page(
     return _parse_page(data)
 
 
+async def fetch_service_page(
+    service_path: str,
+    extra_params: dict | None = None,
+    num_of_rows: int = 1000,
+    page_no: int = 1,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[list[dict], int]:
+    """B551011 하위 임의 서비스/오퍼레이션 한 페이지 → (item 리스트, totalCount).
+
+    2026-09-07 반려동물(`KorService2/detailPetTour2`, contentId 생략 시 전체 목록)·무장애
+    (`KorWithService2/areaBasedList2`) 목록 수집용. 오류·쿼터 판정은 areaBasedList2 와 동일 규칙.
+    serviceKey 는 params 로만 전달하고 로그에 남기지 않는다.
+    """
+    params = {
+        "serviceKey": settings.public_data_api_key,  # 로그 금지
+        "MobileOS": "ETC",
+        "MobileApp": "Sumeungil",
+        "_type": "json",
+        "numOfRows": str(num_of_rows),
+        "pageNo": str(page_no),
+        **(extra_params or {}),
+    }
+    url = f"https://apis.data.go.kr/B551011/{service_path}"
+
+    async def _do(c: httpx.AsyncClient) -> httpx.Response:
+        return await c.get(url, params=params)
+
+    try:
+        if client is not None:
+            resp = await _do(client)
+        else:
+            async with httpx.AsyncClient(timeout=settings.upstream_timeout_sec) as c:
+                resp = await _do(c)
+    except httpx.HTTPError as exc:
+        logger.warning("TourAPI 호출 실패(%s p=%d): %s", service_path, page_no, exc)
+        raise TourApiError(f"upstream request failed: {exc}") from exc
+    if resp.status_code == 429:
+        logger.warning("TourAPI 일일 쿼터 초과(429) %s", service_path)
+        raise TourApiQuotaError("upstream daily quota exceeded (HTTP 429)")
+    if resp.status_code != 200:
+        logger.warning("TourAPI 비정상 상태코드 %s (%s)", resp.status_code, service_path)
+        raise TourApiError(f"upstream status {resp.status_code}")
+    body_text = resp.text
+    for sign in _QUOTA_SIGNS:
+        if sign in body_text:
+            raise TourApiQuotaError(f"upstream quota/access error: {sign}")
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        logger.warning("TourAPI 응답 JSON 파싱 실패: %s", _redact(body_text[:200]))
+        raise TourApiError("upstream returned non-JSON body") from exc
+    return _parse_page(data)
+
+
 async def fetch_area_based_list(
     area_code: str,
     sigungu_code: str,

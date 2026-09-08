@@ -52,7 +52,7 @@ CANDS = [
                             summary="창가에서 비 구경하기 좋은 카페"),
     course_picker.Candidate(id=2, name="실내 공방", category="craft", is_hidden_gem=True),
     course_picker.Candidate(id=3, name="시장 국밥", category="restaurant", congestion_level="mid"),
-    course_picker.Candidate(id=4, name="해안 산책로", category="trail", pet_allowed=True),
+    course_picker.Candidate(id=4, name="해안 산책로", category="trail", pet_allowed=True, pet_note="전구역 동반가능 · 전 견종 · 목줄 착용"),
 ]
 ALLOWED = {c.id for c in CANDS}
 
@@ -101,6 +101,7 @@ check("대역 호출(후보 3곳) → 2곳 선택", out is not None and [p.id fo
 check("<user_wish> 델리미터", stub.last_user is not None and "<user_wish>" in stub.last_user and "</user_wish>" in stub.last_user)
 check("전화번호 마스킹", stub.last_user is not None and "010-1234-5678" not in stub.last_user and PII_MASK in stub.last_user)
 check("후보 목록에 id·소개 포함", stub.last_user is not None and "id=1" in stub.last_user and "창가에서 비 구경" in stub.last_user)
+check("반려동물 조건이 후보 설명에 실림", "반려동물 가능(전구역 동반가능" in course_picker.build_user_prompt("비", CANDS))
 check("JSON 스키마 전달", stub.last_schema is not None and "picks" in stub.last_schema["properties"])
 
 print("=== 4. 비활성·빈 입력 ===")
