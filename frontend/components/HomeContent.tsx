@@ -143,13 +143,14 @@ export default function HomeContent() {
         </div>
       )}
       <HeroGreeting />
-      <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} regionResolved={regionResolved} />
+      <Hero selectedRegion={selectedRegion} onSelectRegion={handleSelectRegion} regionResolved={regionResolved}>
+        <ServiceQuickMenu regionCode={regionCode} />
+      </Hero>
       {/* 2026-08-29(대표 지시) — 지역 지도(RegionMapSection)를 홈에서 뺐다. 히어로 옆(1차) →
           히어로 밖 독립 섹션(2차)을 거쳐 결국 "홈에는 없어도 된다"로 정리 — /course(로그인
           후)에만 남는다(CourseContent.tsx). 컴포넌트 자체는 지우지 않았다, 거기서 재사용 중. */}
       {regionResolved && (
         <>
-          <ServiceQuickMenu regionCode={regionCode} />
           <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />
           {/* 부록 U.3(2026-08-01, 대표 지시) — 예상 혼잡 전광판은 congestion 화면으로 옮겼다.
               그 화면이 전국 지도 아래에 같은 전광판을 두므로, 홈에 남겨두면 두 번 나온다. */}

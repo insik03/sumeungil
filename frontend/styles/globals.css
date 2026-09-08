@@ -2,6 +2,7 @@
    대상 웹폰트 실로딩. 03-design-spec.md "ui-ux-pro-max 적용 내역" 참고. */
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap");
 @import "./tokens.css";
+@import "./home-refinements.css";
 
 @tailwind base;
 @tailwind components;
@@ -144,6 +145,8 @@ input:focus-visible,
 }
 .gnb__logo {
   display: flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   gap: 6px;
   font-size: var(--text-lg);
@@ -280,6 +283,11 @@ input:focus-visible,
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+}
+@media (max-width: 359px) {
+  .gnb__actions > .btn--mint { display: none; }
+  .gnb__greeting { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+  .gnb__actions { gap: 2px; }
 }
 .gnb__greeting {
   font-size: var(--text-sm);

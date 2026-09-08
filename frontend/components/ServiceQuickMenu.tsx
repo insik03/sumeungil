@@ -27,7 +27,7 @@ interface QuickMenuItem {
 }
 
 /**
- * 홈의 10개 핵심 기능을 서로 다른 실제 화면으로 연결한다.
+ * 홈의 9개 핵심 기능을 서로 다른 실제 화면으로 연결한다.
  * 아이콘은 여행 안내소의 픽토그램처럼 목적지를 즉시 연상할 수 있는 상징으로 통일했다.
  */
 const QUICK_MENU_ITEMS: QuickMenuItem[] = [
@@ -67,13 +67,14 @@ function useQuickMenuEnterAnimation(gridRef: React.RefObject<HTMLUListElement>) 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const items = gridRef.current?.querySelectorAll("li");
     if (!items || items.length === 0) return;
-    animate(items, {
+    const animation = animate(items, {
       opacity: [0, 1],
       translateY: [12, 0],
       delay: stagger(35),
       duration: 420,
       ease: "outQuad",
     });
+    return () => { animation.revert(); };
   }, [gridRef]);
 }
 
