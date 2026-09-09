@@ -22,11 +22,47 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from collections import deque
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger("sumeungil.ai.gemini")
+
+# --- 한도(429) 관측 (2026-09-07, n8n 감시용) ------------------------------------------
+# 무료 티어 하루 20회 한도(#99)에 걸리면 AI 기능이 조용히 폴백돼 아무도 모른다. 여기서 429 발생
+# 시각을 프로세스 메모리에 남기고 /api/v1/health/llm 이 읽는다 — 외부 감시(n8n)가 폴링해 슬랙으로
+# 알린다. 재시작하면 0 부터 (영속화 불필요: "지금 막혀 있나"만 알면 된다).
+_QUOTA_WINDOW_SEC = 24 * 60 * 60
+_quota_hits: deque[float] = deque()
+_last_success_ts: float | None = None
+
+
+def _record_quota_hit(now: float | None = None) -> None:
+    ts = time.time() if now is None else now
+    _quota_hits.append(ts)
+    while _quota_hits and ts - _quota_hits[0] > _QUOTA_WINDOW_SEC:
+        _quota_hits.popleft()
+
+
+def _record_success(now: float | None = None) -> None:
+    global _last_success_ts
+    _last_success_ts = time.time() if now is None else now
+
+
+def quota_status(now: float | None = None) -> dict[str, Any]:
+    """최근 1시간/24시간 429 횟수와 마지막 429·성공 시각(epoch). 개인정보·키 없음."""
+    ts = time.time() if now is None else now
+    while _quota_hits and ts - _quota_hits[0] > _QUOTA_WINDOW_SEC:
+        _quota_hits.popleft()
+    last_hour = sum(1 for t in _quota_hits if ts - t <= 3600)
+    return {
+        "quota_429_last_hour": last_hour,
+        "quota_429_last_24h": len(_quota_hits),
+        "last_429_ts": _quota_hits[-1] if _quota_hits else None,
+        "last_success_ts": _last_success_ts,
+    }
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -134,9 +170,12 @@ async def chat(
     except httpx.HTTPError as exc:
         raise GeminiError(f"gemini request failed: {type(exc).__name__}") from exc
 
+    if resp.status_code == 429:
+        _record_quota_hit()
     if resp.status_code != 200:
         # 본문에 사용자 입력이 되돌아올 수 있어 상태코드만 남긴다.
         raise GeminiError(f"gemini status {resp.status_code}")
+    _record_success()
 
     try:
         data = resp.json()

@@ -6,13 +6,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 
+from ..ai import gemini_client
 from ..cache.base import Cache
+from ..config import settings
 from ..deps import get_cache, get_congestion_repository
 from ..repositories.congestion_repo import CongestionRepository
 from ..schemas.congestion import HealthChecks, HealthResponse
-from ..util.time import now_kst, to_iso_kst
+from ..util.time import KST, now_kst, to_iso_kst
 
 router = APIRouter(tags=["health"])
 
@@ -49,6 +53,31 @@ async def health_v1(
     repo: CongestionRepository = Depends(get_congestion_repository),
 ):
     return await _build_health(cache, repo)
+
+
+@router.get("/api/v1/health/llm")
+async def health_llm():
+    """LLM 한도 상태 (2026-09-07) — 외부 감시(n8n)가 10분마다 폴링한다.
+
+    Gemini 무료 티어 하루 20회(#99)에 걸리면 온보딩·요약·코스 선택기가 조용히 폴백되므로,
+    최근 1시간 안에 429 가 있으면 `fallback_suspected=true` 로 알린다. 키·개인정보·본문 없음.
+    프로세스 메모리 기반이라 재시작 후엔 0 부터 센다(정직: 재시작 시각도 함께 준다).
+    """
+    q = gemini_client.quota_status()
+
+    def _iso(ts: float | None) -> str | None:
+        return to_iso_kst(datetime.fromtimestamp(ts, tz=KST)) if ts else None
+
+    return {
+        "provider": settings.llm_provider,
+        "model": settings.gemini_model if settings.llm_provider == "gemini" else settings.ollama_model,
+        "quota_429_last_hour": q["quota_429_last_hour"],
+        "quota_429_last_24h": q["quota_429_last_24h"],
+        "last_429_at": _iso(q["last_429_ts"]),
+        "last_success_at": _iso(q["last_success_ts"]),
+        "fallback_suspected": q["quota_429_last_hour"] > 0,
+        "time": to_iso_kst(now_kst()),
+    }
 
 
 @router.get("/health", response_model=HealthResponse)
