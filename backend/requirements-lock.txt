@@ -11,7 +11,7 @@
 # 그래도 사람이 "지금 뭐가 깔리는지" 참고하기 좋으라고 이 파일은 유지·최신화한다.
 annotated-doc==0.0.5
 annotated-types==0.8.0
-anyio==4.14.2
+anyio==4.15.1
 certifi==2026.7.22
 click==8.5.0
 colorama==0.4.6  # Windows 전용(win32) — Linux 배포 이미지엔 없음
