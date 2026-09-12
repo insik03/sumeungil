@@ -42,6 +42,19 @@ def check(name: str, ok: bool, detail: str = "") -> None:
         FAILS.append(name)
 
 
+print("=== 0. 한도(429) 카운터 ===")
+gemini_client._quota_hits.clear()
+base = 1_000_000.0
+gemini_client._record_quota_hit(base - 7200)   # 2시간 전 → 24h 창 안, 1h 창 밖
+gemini_client._record_quota_hit(base - 60)
+gemini_client._record_success(base - 30)
+q = gemini_client.quota_status(now=base)
+check("1시간 1회 / 24시간 2회", q["quota_429_last_hour"] == 1 and q["quota_429_last_24h"] == 2, str(q))
+check("마지막 429·성공 시각", q["last_429_ts"] == base - 60 and q["last_success_ts"] == base - 30)
+q2 = gemini_client.quota_status(now=base + 25 * 3600)
+check("24시간 지나면 0", q2["quota_429_last_24h"] == 0, str(q2))
+gemini_client._quota_hits.clear()
+
 print("=== 1. 팩토리 스위치 ===")
 provider = create_provider_from_settings(settings)
 summarizer = create_summarizer_from_settings(settings)
