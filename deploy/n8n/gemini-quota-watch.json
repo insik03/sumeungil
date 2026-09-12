@@ -1,0 +1,53 @@
+{
+  "name": "숨은길 · Gemini 한도 감시 → 슬랙",
+  "settings": { "executionOrder": "v1", "timezone": "Asia/Seoul" },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "minutes", "minutesInterval": 10 } ] }
+      },
+      "name": "10분마다",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://sumeungil.co.kr/api/v1/health/llm",
+        "options": { "timeout": 10000 }
+      },
+      "name": "LLM 상태 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1시간에 한 번만 알린다(같은 장애로 6번 울리지 않게). 상태는 워크플로 static data 에 보관.\nconst s = $getWorkflowStaticData('global');\nconst body = $input.first().json;\nconst now = Date.now();\nconst suspected = body.fallback_suspected === true;\nconst lastAlert = s.lastAlertAt || 0;\nconst recovered = !suspected && s.alerting === true;\nlet fire = null;\nif (suspected && now - lastAlert > 60 * 60 * 1000) {\n  s.lastAlertAt = now; s.alerting = true;\n  fire = `:rotating_light: *Gemini 한도 초과 의심* — 최근 1시간 429 ${body.quota_429_last_hour}회 (24시간 ${body.quota_429_last_24h}회, 마지막 ${body.last_429_at ?? '-'}).\\nAI 기능(온보딩·요약·코스 선택기)이 폴백으로 돌고 있습니다. 모델: ${body.model}. 결제 연결 안 됐으면 이슈 #99 참고.`;\n}\nif (recovered) {\n  s.alerting = false;\n  fire = `:white_check_mark: Gemini 429 가 1시간 동안 없습니다 — 정상 복귀 (마지막 성공 ${body.last_success_at ?? '-'}).`;\n}\nreturn fire ? [{ json: { text: fire } }] : [];"
+      },
+      "name": "알림 판단(1시간 1회)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "PASTE_SLACK_WEBHOOK_URL_HERE",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, unfurl_links: false }) }}",
+        "options": {}
+      },
+      "name": "슬랙 #서버-알림",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 0]
+    }
+  ],
+  "connections": {
+    "10분마다": { "main": [ [ { "node": "LLM 상태 조회", "type": "main", "index": 0 } ] ] },
+    "LLM 상태 조회": { "main": [ [ { "node": "알림 판단(1시간 1회)", "type": "main", "index": 0 } ] ] },
+    "알림 판단(1시간 1회)": { "main": [ [ { "node": "슬랙 #서버-알림", "type": "main", "index": 0 } ] ] }
+  }
+}
