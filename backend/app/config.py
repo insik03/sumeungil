@@ -123,6 +123,12 @@ class Settings:
         # 같은 로컬 Ollama 모델을 재사용한다(새 키·비용 0). 사용자가 화면에서 기다리는 경로라
         # 소개글 요약(25s)보다 짧은 타임아웃을 둔다 — 초과 시 ai_summary:null 로 graceful.
         self.course_summary_timeout_sec: float = float(os.getenv("COURSE_SUMMARY_TIMEOUT_SEC", "20"))
+        # --- AI 코스 비용 상한 (2026-09-14, 대표: "코스 짜는 사람은 10~20번씩 누른다") ---
+        # 코스 1회 = Gemini 2회(선택기+제목/요약) ≈ 6.6원. 같은 입력은 하루 캐시, 계정당 하루 30회,
+        # 서비스 전체 하루 2,000회를 넘으면 LLM 없이 규칙 기반 코스로 폴백(화면은 그대로).
+        self.course_pick_cache_ttl_sec: int = int(os.getenv("COURSE_PICK_CACHE_TTL_SEC", str(24 * 60 * 60)))
+        self.course_llm_daily_cap_per_user: int = int(os.getenv("COURSE_LLM_DAILY_CAP_PER_USER", "30"))
+        self.course_llm_daily_cap_global: int = int(os.getenv("COURSE_LLM_DAILY_CAP_GLOBAL", "2000"))
         # 코스 텍스트(스팟명=외부 문자열 포함) 상한 — DoS/비용 폭주 방지.
         self.course_summary_max_chars: int = int(os.getenv("COURSE_SUMMARY_MAX_CHARS", "1200"))
         # 같은 spot_ids 순서 조합의 성공 요약만 24h 캐시(매 요청마다 LLM 을 돌리지 않는다).

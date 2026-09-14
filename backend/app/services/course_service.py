@@ -14,8 +14,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import random
+from datetime import datetime
 
 from ..ai import course_picker, tag_registry
 from ..ai.summarizer import Summarizer
@@ -174,6 +176,7 @@ async def build_course_response(
     cache: Cache,
     summarizer: Summarizer | None = None,
     wish: str | None = None,
+    user_id: int | None = None,
 ) -> CourseResponse:
     prof = recommend_service.validate_profile(profile)  # 구조 위반 시 ProfileValidationError
     personalized = prof is not None
@@ -210,7 +213,10 @@ async def build_course_response(
     # 품질 상위 후보(저혼잡·숨은·취향점수 순)를 LLM 에 보여 주고 상황에 맞는 곳을 고르게 한다.
     # 후보 밖 id 는 course_picker 가 걸러내므로 지어낸 장소는 못 들어온다. 실패·비활성이면 아래
     # 슬롯 휴리스틱 그대로(코스는 항상 나온다).
-    picked = await _pick_with_llm(wish, scored, personalized, summarizer)
+    # 2026-09-14 비용 상한 — 이 요청이 LLM(선택기+제목/요약)을 써도 되는지 한 번만 판정한다.
+    # 캐시 히트는 상한을 소모하지 않는다(Gemini 를 안 부르니까).
+    llm_summarizer = summarizer if await _llm_allowed(cache, user_id) else None
+    picked = await _pick_with_llm(wish, scored, personalized, llm_summarizer, cache)
     reasons: dict[int, str] = {}
 
     chosen: list[tuple[str, object]] = []
@@ -262,7 +268,7 @@ async def build_course_response(
             spots=course_spots,
             legs=legs,
             region_name=region.region_name,
-            summarizer=summarizer,
+            summarizer=llm_summarizer,
             cache=cache,
         ),
     )
@@ -278,17 +284,67 @@ async def build_course_response(
     )
 
 
+def _kst_day() -> str:
+    from ..util.time import KST
+    return datetime.now(KST).strftime("%Y%m%d")
+
+
+async def _llm_allowed(cache: Cache, user_id: int | None) -> bool:
+    """계정당·전체 일일 상한(2026-09-14). 넘으면 False → 호출부가 summarizer=None 으로 폴백.
+
+    카운터는 캐시(프로세스 메모리)에 자정까지 남는다 — 재시작하면 0 부터(정직: 상한은 "천장"이지
+    회계가 아니다). get→set 이라 완전한 원자성은 없지만 단일 프로세스·이벤트루프라 실질적으로
+    충분하다. ponytail: Redis 로 바꾸면 INCR 로 교체.
+    """
+    day = _kst_day()
+    now = datetime.now()
+    ttl = max(60, int((24 * 3600) - (now.hour * 3600 + now.minute * 60 + now.second)))
+    keys = [("llm-cap:global:" + day, settings.course_llm_daily_cap_global)]
+    if user_id is not None:
+        keys.append((f"llm-cap:user:{user_id}:{day}", settings.course_llm_daily_cap_per_user))
+    counts = [int(await cache.get(k) or 0) for k, _ in keys]
+    for (k, cap), n in zip(keys, counts):
+        if n >= cap:
+            logger.warning("AI 코스 일일 상한 도달 key=%s n=%d cap=%d → 규칙 기반 폴백", k, n, cap)
+            return False
+    for (k, _cap), n in zip(keys, counts):
+        await cache.set(k, n + 1, ttl)
+    return True
+
+
+def _pick_cache_key(wish_text: str, candidate_ids: list[int]) -> str:
+    """같은 문장 + 같은 후보 집합이면 같은 키. 문장은 공백 정규화·소문자, 후보는 정렬해 해시."""
+    norm = " ".join(wish_text.lower().split())
+    raw = norm + "|" + ",".join(str(i) for i in sorted(candidate_ids))
+    return "course-pick:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
 async def _pick_with_llm(
     wish: str | None,
     scored: list,
     personalized: bool,
     summarizer: Summarizer | None,
+    cache: Cache | None = None,
 ) -> course_picker.PickResult | None:
-    """자유서술 + 품질 상위 후보 → LLM 선택. 후보 재료는 전부 시드·캐시에 있는 사실만."""
+    """자유서술 + 품질 상위 후보 → LLM 선택. 후보 재료는 전부 시드·캐시에 있는 사실만.
+
+    2026-09-14: 같은 (문장, 후보 집합) 결과는 캐시(기본 24h)에서 돌려준다 — "20번 눌러보는" 반복이
+    Gemini 를 다시 부르지 않게. 캐시엔 후보 id·라벨·이유만 들어간다(개인정보 없음).
+    """
     wish_text = (wish or "").strip()
-    if not wish_text or summarizer is None or not scored:
+    if not wish_text or not scored:
         return None
     ranked = sorted(scored, key=lambda s: _quality_key(s, personalized))[: course_picker.CANDIDATE_LIMIT]
+    cache_key = _pick_cache_key(wish_text, [s.spot.id for s in ranked]) if cache is not None else None
+    if cache_key:
+        hit = await cache.get(cache_key)
+        if isinstance(hit, dict) and hit.get("picks"):
+            logger.info("코스 선택기 캐시 히트 — Gemini 미호출")
+            return course_picker.PickResult(
+                picks=[course_picker.Pick(**p) for p in hit["picks"]], note=hit.get("note")
+            )
+    if summarizer is None:
+        return None
     pre = spot_detail_service._pregenerated_summaries()  # 배치 사전 생성 요약(있는 스팟만)
     candidates = []
     for s in ranked:
@@ -310,4 +366,12 @@ async def _pick_with_llm(
             )
         )
     timeout = getattr(summarizer, "_course_timeout_sec", None) or settings.course_summary_timeout_sec
-    return await course_picker.pick_course_spots(summarizer, wish_text, candidates, timeout_sec=timeout)
+    result = await course_picker.pick_course_spots(summarizer, wish_text, candidates, timeout_sec=timeout)
+    if result is not None and cache_key:
+        await cache.set(
+            cache_key,
+            {"picks": [{"id": p.id, "slot_label": p.slot_label, "reason": p.reason} for p in result.picks],
+             "note": result.note},
+            settings.course_pick_cache_ttl_sec,
+        )
+    return result
