@@ -19,9 +19,12 @@ import logging
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
+from ..cache.base import Cache
 from ..config import settings
 from ..db.postgres import Database
-from ..deps import get_database
+from ..deps import get_cache, get_database
+from ..middleware.rate_limit import extract_client_ip
+from ..middleware.visit_log import visit_ip_hash
 from ..repositories import review_repo
 from ..schemas.community import (
     ReviewCreateRequest,
@@ -162,20 +165,35 @@ async def report_review(
     review_id: int,
     req: ReviewReportRequest,
     db: Database = Depends(get_database),
+    cache: Cache = Depends(get_cache),
 ):
-    """신고 접수(202). 서로 다른 기기 N 건이 쌓이면 자동으로 숨김 처리된다."""
+    """신고 접수(202). 서로 다른 기기 N 건이 쌓이면 자동으로 숨김 처리된다.
+
+    보안감사 F-03(2026-09): 기기 ID 는 클라이언트가 바꿀 수 있어 같은 IP 가 ID 만 바꿔 3회 신고하면
+    남의 리뷰를 숨길 수 있었다. IP 가명 지문(방문 통계와 같은 함수) 기준으로 같은 리뷰엔 24시간
+    1회만 집계한다 — 응답은 똑같이 202 라 우회 여부를 알 수 없다.
+    """
     try:
         ensure_enabled()
         device_id = require_device_id(request)
         limited = check_write_quota(device_id, "review")
         if limited is not None:
             return limited
+        ip_hash = visit_ip_hash(
+            extract_client_ip(
+                request,
+                trust_proxy=settings.rate_limit_trust_proxy,
+                trusted_networks=settings.rate_limit_trusted_proxy_networks or None,
+            )
+        )
         result = await review_service.report_review(
             db,
             review_id=review_id,
             reason=req.reason,
             device_id=device_id,
             hide_threshold=settings.review_hide_report_threshold,
+            ip_hash=ip_hash or None,
+            cache=cache,
         )
         return JSONResponse(status_code=202, content=result)
     except Exception as exc:  # noqa: BLE001

@@ -17,6 +17,7 @@ import logging
 import psycopg
 from typing import Any
 
+from ..cache.base import Cache
 from ..db.postgres import Database
 from ..repositories import review_repo
 from ..schemas.community import (
@@ -280,8 +281,18 @@ async def delete_review(db: Database, *, review_id: int, device_id: str) -> None
     logger.info("review deleted id=%d", review_id)
 
 
+REPORT_IP_WINDOW_SEC = 24 * 60 * 60
+
+
 async def report_review(
-    db: Database, *, review_id: int, reason: str, device_id: str, hide_threshold: int
+    db: Database,
+    *,
+    review_id: int,
+    reason: str,
+    device_id: str,
+    hide_threshold: int,
+    ip_hash: str | None = None,
+    cache: Cache | None = None,
 ) -> dict[str, Any]:
     """신고 접수. 고유 신고자 수가 임계 이상이면 **즉시 hidden=1**.
 
@@ -293,6 +304,12 @@ async def report_review(
         raise errors.invalid_input("INVALID_REASON", "신고 사유를 입력해 주세요.")
     now_iso = to_iso_kst(now_kst())
     threshold = max(1, hide_threshold)
+
+    # F-03: 같은 IP 지문이 같은 리뷰를 24시간 안에 다시 신고하면 집계하지 않는다(응답은 동일).
+    ip_key = f"review-report-ip:{review_id}:{ip_hash}" if (ip_hash and cache is not None) else None
+    if ip_key and await cache.get(ip_key):
+        logger.info("review report ignored (same ip fingerprint within window) id=%d", review_id)
+        return {"status": "accepted", "hidden": False}
 
     def _tx(conn: psycopg.Connection):
         row = review_repo.get_review(conn, review_id)
@@ -308,6 +325,8 @@ async def report_review(
         return count, hidden
 
     count, hidden = await db.awrite(_tx)
+    if ip_key:
+        await cache.set(ip_key, True, REPORT_IP_WINDOW_SEC)
     logger.info("review reported id=%d unique_reports=%d hidden=%s", review_id, count, hidden)
     return {"status": "accepted", "hidden": hidden}
 
