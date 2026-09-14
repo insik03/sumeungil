@@ -274,9 +274,8 @@ if front_path.exists():
     # 프론트의 **앞 5건**과 id·category 가 일치해야 한다(API 계약 3~5건은 그대로).
     check("id 목록 일치(서버 5건 = 프론트 앞 5건)", [t["id"] for t in server_tips] == [t["id"] for t in front[:5]],
           str([t["id"] for t in front[:5]]))
-    check("category 일치", [t["category"] for t in server_tips] == [t["category"] for t in front[:5]])
-    check("category 목록 일치",
-          [t["category"] for t in server_tips] == [t["category"] for t in front])
+    check("category 목록 일치(서버 5건 = 프론트 앞 5건)",
+          [t["category"] for t in server_tips] == [t["category"] for t in front[:5]])
 else:
     check("프론트 정적 팁 파일 존재", False, str(front_path))
 
