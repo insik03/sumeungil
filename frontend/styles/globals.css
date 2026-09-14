@@ -88,7 +88,7 @@ input:focus-visible,
 .page {
   max-width: 480px;
   margin: 0 auto;
-  background: var(--white);
+  background: var(--paper);
   box-shadow: 0 0 60px rgba(5, 14, 27, 0.1);
   min-height: 100vh;
   /* 2026-08-01(대표 지적 "헤더 아래 회색 빈 띠") — margin collapse 때문이었다.
@@ -301,6 +301,23 @@ input:focus-visible,
   color: var(--g-500);
 }
 /* 데모 로그인 모달 */
+.consent-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: var(--sp-3) 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.consent-check input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.consent-check a {
+  text-decoration: underline;
+}
 .login-modal__backdrop {
   position: fixed;
   inset: 0;
@@ -2781,6 +2798,15 @@ input:focus-visible,
 .onboard-textarea::placeholder {
   color: var(--gray-400);
 }
+.onboard-hint {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+.onboard-hint a {
+  text-decoration: underline;
+}
 .onboard-textarea__count {
   text-align: right;
   font-size: var(--text-xs);
@@ -4561,7 +4587,7 @@ input:focus-visible,
 @media (min-width: 1024px) {
   .spot-detail {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 46%);
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 54%); /* 2026-09-03 회의 — 스팟 사진 확대 */
     column-gap: var(--sp-6);
     align-items: start;
   }

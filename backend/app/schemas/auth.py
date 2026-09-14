@@ -18,12 +18,20 @@ class UserSessionResponse(BaseModel):
     # 쓴다) optional로 열어두되, 프론트가 필요하면 쓸 수 있게 내려는 준다.
     name: str | None = None
     email: str | None = None
+    # 2026-09-14 — 현재 약관 버전에 동의했는가. false 면 프론트가 ConsentModal 을 띄운다.
+    terms_agreed: bool = False
 
 
 class UpdateDisplayNameRequest(BaseModel):
     # 리뷰 nickname과 동일한 상한 재사용(schemas/community.py) — 표시 이름이라는 같은
     # 성격의 값이라 별도 상한을 만들지 않는다.
     display_name: str = Field(min_length=1, max_length=NICKNAME_MAX)
+    # 2026-09-14 — 첫 로그인 표시 이름 단계에서 함께 보내는 약관 동의 버전(선택).
+    terms_version: str | None = Field(default=None, max_length=20)
+
+
+class ConsentRequest(BaseModel):
+    terms_version: str = Field(min_length=1, max_length=20)
 
 
 class AuthOkResponse(BaseModel):

@@ -348,8 +348,9 @@ export default function MyPageContent() {
             <div className="mypage-field">
               <span className="onboard-label">계정 삭제</span>
               <p className="onboard-result__sub" style={{ marginBottom: "var(--sp-4)" }}>
-                계정을 삭제하면 표시 이름·이메일·로그인 연동 정보가 즉시 삭제돼요. 이미 작성한
-                리뷰·공유 코스는 그대로 남아요.
+                계정을 삭제하면 이메일·표시 이름·로그인 연동 정보와 온보딩 취향·저장한 AI 코스·좋아요·
+                고객문의가 <strong>즉시 삭제되고 되돌릴 수 없어요</strong>(별도 보관 기간 없이 바로
+                파기해요). 이미 작성한 리뷰·공유 코스는 게시물로 남으니 지우려면 먼저 직접 삭제해주세요.
               </p>
               <button type="button" className="btn btn--ghost-text" onClick={handleDeleteAccount}>
                 {deleteConfirm ? "정말 삭제할까요? 다시 누르면 삭제돼요" : "계정 삭제"}
@@ -390,6 +391,9 @@ export default function MyPageContent() {
                   onChange={(e) => setInquiryMessage(e.target.value)}
                   placeholder="예: 카카오 로그인이 안 돼요 / 리뷰 삭제가 안 돼요"
                 />
+                <p className="onboard-hint">
+                  답변에 필요한 연락처 외의 개인정보(주민번호·카드번호 등)는 적지 마세요.
+                </p>
                 {inquiryError && (
                   <p className="login-modal__note" role="alert">
                     {inquiryError}

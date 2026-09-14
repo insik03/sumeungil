@@ -111,7 +111,7 @@ def provider_upsert(
             now_iso=now_iso,
         )
     )
-    token, _ = auth.issue_token(user_id=user["id"], email=user["email"])
+    token, _ = auth.issue_token(user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user))
     client = TestClient(app)
     client.cookies.set(auth.cookie_name, token)
     return client, user
@@ -165,6 +165,34 @@ tclient = TestClient(app)
 tclient.cookies.set(auth.cookie_name, tampered)
 r = tclient.get("/api/v1/auth/me")
 check("서명 변조 토큰 → authenticated:false", r.json()["authenticated"] is False)
+
+
+# === 1c. 로그아웃 즉시 무효화(session_epoch) + 약관 동의 기록 (2026-09-14) ===
+section("1c. 로그아웃하면 기존 토큰 전부 무효 · 표시 이름 단계 약관 동의 기록")
+
+c1c, u1c = make_login("sub-epoch", "epoch@example.com", "에폭")
+r = c1c.get("/api/v1/auth/me")
+check("로그인 직후 /me authenticated + terms_agreed=false", r.json().get("authenticated") is True and r.json().get("terms_agreed") is False, str(r.json()))
+r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭", "terms_version": "2026-09-14"})
+check("표시 이름 + 약관 버전 → terms_agreed=true", r.status_code == 200 and r.json().get("terms_agreed") is True, str(r.json()))
+r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭2"})
+check("버전 없이 이름만 바꿔도 동의 유지", r.json().get("terms_agreed") is True)
+old_cookie = c1c.cookies.get(auth.cookie_name)
+r = c1c.post("/api/v1/auth/logout")
+check("로그아웃 204", r.status_code == 204)
+stale = TestClient(app)
+stale.cookies.set(auth.cookie_name, old_cookie)
+r = stale.get("/api/v1/auth/me")
+check("로그아웃 전 토큰으로 /me → authenticated:false (epoch 불일치)", r.json().get("authenticated") is False, str(r.json()))
+r = stale.patch("/api/v1/auth/display-name", json={"display_name": "x"})
+check("로그아웃 전 토큰으로 쓰기 → 401", r.status_code == 401, str(r.status_code))
+v1_like = "v1." + old_cookie.split(".")[1] + "." + old_cookie.split(".")[2]
+check("v1 스킴 토큰은 거부", auth.verify_token(v1_like) is None)
+fresh, u_fresh = make_login("sub-epoch", "epoch@example.com", "에폭")
+r = fresh.post("/api/v1/auth/consent", json={"terms_version": "0000-00-00"})
+check("consent: 다른 버전 → 400", r.status_code == 400, str(r.status_code))
+r = fresh.post("/api/v1/auth/consent", json={"terms_version": "2026-09-14"})
+check("consent: 현재 버전 → terms_agreed=true", r.status_code == 200 and r.json().get("terms_agreed") is True, str(r.json()))
 
 
 # === 2. OAuth state — 서명·만료·브라우저 바인딩·1회용 (C-3) ==========================

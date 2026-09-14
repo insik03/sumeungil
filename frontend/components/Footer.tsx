@@ -4,8 +4,8 @@ import Link from "next/link";
  * §22(03-design-spec.md, 2026-07-29) — Acenda 레퍼런스의 "다크 푸터(링크 컬럼) + 뉴스레터형
  * CTA 카드" 문법을 흡수했다. 뉴스레터 자리는 숨은길에 이메일 수집 기능이 없으므로(스코프 밖)
  * 그대로 베끼지 않고 "취향 알려주고 맞춤 여행 받기" 온보딩 유도 카드로 재해석했다.
- * 링크 컬럼은 전부 Header.tsx의 NAV_ITEMS와 동일한 실제 존재하는 라우트만 쓴다 — 없는
- * 페이지(예: 고객센터·이용약관)는 만들지 않는다.
+ * 링크 컬럼은 전부 Header.tsx의 NAV_ITEMS와 동일한 실제 존재하는 라우트만 쓴다.
+ * 2026-09-14 — 이용약관(/terms)을 만들어 하단에 링크했다(개인정보처리방침과 나란히).
  */
 const EXPLORE_LINKS = [
   { label: "홈", href: "/" },
@@ -63,6 +63,10 @@ export default function Footer() {
         © 2026 숨은길 · 한국관광공사 공공데이터 기반 ·{" "}
         <Link href="/privacy" className="footer__privacy-link">
           개인정보처리방침
+        </Link>{" "}
+        ·{" "}
+        <Link href="/terms" className="footer__privacy-link">
+          이용약관
         </Link>
       </p>
     </footer>

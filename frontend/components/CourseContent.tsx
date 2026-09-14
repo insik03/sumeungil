@@ -841,6 +841,9 @@ export default function CourseContent() {
                 onChange={(e) => setOpinionText(e.target.value)}
                 disabled={opinionStatus === "loading"}
               />
+              <p className="onboard-hint">
+                개인정보는 적지 마세요. 이 문장은 AI 코스 추천을 위해 Google(해외) 서버로 전송됩니다.
+              </p>
               <div className="chip-row" role="group" aria-label="예시">
                 {OPINION_EXAMPLES.map((ex) => (
                   <button

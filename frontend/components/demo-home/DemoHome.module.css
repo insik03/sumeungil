@@ -111,9 +111,6 @@
 .mapPinName { fill: var(--ink); font-size: 11px; font-weight: 800; }
 .mapPinNumber { fill: white; font-size: 12px; font-weight: 900; }
 .mapState { position: absolute; top: 48%; left: 50%; z-index: 7; width: max-content; max-width: calc(100% - 48px); padding: 10px 13px; border: 1px solid var(--line); color: var(--ink-soft); background: rgba(var(--paper-rgb), .94); font-size: 11px; transform: translate(-50%,-50%); }
-.hotspot { position: absolute; left: 3%; bottom: 7%; z-index: 6; width: 154px; padding: 14px; border: 1px solid var(--ink); background: var(--paper); transform: rotate(-2deg); box-shadow: 5px 5px 0 var(--signal); }
-.hotspot span, .hotspot small { display: block; color: var(--ink-soft); font-size: 10px; }
-.hotspot strong { display: -webkit-box; overflow: hidden; margin: 5px 0 2px; font-size: 16px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .srOnly { position: absolute; overflow: hidden; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .proof { position: relative; display: grid; grid-template-columns: .75fr 1.25fr; gap: 8vw; padding: 96px clamp(20px, 7vw, 110px) 112px; color: white; background: var(--ink); isolation: isolate; }
@@ -193,7 +190,6 @@
   .routeStage { min-height: 520px; margin: 0 -5px; }
   .cityPicker { top: 12px; right: 12px; left: 12px; grid-template-columns: minmax(0,1fr); padding: 7px; }
   .cityPicker > span { display: none; }
-  .hotspot { left: 2%; bottom: 5%; width: 139px; }
   .proof { padding: 76px 20px 84px; }
   .proof dl { grid-template-columns: 1fr; }
   .proof dl > div { min-height: 132px; padding-left: 0; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.16); }
