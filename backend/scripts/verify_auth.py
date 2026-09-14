@@ -177,7 +177,11 @@ r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭", "term
 check("표시 이름 + 약관 버전 → terms_agreed=true", r.status_code == 200 and r.json().get("terms_agreed") is True, str(r.json()))
 r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭2"})
 check("버전 없이 이름만 바꿔도 동의 유지", r.json().get("terms_agreed") is True)
-old_cookie = c1c.cookies.get(auth.cookie_name)
+# httpx Cookies.get 은 같은 이름 쿠키가 도메인별로 둘이면(수동 set + 서버 Set-Cookie) CookieConflict 를
+# 던진다 — /me 가 재발급한 Set-Cookie 헤더에서 토큰을 직접 꺼낸다.
+_sc = c1c.get("/api/v1/auth/me").headers.get("set-cookie", "")
+old_cookie = _sc.split(";")[0].split("=", 1)[1]
+check("로그아웃 전 토큰 확보", old_cookie.startswith("v2."), old_cookie[:8])
 r = c1c.post("/api/v1/auth/logout")
 check("로그아웃 204", r.status_code == 204)
 stale = TestClient(app)
