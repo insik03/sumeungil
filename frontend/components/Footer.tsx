@@ -22,16 +22,8 @@ const MY_TRIP_LINKS = [
 export default function Footer() {
   return (
     <footer className="footer">
-      <div className="footer__cta">
-        <div>
-          <p className="footer__cta-title">취향 알려주고 맞춤 여행 받기</p>
-          <p className="footer__cta-sub">동행자와 분위기만 알려주면 AI가 숨은 코스를 찾아드려요.</p>
-        </div>
-        <Link className="btn btn--coral btn--lg" href="/onboarding">
-          온보딩 시작하기
-        </Link>
-      </div>
-
+      {/* 2026-09-15 대표 지시 — 푸터 상단 초록 CTA("취향 알려주고 맞춤 여행 받기") 제거.
+          온보딩 진입은 아래 링크 목록의 "취향 온보딩 시작"이 계속 맡는다. */}
       <div className="footer__columns">
         <div className="footer__col footer__col--brand">
           <div className="footer__logo">숨은길</div>
