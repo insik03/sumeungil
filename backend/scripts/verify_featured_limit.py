@@ -295,6 +295,18 @@ async def main() -> int:
           "diverse: totals 는 null(집계 안 함 → 프론트가 더보기를 띄우지 않음)")
     check(d_none.region is None, "diverse: region null 유지")
 
+    # (i) 2026-09-15 — 숨은 명소 픽 카테고리 다양성: 인천 연수구(28185)는 사진 있는 숨은 후보가
+    # 카페 12·시장 1이라 종전엔 카페만 나왔다. 카테고리당 상한(6곳이면 2)으로 백필(관광지·식당)이 섞인다.
+    print("\n[i] 숨은 명소 픽 카테고리 상한(28185 인천 연수구)")
+    for seed in (1, 2, 3):
+        r_ys, _ = await call(region_code="28185", limit=None, seed=seed)
+        cats = [s.category for s in r_ys.hidden_picks]
+        cap = featured_service._category_cap_for(len(cats))
+        check(len(cats) == 6 and max(cats.count(c) for c in set(cats)) <= cap,
+              f"seed={seed}: hidden_picks 6곳, 카테고리당 ≤{cap} → {cats}")
+    check(featured_service._category_cap_for(24) == 8 and featured_service._category_cap_for(4) == 2,
+          "상한 = max(2, ceil(n/3))")
+
     ok = sum(1 for r, _ in RESULTS if r)
     print(f"\n== {ok}/{len(RESULTS)} PASS ==")
     for r, label in RESULTS:
