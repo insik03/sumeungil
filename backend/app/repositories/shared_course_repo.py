@@ -315,7 +315,25 @@ def delete_overflow(
         """,
         (grace_since_iso, min(batch, excess)),
     )
-    return int(cur.rowcount or 0)
+    removed = int(cur.rowcount or 0)
+    # 보안감사 F-02(2026-09): 유예(최근 반응 있음) 행만 남아 상한을 넘기면 조회 유예보다 **전체 상한이
+    # 우선**한다 — 유예 무시하고 오래된 순으로 마저 지운다. 유예는 "먼저 지우지 않는다"일 뿐이다.
+    remaining = min(batch, excess) - removed
+    if remaining > 0:
+        cur2 = conn.execute(
+            """
+            DELETE FROM shared_courses
+             WHERE share_code IN (
+                   SELECT share_code
+                     FROM shared_courses
+                    ORDER BY created_at ASC, seq ASC
+                    LIMIT %s
+             )
+            """,
+            (remaining,),
+        )
+        removed += int(cur2.rowcount or 0)
+    return removed
 
 
 def delete_expired(

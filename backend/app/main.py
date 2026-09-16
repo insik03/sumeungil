@@ -24,6 +24,7 @@ from .api import (
     compare,
     congestion,
     course_share,
+    csp_report,
     courses,
     festivals,
     health,
@@ -441,6 +442,7 @@ app.include_router(course_share.router) # 부록 R: 코스 공유(share_code) �
 app.include_router(inquiries.router)    # 2026-08-18: 고객문의(마이페이지, 로그인 필수)
 app.include_router(tips.router)        # 부록 Z: 개인화 여행 팁(로그인 선택 — 비로그인은 정적)
 app.include_router(visit.router)        # 부록 X: 페이지 조회 비콘(프론트가 처리하는 화면 경로 집계)
+app.include_router(csp_report.router)   # 2026-09-14: CSP Report-Only 위반 집계(/api/v1/csp-report, /health/csp)
 
 # 슬랙 슬래시 명령어 (2026-08-18) — **서명 검증 키가 없으면 등록하지 않는다.**
 # 이 엔드포인트는 인증 쿠키를 쓸 수 없어(슬랙 서버가 호출) 서명 검증이 유일한 방어선이다.
