@@ -123,6 +123,30 @@ def update_display_name(
     return get_by_id(conn, user_id)
 
 
+def set_terms_agreed(
+    conn: psycopg.Connection, *, user_id: int, version: str, now_iso: str
+) -> dict[str, Any] | None:
+    """약관·처리방침 동의 기록(2026-09-14). 같은 버전에 다시 동의해도 시각만 갱신한다."""
+    conn.execute(
+        "UPDATE users SET terms_agreed_at = %s, terms_version = %s WHERE id = %s",
+        (now_iso, version, user_id),
+    )
+    return get_by_id(conn, user_id)
+
+
+def bump_session_epoch(conn: psycopg.Connection, *, user_id: int) -> int:
+    """로그아웃(2026-09-14): epoch +1 → 이 계정의 기존 세션 토큰 전부 즉시 무효(모든 기기)."""
+    row = conn.execute(
+        "UPDATE users SET session_epoch = session_epoch + 1 WHERE id = %s RETURNING session_epoch",
+        (user_id,),
+    ).fetchone()
+    return int(row["session_epoch"]) if row else 0
+
+
+def session_epoch_of(user: dict[str, Any] | None) -> int:
+    return int((user or {}).get("session_epoch") or 0)
+
+
 def delete_account(conn: psycopg.Connection, *, user_id: int) -> bool:
     """계정 삭제(탈퇴, 2026-08-17 QA C-4 대응) — users 행을 즉시 영구 삭제한다.
 

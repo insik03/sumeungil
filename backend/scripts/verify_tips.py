@@ -270,9 +270,12 @@ front_path = BACKEND_DIR.parent / "frontend" / "content" / "travel-tips.ko.json"
 check("서버 사본 5건 로드", len(server_tips) == 5, str(len(server_tips)))
 if front_path.exists():
     front = json.loads(front_path.read_text(encoding="utf-8"))["tips"]
-    check("id 목록 일치", [t["id"] for t in server_tips] == [t["id"] for t in front])
-    check("category 목록 일치",
-          [t["category"] for t in server_tips] == [t["category"] for t in front])
+    # 2026-09-14: 프론트 파일은 화면용 추가 팁(무장애·예절 등)을 뒤에 더 가질 수 있다 — 서버 사본 5건은
+    # 프론트의 **앞 5건**과 id·category 가 일치해야 한다(API 계약 3~5건은 그대로).
+    check("id 목록 일치(서버 5건 = 프론트 앞 5건)", [t["id"] for t in server_tips] == [t["id"] for t in front[:5]],
+          str([t["id"] for t in front[:5]]))
+    check("category 목록 일치(서버 5건 = 프론트 앞 5건)",
+          [t["category"] for t in server_tips] == [t["category"] for t in front[:5]])
 else:
     check("프론트 정적 팁 파일 존재", False, str(front_path))
 

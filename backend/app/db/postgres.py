@@ -196,6 +196,19 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
     ALTER TABLE users ADD COLUMN IF NOT EXISTS kakao_sub TEXT UNIQUE
     """,
+    # --- 2026-09-14: 로그아웃 즉시 무효화 + 약관 동의 기록 ------------------------------
+    #   session_epoch: 세션 토큰에 박히는 정수. 로그아웃하면 +1 → 그 전에 발급된 토큰은 전부 무효
+    #   (무상태 서명 토큰의 "서버가 끊을 수단 없음" 한계 해소, 보안검토 M-2/M-5 후속).
+    #   terms_agreed_at/terms_version: 첫 로그인(표시 이름 단계) 또는 동의 모달에서 기록.
+    """
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS session_epoch INTEGER NOT NULL DEFAULT 0
+    """,
+    """
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_agreed_at TEXT
+    """,
+    """
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT
+    """,
     # --- 2026-08-17 신설: 로그인 기반 개인화(대표 지시 — 온보딩·AI문답·AI코스짜기 로그인 필수화) ---
     #
     # onboarding_profiles: 계정당 최신 취향 프로필 1건만 보관(upsert) — history가 아니다.

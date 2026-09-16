@@ -54,7 +54,14 @@ from ..clients.kakao_oauth_client import fetch_userinfo as kakao_fetch_userinfo
 from ..config import settings
 from ..deps import get_database, get_user_auth
 from ..repositories import user_repo
-from ..schemas.auth import UpdateDisplayNameRequest, UserSessionResponse
+from ..schemas.auth import ConsentRequest, UpdateDisplayNameRequest, UserSessionResponse
+
+# 약관·개인정보처리방침 동의 버전 (2026-09-14). 프론트 lib/consent.ts 와 같은 값. 실질 변경 시 둘 다 올린다.
+TERMS_VERSION = "2026-09-14"
+
+
+def _terms_agreed(user: dict | None) -> bool:
+    return bool(user) and user.get("terms_version") == TERMS_VERSION
 from ..schemas.community import NICKNAME_MAX
 from ..security.user_auth import UserAuth, UserIdentity
 from ..util.time import now_kst, to_iso_kst
@@ -233,7 +240,7 @@ async def _complete_oauth_login(
         _clear_state_cookie(response)
         return response
 
-    token, _exp = auth.issue_token(user_id=user["id"], email=user["email"])
+    token, _exp = auth.issue_token(user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user))
     # 팝업엔 provider 원본 이름이 아니라 **DB의 현재 display_name**을 돌려준다 — 재로그인한
     # 사용자라면 이전에 직접 정한 이름이 그대로 뜬다(매번 원본 이름으로 되돌아가지 않음).
     #
@@ -358,8 +365,14 @@ async def kakao_callback(request: Request, code: str | None = None, state: str |
 
 
 @router.post("/logout")
-async def logout():
+async def logout(request: Request):
+    """쿠키 삭제 + **users.session_epoch +1** (2026-09-14) — 이 계정으로 발급된 세션 토큰이 모든 기기에서
+    즉시 무효가 된다. 서명 토큰이라 서버가 끊을 수단이 없던 한계(보안검토 M-2) 해소."""
     auth = get_user_auth()
+    identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
+    if identity is not None:
+        db = get_database()
+        await db.awrite(lambda conn: user_repo.bump_session_epoch(conn, user_id=identity.user_id))
     response = Response(status_code=204)
     response.delete_cookie(
         key=auth.cookie_name,
@@ -393,9 +406,14 @@ async def me(request: Request, response: Response):
     if user is None:
         # 세션은 유효한데 계정 행이 사라진 상태(수동 DB 조작 등) — 비로그인으로 취급.
         return UserSessionResponse(authenticated=False)
-    token, _ = auth.issue_token(user_id=identity.user_id, email=identity.email)
+    if user_repo.session_epoch_of(user) != identity.epoch:
+        # 2026-09-14: 로그아웃 뒤 남은 토큰(다른 기기 포함) → 비로그인
+        return UserSessionResponse(authenticated=False)
+    token, _ = auth.issue_token(user_id=identity.user_id, email=identity.email, epoch=identity.epoch)
     _set_session_cookie(response, auth, token)
-    return UserSessionResponse(authenticated=True, name=user["display_name"])
+    return UserSessionResponse(
+        authenticated=True, name=user["display_name"], terms_agreed=_terms_agreed(user)
+    )
 
 
 @router.delete("/me", status_code=204)
@@ -406,6 +424,9 @@ async def delete_account(request: Request):
     않는다 — /privacy §4가 설명하는 기존 동작 그대로다."""
     _auth, identity = _require_session(request)
     db = get_database()
+    user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
+    if user is None or user_repo.session_epoch_of(user) != identity.epoch:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     await db.awrite(lambda conn: user_repo.delete_account(conn, user_id=identity.user_id))
     response = Response(status_code=204)
     response.delete_cookie(
@@ -430,12 +451,44 @@ async def update_display_name(request: Request, body: UpdateDisplayNameRequest):
     if is_impersonating_staff(cleaned):
         raise HTTPException(status_code=400, detail="운영자로 오인될 수 있는 이름은 쓸 수 없어요.")
     db = get_database()
+    current = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
+    if current is None or user_repo.session_epoch_of(current) != identity.epoch:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     user = await db.awrite(
         lambda conn: user_repo.update_display_name(conn, user_id=identity.user_id, display_name=cleaned)
     )
     if user is None:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    return UserSessionResponse(authenticated=True, name=user["display_name"])
+    # 2026-09-14 — 첫 로그인의 "표시 이름 정하기" 단계에서 약관·처리방침 동의를 함께 받는다.
+    if body.terms_version == TERMS_VERSION:
+        user = await db.awrite(
+            lambda conn: user_repo.set_terms_agreed(
+                conn, user_id=identity.user_id, version=TERMS_VERSION, now_iso=to_iso_kst(now_kst())
+            )
+        ) or user
+    return UserSessionResponse(
+        authenticated=True, name=user["display_name"], terms_agreed=_terms_agreed(user)
+    )
+
+
+@router.post("/consent", response_model=UserSessionResponse)
+async def record_consent(request: Request, body: ConsentRequest):
+    """기존 회원·약관 개정 후 재동의(ConsentModal.tsx). 현재 버전만 받는다."""
+    _auth, identity = _require_session(request)
+    if body.terms_version != TERMS_VERSION:
+        raise HTTPException(status_code=400, detail="약관 버전이 맞지 않아요. 새로고침 후 다시 시도해주세요.")
+    db = get_database()
+    current = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
+    if current is None or user_repo.session_epoch_of(current) != identity.epoch:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    user = await db.awrite(
+        lambda conn: user_repo.set_terms_agreed(
+            conn, user_id=identity.user_id, version=TERMS_VERSION, now_iso=to_iso_kst(now_kst())
+        )
+    )
+    return UserSessionResponse(
+        authenticated=True, name=(user or current)["display_name"], terms_agreed=_terms_agreed(user)
+    )
 
 
 __all__ = ("router",)

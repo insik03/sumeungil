@@ -111,7 +111,9 @@ async def session_display_name(request: Request) -> str | None:
         return None
     db = get_database()
     user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
-    return user["display_name"] if user else None
+    if user is None or user_repo.session_epoch_of(user) != identity.epoch:
+        return None  # 2026-09-14: 로그아웃(epoch +1) 뒤 남은 토큰은 익명 취급
+    return user["display_name"]
 
 
 def check_write_quota(device_id: str, bucket: str) -> JSONResponse | None:
