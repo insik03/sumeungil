@@ -244,12 +244,27 @@ async def build_featured_response(
     hidden_with_seed_img = [s for s in hidden_candidates if s.image_url]
     hidden_no_seed_img = [s for s in hidden_candidates if not s.image_url]
     # 등급 순서 = 숨은+사진 → 사진 있는 백필 → 숨은+사진없음(최후 수단).
+    # 2026-09-15(대표: "인천 연수구 숨은길 PICK 이 카페만 뜬다") — 연수구는 사진 있는 숨은 후보
+    # 13곳 중 12곳이 카페라(실측) 무작위로 뽑아도 카페만 나온다. 카테고리당 상한을 두고, 상한
+    # 카운터가 등급을 가로질러 공유되므로 모자란 자리는 사진 백필(관광지·식당)에서 다른 카테고리로
+    # 채워진다. 풀 자체가 한 카테고리뿐인 지역은 상한 때문에 개수가 줄 수 있어 그때만 종전대로
+    # 상한 없이 다시 뽑는다(빈 카드보다 카페 6곳이 낫다).
+    hidden_tiers = (hidden_with_seed_img, photo_backfill, hidden_no_seed_img)
     hidden_primary, hidden_spares = sampling.sample_with_spares(
-        (hidden_with_seed_img, photo_backfill, hidden_no_seed_img),
+        hidden_tiers,
         hidden_n,
         sampling.make_rng(seed, "featured:hidden"),
         has_seed_photo=lambda s: bool(s.image_url),
+        group_key=lambda s: s.category,
+        group_cap=_category_cap_for(hidden_n),
     )
+    if len(hidden_primary) < min(hidden_n, sum(len(t) for t in hidden_tiers)):
+        hidden_primary, hidden_spares = sampling.sample_with_spares(
+            hidden_tiers,
+            hidden_n,
+            sampling.make_rng(seed, "featured:hidden"),
+            has_seed_photo=lambda s: bool(s.image_url),
+        )
     hidden_pool = hidden_primary + hidden_spares
 
     # --- 이미지 동시 조회(trending 전부 + hidden_pool) ---
@@ -489,6 +504,11 @@ def _province_region_codes(area_cd: str, spot_repo: SpotRepository) -> list[str]
         for r in REGIONS
         if r.area_cd == area_cd and spot_repo.by_region(r.region_id, None)
     ]
+
+
+def _category_cap_for(hidden_n: int) -> int:
+    """숨은 명소 픽의 카테고리당 상한 — 노출 개수의 1/3(최소 2). 6곳이면 카테고리당 2곳."""
+    return max(2, math.ceil(hidden_n / 3))
 
 
 def _group_cap_for(hidden_n: int, region_count: int) -> int:
