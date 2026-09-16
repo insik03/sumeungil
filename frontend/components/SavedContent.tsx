@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { SavedSpot, loadSavedSpots, removeSavedSpot } from "../lib/savedSpotsStorage";
+import { SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
 import SavedSpotCard from "./saved/SavedSpotCard";
 import VisitStampsSection from "./saved/VisitStampsSection";
 import SharedCoursesSection from "./saved/SharedCoursesSection";
@@ -27,6 +27,14 @@ export default function SavedContent() {
 
   useEffect(() => {
     setSpots(loadSavedSpots());
+    // 2026-09-16 — 계정 보관함(서버)이 정본. 캐시를 먼저 보여주고 서버 값으로 갱신한다.
+    let alive = true;
+    void syncSavedSpotsFromServer().then((list) => {
+      if (alive) setSpots(list);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const handleRemove = (id: number) => {
