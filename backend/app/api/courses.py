@@ -52,7 +52,7 @@ async def recommend_course(
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     cache: Cache = Depends(get_cache),
     summarizer: Summarizer = Depends(get_summarizer),
-    _identity=Depends(require_login),
+    identity=Depends(require_login),
 ):
     """2026-08-17(대표 지시) — AI 코스짜기(추천 모드)도 로그인 필수."""
     region_code = (req.region_code or "").strip()
@@ -69,6 +69,7 @@ async def recommend_course(
             cache=cache,
             summarizer=summarizer,
             wish=req.wish,
+            user_id=identity.user_id,
         )
     except ProfileValidationError as exc:
         logger.warning("프로필 구조 위반 → 400 INVALID_PROFILE: %s", exc)
