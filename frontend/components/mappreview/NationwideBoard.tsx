@@ -54,9 +54,6 @@ export default function NationwideBoard({
           it.available ? `${LEVEL_TEXT[key]} ${Math.round(it.index ?? 0)}퍼센트` : "정보 없음"
         } — 이 지역 보기`}
       >
-        <span className="board-card__ranknum" aria-hidden="true">
-          {String(idx + 1).padStart(2, "0")}
-        </span>
         {lm && (
           <img
             src={`/landmarks/${it.sido_code}.png`}

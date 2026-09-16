@@ -18,13 +18,16 @@ export const metadata: Metadata = {
  * DeparturePlanner는 자체 상태만 갖는 독립 섹션이라(§37.2, /plan 전용 페이지) props 없이
  * 그대로 아래에 이어 붙이기만 하면 된다 — 내부 로직·API 호출 무변경, /plan 페이지도 그대로 유지
  * (기존 진입 경로 보존, 필요 시 정리는 대표 지시로 별도 진행).
+ *
+ * 2026-09-15(대표 지시) — 순서 반전: 출발일 플래너를 맨 위, 전국 혼잡 현황을 아래로. 두 섹션의
+ * 좌우 폭은 globals.css `.planner`(max-width 1560)로 맞췄고, 두 섹션 사이 간격은 `.congestion-stack`으로 좁혔다.
  */
 export default function CongestionPage() {
   return (
     <div className="page">
-      <main>
-        <MapPreviewContent />
+      <main className="congestion-stack">
         <DeparturePlanner />
+        <MapPreviewContent />
       </main>
       <Footer />
     </div>

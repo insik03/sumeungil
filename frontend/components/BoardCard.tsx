@@ -22,13 +22,9 @@ function formatRate(rate: number | null): string | null {
 export default function BoardCard({ item }: { item: CongestionItem }) {
   const meta = LEVEL_META[item.congestion_level] ?? LEVEL_META.unknown;
   const rateLabel = formatRate(item.congestion_rate);
-  const rankLabel = String(item.rank).padStart(2, "0");
 
   return (
     <div className="board-card" role="listitem">
-      <span className="board-card__ranknum" aria-hidden="true">
-        {rankLabel}
-      </span>
       <span className="board-card__rank">TOP {item.rank}</span>
       <div className="board-card__name">{item.spot_name}</div>
       <span className={`badge ${meta.badgeClass}`}>
