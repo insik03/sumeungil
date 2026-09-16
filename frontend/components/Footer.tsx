@@ -1,66 +1,89 @@
 import Link from "next/link";
 
 /**
- * §22(03-design-spec.md, 2026-07-29) — Acenda 레퍼런스의 "다크 푸터(링크 컬럼) + 뉴스레터형
- * CTA 카드" 문법을 흡수했다. 뉴스레터 자리는 숨은길에 이메일 수집 기능이 없으므로(스코프 밖)
- * 그대로 베끼지 않고 "취향 알려주고 맞춤 여행 받기" 온보딩 유도 카드로 재해석했다.
- * 링크 컬럼은 전부 Header.tsx의 NAV_ITEMS와 동일한 실제 존재하는 라우트만 쓴다.
- * 2026-09-14 — 이용약관(/terms)을 만들어 하단에 링크했다(개인정보처리방침과 나란히).
+ * 2026-09-16 대표 지시 — "대한민국 구석구석처럼". 종전의 링크 컬럼(탐색/내 여행)은 GNB 와 겹쳐 의미가
+ * 없어 걷어내고, 구석구석 푸터의 구성(관광안내 전화 띠 → 기관·데이터 정보 → 약관 링크 줄 → 출처 마크 →
+ * 저작권)을 숨은길 규모에 맞게 옮겼다. 사업자번호·주소처럼 우리에게 없는 정보는 적지 않는다.
+ * 1330 은 한국관광공사 관광안내전화(공개 번호, 24시간). 관련 사이트는 실제로 데이터를 받아오는 곳만.
  */
-const EXPLORE_LINKS = [
-  { label: "홈", href: "/" },
-  { label: "여행지 추천", href: "/recommend" },
-  { label: "AI 여행 경로", href: "/course" },
+const RELATED_SITES = [
+  { label: "대한민국 구석구석", href: "https://korean.visitkorea.or.kr" },
+  { label: "한국관광 데이터랩", href: "https://datalab.visitkorea.or.kr" },
+  { label: "공공데이터포털", href: "https://www.data.go.kr" },
+  { label: "기상청 날씨누리", href: "https://www.weather.go.kr" },
 ];
 
-const MY_TRIP_LINKS = [
-  { label: "저장한 코스", href: "/saved" },
-  { label: "여행 팁", href: "/tips" },
-  { label: "취향 온보딩 시작", href: "/onboarding" },
+const POLICY_LINKS = [
+  { label: "이용약관", href: "/terms" },
+  { label: "개인정보처리방침", href: "/privacy" },
+  { label: "위치정보 이용 안내", href: "/privacy" },
+  { label: "고객문의", href: "/mypage" },
 ];
 
 export default function Footer() {
   return (
     <footer className="footer">
-      {/* 2026-09-15 대표 지시 — 푸터 상단 초록 CTA("취향 알려주고 맞춤 여행 받기") 제거.
-          온보딩 진입은 아래 링크 목록의 "취향 온보딩 시작"이 계속 맡는다. */}
-      <div className="footer__columns">
-        <div className="footer__col footer__col--brand">
+      <div className="footer__inner">
+        <div className="footer__help">
+          <div className="footer__help-item">
+            <span className="footer__help-label">관광안내</span>
+            <a className="footer__help-phone" href="tel:1330">
+              1330
+            </a>
+            <span className="footer__help-note">한국관광공사 관광안내전화 · 24시간</span>
+          </div>
+          <div className="footer__help-item">
+            <span className="footer__help-label">정보 수정·문의</span>
+            <Link className="footer__help-link" href="/mypage">
+              마이페이지 › 고객문의
+            </Link>
+            <span className="footer__help-note">잘못된 관광 정보, 서비스 문의</span>
+          </div>
+          <div className="footer__help-item footer__help-item--sites">
+            <span className="footer__help-label">관련 사이트</span>
+            <ul className="footer__sites">
+              {RELATED_SITES.map((s) => (
+                <li key={s.href}>
+                  <a href={s.href} target="_blank" rel="noopener noreferrer">
+                    {s.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="footer__info">
           <div className="footer__logo">숨은길</div>
           <p className="footer__tag">사람 대신, 설렘을 만나는 여행</p>
+          {/* 2026-09-16(오버투어리즘 검토 P1-d) — 서비스의 사회적 목적. 성과를 단정하지 않는다. */}
+          <p className="footer__desc">
+            한곳에 몰리는 여행에서, 지역을 나누어 만나는 여행으로. 예상 혼잡도와 대체 여행지 정보로 덜 붐비는
+            장소와 시기를 고르도록 돕습니다.
+          </p>
+          <p className="footer__source">
+            데이터 출처 · 한국관광공사 TourAPI 4.0(관광지·축제·사진) · 한국관광공사 관광지별 방문자 집중률
+            예측(KT 이동통신 데이터 기반) · 행정안전부 전국문화축제표준데이터 · 기상청 관광코스별 날씨
+          </p>
         </div>
-        <div className="footer__col">
-          <span className="footer__col-title">탐색</span>
-          <ul className="footer__links">
-            {EXPLORE_LINKS.map((item) => (
-              <li key={item.href}>
-                <Link href={item.href}>{item.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="footer__col">
-          <span className="footer__col-title">내 여행</span>
-          <ul className="footer__links">
-            {MY_TRIP_LINKS.map((item) => (
-              <li key={item.href}>
-                <Link href={item.href}>{item.label}</Link>
-              </li>
-            ))}
-          </ul>
+
+        <ul className="footer__policy" aria-label="약관과 안내">
+          {POLICY_LINKS.map((p) => (
+            <li key={p.label}>
+              <Link href={p.href}>{p.label}</Link>
+            </li>
+          ))}
+        </ul>
+
+        <div className="footer__bottom">
+          <div className="footer__marks" aria-label="출처 표시">
+            <span className="footer__mark">한국관광공사 공공데이터</span>
+            <span className="footer__mark">TourAPI 4.0</span>
+            <span className="footer__mark">공공데이터포털</span>
+          </div>
+          <p className="footer__copyright">© 2026 숨은길</p>
         </div>
       </div>
-
-      <p className="footer__copyright">
-        © 2026 숨은길 · 한국관광공사 공공데이터 기반 ·{" "}
-        <Link href="/privacy" className="footer__privacy-link">
-          개인정보처리방침
-        </Link>{" "}
-        ·{" "}
-        <Link href="/terms" className="footer__privacy-link">
-          이용약관
-        </Link>
-      </p>
     </footer>
   );
 }
