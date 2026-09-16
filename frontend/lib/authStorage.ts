@@ -15,6 +15,7 @@
  */
 import { API_BASE } from "./api";
 import { clearOnboardingResult } from "./onboardingStorage";
+import type { SessionInfo } from "./consent";
 
 const NICKNAME_KEY = "sumeungil:nickname:v1";
 
@@ -77,12 +78,12 @@ export function logout(): void {
  *
  * LoginGateProvider의 동기 체크 계약(모듈 상단 주석)은 그대로 둔다 — 이 함수는 그 캐시를
  * "가끔 서버와 맞추는" 백그라운드 보정일 뿐, 매 판정을 네트워크 왕복으로 바꾸지 않는다. */
-export async function syncSessionFromServer(): Promise<void> {
-  if (!isBrowser()) return;
+export async function syncSessionFromServer(): Promise<SessionInfo | null> {
+  if (!isBrowser()) return null;
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/me`, { credentials: "include" });
-    if (!res.ok) return; // 네트워크/서버 오류 — 로컬 캐시를 함부로 지우지 않는다(오프라인 등 오탐 방지).
-    const data: { authenticated: boolean; name?: string | null } = await res.json();
+    if (!res.ok) return null; // 네트워크/서버 오류 — 로컬 캐시를 함부로 지우지 않는다(오프라인 등 오탐 방지).
+    const data: SessionInfo = await res.json();
     const cached = getNickname();
     if (data.authenticated && data.name) {
       if (data.name !== cached) setLoggedInName(data.name);
@@ -93,8 +94,10 @@ export async function syncSessionFromServer(): Promise<void> {
       window.localStorage.removeItem(NICKNAME_KEY);
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
     }
+    return data;
   } catch {
     // 네트워크 실패 — 다음 페이지 이동/새로고침 때 다시 시도된다. 로컬 캐시는 유지.
+    return null;
   }
 }
 

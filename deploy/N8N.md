@@ -13,11 +13,11 @@ n8n 화면에서 고쳤으면 **Export → 여기 JSON 갱신**까지가 한 세
 
 | 파일 | 하는 일 | 주기 | 상태 |
 |---|---|---|---|
-| `gemini-quota-watch.json` | `GET /api/v1/health/llm` 을 보고 최근 1시간 Gemini 429 가 있으면 `#서버-알림` 으로 1시간에 1회 알림, 복귀 시 복귀 알림 | 10분 | 대표가 웹훅 URL 붙여 넣고 Activate 하면 가동 |
+| `gemini-quota-watch.json` | `GET /api/v1/health/llm` 을 보고 최근 1시간 Gemini 429 가 있으면 `#서버-알림` 으로 1시간에 1회 알림, 복귀 시 복귀 알림 | 10분 | 가동 중(2026-09-12~) |
 
 ## gemini-quota-watch 설정 순서
 
-1. n8n 에서 워크플로 "숨은길 · Gemini 한도 감시 → 슬랙" 을 연다 — https://n8n.aitestbed.kr/workflow/vHQfM7iRMyK8WbFY (2026-09-07 올려 둠, 비활성).
+1. n8n 에서 워크플로 "숨은길 · Gemini 한도 감시 → 슬랙" 을 연다 — https://n8n.aitestbed.kr/workflow/vHQfM7iRMyK8WbFY (2026-09-07 생성, 2026-09-12 v0.5.5 배포 후 활성화).
 2. 마지막 노드 "슬랙 #서버-알림" 의 URL 에 `#서버-알림` 채널 웹훅 URL 을 붙여 넣는다(GitHub Secrets 의 `SLACK_WEBHOOK_URL` 과 같은 값).
 3. 오른쪽 위 **Active** 토글을 켠다.
 4. 확인: "Execute workflow" 를 한 번 눌러 "LLM 상태 조회" 노드 출력에 `fallback_suspected` 가 보이면 된다(429 가 없으면 슬랙엔 아무것도 안 감 — 정상).

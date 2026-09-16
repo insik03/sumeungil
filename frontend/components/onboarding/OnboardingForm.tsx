@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TagSchemaAxis } from "../../lib/api";
 
 const TEXT_MAX_LENGTH = 300; // §B.1 — 서버가 300자 초과분을 절단. 프론트도 같은 상한을 안내.
@@ -52,6 +53,10 @@ export default function OnboardingForm({
         <div className="onboard-textarea__count" aria-live="off">
           {text.length}/{TEXT_MAX_LENGTH}
         </div>
+        <p className="onboard-hint">
+          전화번호·이메일 등 개인정보는 적지 마세요. 입력한 문장은 AI 분석을 위해 Google(해외) 서버로
+          전송됩니다. <Link href="/privacy">자세히</Link>
+        </p>
 
         {schemaStatus === "loading" &&
           Array.from({ length: CHIP_SKELETON_AXES }).map((_, i) => (

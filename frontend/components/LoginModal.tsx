@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "../lib/api";
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
+import { TERMS_VERSION } from "../lib/consent";
 
 interface LoginModalProps {
   open: boolean;
@@ -45,6 +46,8 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   const [nickname, setNickname] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 2026-09-14 — 첫 로그인(표시 이름 단계)에서 약관·처리방침 동의를 명시적으로 받는다.
+  const [agreed, setAgreed] = useState(false);
   const popupRef = useRef<Window | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const startButtonRef = useRef<HTMLButtonElement>(null);
@@ -146,7 +149,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   // 때 구글 원본 이름으로 되돌아가는 문제가 재발한다(user_repo.upsert_login 참고).
   const confirmNickname = async () => {
     const trimmed = nickname.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length === 0 || !agreed) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -154,7 +157,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name: trimmed }),
+        body: JSON.stringify({ display_name: trimmed, terms_version: TERMS_VERSION }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -256,11 +259,15 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               </button>
             </div>
             <p className="login-modal__note">
-              지금은 임시로 붙인 로그인이에요. 계속하면{" "}
+              로그인 제공자에게서 이메일·이름만 받아요. 첫 로그인 뒤 표시 이름을 정하는 단계에서{" "}
+              <a href="/terms" target="_blank" rel="noopener noreferrer">
+                이용약관
+              </a>
+              과{" "}
               <a href="/privacy" target="_blank" rel="noopener noreferrer">
                 개인정보처리방침
-              </a>
-              에 동의하는 것으로 간주해요.
+              </a>{" "}
+              동의를 받아요.
             </p>
           </>
         ) : (
@@ -287,6 +294,19 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 if (e.key === "Enter") confirmNickname();
               }}
             />
+            <label className="consent-check">
+              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+              <span>
+                <a href="/terms" target="_blank" rel="noopener noreferrer">
+                  이용약관
+                </a>
+                과{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                  개인정보처리방침
+                </a>
+                을 확인했고 동의해요. (만 14세 이상)
+              </span>
+            </label>
             {saveError && (
               <p className="login-modal__note" role="alert">
                 {saveError}
@@ -304,7 +324,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               <button
                 type="button"
                 className="btn btn--mint"
-                disabled={nickname.trim().length === 0 || saving}
+                disabled={nickname.trim().length === 0 || saving || !agreed}
                 onClick={confirmNickname}
               >
                 {saving ? "저장 중…" : "시작하기"}

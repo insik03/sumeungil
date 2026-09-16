@@ -53,7 +53,7 @@ import secrets
 import time
 from dataclasses import dataclass
 
-SCHEME_VERSION = "v1"
+SCHEME_VERSION = "v2"  # 2026-09-14: payload 에 session_epoch 추가(v1 토큰은 거부 → 1회 재로그인)
 _KEY_LABEL = b"sumeungil.user.session.v1"
 
 # state 파라미터(OAuth CSRF 방어) 서명 — 세션 토큰과 같은 키에서 다른 라벨로 파생한다.
@@ -98,6 +98,8 @@ class UserIdentity:
     email: str | None
     # 토큰 만료 시각(epoch 초). /me 의 슬라이딩 재발급이 "남은 수명"을 계산하는 데 쓴다.
     exp: int = 0
+    # 발급 시점의 users.session_epoch. DB 값과 다르면(로그아웃 뒤) 무효 — 호출부가 비교한다.
+    epoch: int = 0
 
 
 class UserAuth:
@@ -220,7 +222,7 @@ class UserAuth:
     # --- 세션 토큰 -------------------------------------------------------------
 
     def issue_token(
-        self, *, user_id: int, email: str | None, now: int | None = None
+        self, *, user_id: int, email: str | None, now: int | None = None, epoch: int = 0
     ) -> tuple[str, int]:
         issued = int(time.time()) if now is None else int(now)
         exp = issued + self.session_ttl_sec
@@ -228,7 +230,7 @@ class UserAuth:
         # verify_token이 빈 문자열을 다시 None으로 되돌린다 — "" 자체가 유효 이메일이 될
         # 일은 없으므로 이 왕복 변환은 안전하다.
         e = (email or "").strip()[:EMAIL_MAX_LEN]
-        payload = f"{exp}:{int(user_id)}:{_b64e(e.encode('utf-8'))}".encode("utf-8")
+        payload = f"{exp}:{int(user_id)}:{_b64e(e.encode('utf-8'))}:{int(epoch)}".encode("utf-8")
         body = f"{SCHEME_VERSION}.{_b64e(payload)}"
         sig = hmac.new(self._key, body.encode("ascii"), hashlib.sha256).digest()
         return f"{body}.{_b64e(sig)}", exp
@@ -248,16 +250,17 @@ class UserAuth:
         if not hmac.compare_digest(expected, actual):
             return None
         try:
-            exp_str, user_id_str, email_b64 = _b64d(parts[1]).decode("utf-8").split(":", 2)
+            exp_str, user_id_str, email_b64, epoch_str = _b64d(parts[1]).decode("utf-8").split(":", 3)
             exp = int(exp_str)
             user_id = int(user_id_str)
             email = _b64d(email_b64).decode("utf-8")
+            epoch = int(epoch_str)
         except (ValueError, TypeError, UnicodeDecodeError, binascii.Error):
             return None
         current = int(time.time()) if now is None else int(now)
         if exp <= current:
             return None
-        return UserIdentity(user_id=user_id, email=email or None, exp=exp)
+        return UserIdentity(user_id=user_id, email=email or None, exp=exp, epoch=epoch)
 
 
 __all__ = ("UserAuth", "UserIdentity", "STATE_TTL_SEC")

@@ -88,7 +88,7 @@ input:focus-visible,
 .page {
   max-width: 480px;
   margin: 0 auto;
-  background: var(--white);
+  background: var(--paper);
   box-shadow: 0 0 60px rgba(5, 14, 27, 0.1);
   min-height: 100vh;
   /* 2026-08-01(대표 지적 "헤더 아래 회색 빈 띠") — margin collapse 때문이었다.
@@ -301,6 +301,23 @@ input:focus-visible,
   color: var(--g-500);
 }
 /* 데모 로그인 모달 */
+.consent-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: var(--sp-3) 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.consent-check input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.consent-check a {
+  text-decoration: underline;
+}
 .login-modal__backdrop {
   position: fixed;
   inset: 0;
@@ -1629,7 +1646,6 @@ input:focus-visible,
   .hero-greeting,
   .quick-menu,
   .section,
-  .footer__cta,
   .footer__columns,
   .footer__copyright,
   .compare-section {
@@ -1643,7 +1659,6 @@ input:focus-visible,
   .hero-greeting,
   .quick-menu,
   .section,
-  .footer__cta,
   .footer__columns,
   .footer__copyright,
   .compare-section {
@@ -1657,7 +1672,6 @@ input:focus-visible,
   .hero-greeting,
   .quick-menu,
   .section,
-  .footer__cta,
   .footer__columns,
   .footer__copyright,
   .compare-section {
@@ -1675,7 +1689,6 @@ input:focus-visible,
   .hero-greeting,
   .quick-menu,
   .section,
-  .footer__cta,
   .footer__columns,
   .footer__copyright,
   .compare-section {
@@ -1833,18 +1846,6 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-}
-.board-card__ranknum {
-  position: absolute;
-  top: -8px;
-  right: -4px;
-  font-size: 40px;
-  font-weight: 900;
-  color: var(--n-50);
-  z-index: 0;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  user-select: none;
 }
 .board-card__rank {
   position: relative;
@@ -2781,6 +2782,15 @@ input:focus-visible,
 .onboard-textarea::placeholder {
   color: var(--gray-400);
 }
+.onboard-hint {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+.onboard-hint a {
+  text-decoration: underline;
+}
 .onboard-textarea__count {
   text-align: right;
   font-size: var(--text-xs);
@@ -3591,12 +3601,6 @@ input:focus-visible,
   overflow: hidden;
   box-shadow: var(--shadow-card);
   border: 2px solid var(--white);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.course-photo-strip__item:hover .course-photo-strip__thumb,
-.course-photo-strip__item:focus-visible .course-photo-strip__thumb {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
 }
 .course-photo-strip__img {
   width: 100%;
@@ -3701,6 +3705,13 @@ input:focus-visible,
 .course-step-card__body .spot-card {
   box-shadow: none;
   border-radius: 0;
+}
+/* 2026-09-15(대표: "AI 코스짜기 코스 카드의 인터랙티브 삭제") — 코스 스텝 카드 위에서는 안쪽
+   .spot-card 의 hover 들썩임(translateY + 그림자)을 끈다. /recommend 의 .spot-card-link 규칙은 그대로. */
+.spot-card-link:hover .course-step-card .spot-card,
+.spot-card-link:focus-visible .course-step-card .spot-card {
+  transform: none;
+  box-shadow: none;
 }
 .course-step-card__blurb {
   margin: 0 var(--sp-5) var(--sp-5);
@@ -3916,47 +3927,6 @@ input:focus-visible,
   .footer {
     padding: var(--sp-16) var(--sp-10) var(--sp-8);
   }
-}
-.footer__cta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-4);
-  background: var(--g-700);
-  border-radius: var(--r-lg);
-  padding: var(--sp-6) var(--sp-5);
-  margin-bottom: var(--sp-10);
-}
-@media (min-width: 720px) {
-  .footer__cta {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-6);
-  }
-}
-@media (min-width: 1024px) {
-  .footer__cta {
-    max-width: var(--container-1);
-    margin-left: auto;
-    margin-right: auto;
-  }
-}
-.footer__cta-title {
-  font-size: var(--text-xl);
-  font-weight: 900;
-  color: var(--white);
-  letter-spacing: -0.01em;
-}
-.footer__cta-sub {
-  margin-top: var(--sp-2);
-  font-size: var(--text-sm);
-  color: rgba(255, 255, 255, 0.78);
-  line-height: 1.5;
-}
-.footer__cta .btn {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 .footer__columns {
   display: flex;
@@ -4561,7 +4531,7 @@ input:focus-visible,
 @media (min-width: 1024px) {
   .spot-detail {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 46%);
+    grid-template-columns: minmax(0, 1fr) minmax(420px, 54%); /* 2026-09-03 회의 — 스팟 사진 확대 */
     column-gap: var(--sp-6);
     align-items: start;
   }
@@ -5863,6 +5833,22 @@ input:focus-visible,
   font-weight: 600;
   max-width: 62ch;
   line-height: 1.6;
+}
+/* 2026-09-15(대표: "전국 혼잡 현황이랑 출발일 플래너 양 옆 구역을 맞춰라") — /congestion 의
+   MapPreviewContent 섹션(maxWidth 1560, margin auto)과 같은 폭. /plan 에도 같이 적용된다. */
+.planner {
+  max-width: 1560px;
+  margin: 0 auto;
+}
+/* /congestion 에서 플래너와 전국 혼잡 현황 사이 간격 — 섹션 기본 여백(64+64px)이 너무 멀다는
+   대표 지적(2026-09-15). 위 섹션 아래·아래 섹션 위를 sp-4 씩만 남긴다. */
+.congestion-stack .planner {
+  /* 2026-09-15(대표: "플래너 페이지 전체적으로 좀 더 위로") — 헤더 바로 아래 붙도록 위 여백도 줄인다. */
+  padding-top: var(--sp-5);
+  padding-bottom: var(--sp-4);
+}
+.congestion-stack .planner + .section {
+  padding-top: var(--sp-4);
 }
 .planner-form {
   background: var(--white);

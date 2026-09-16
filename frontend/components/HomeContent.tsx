@@ -151,6 +151,7 @@ export default function HomeContent() {
           후)에만 남는다(CourseContent.tsx). 컴포넌트 자체는 지우지 않았다, 거기서 재사용 중. */}
       {regionResolved && (
         <>
+          {/* 2026-09-03 회의 액션 — 축제 섹션을 추천보다 위로(시의성 높은 정보 먼저). */}
           <FeaturedSpots regionCode={regionCode} diverse={!selectedRegion} />
           {/* 부록 U.3(2026-08-01, 대표 지시) — 예상 혼잡 전광판은 congestion 화면으로 옮겼다.
               그 화면이 전국 지도 아래에 같은 전광판을 두므로, 홈에 남겨두면 두 번 나온다. */}

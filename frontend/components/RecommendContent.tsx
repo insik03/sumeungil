@@ -269,27 +269,7 @@ export default function RecommendContent() {
 
   return (
     <>
-      <section className="onboard-hero" aria-label="추천 소개">
-        <span className="hero__eyebrow">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 2l2.2 6.8H21l-5.6 4.1 2.2 6.9L12 15.8 6.4 19.8l2.2-6.9L3 8.8h6.8L12 2z"
-              fill="currentColor"
-            />
-          </svg>
-          오늘의 숨은 스팟
-        </span>
-        <h1 className="onboard-hero__title">
-          {regionLabel}에서
-          <br />
-          붐비지 않는 곳을 골랐어요
-        </h1>
-        <p className="onboard-hero__sub">
-          {profile
-            ? "온보딩에서 알려주신 취향을 바탕으로 어울리는 순서대로 정렬했어요."
-            : "지금은 예상 혼잡도가 낮은 순으로 보여드리고 있어요. 취향을 알려주시면 더 꼭 맞는 순서로 바꿔드려요."}
-        </p>
-      </section>
+      {/* 2026-09-14 대표 지시 — 상단 초록 배너("오늘의 숨은 스팟 / …붐비지 않는 곳을 골랐어요") 제거. */}
 
       <section className="section" aria-labelledby="recommendHeading">
         <span className="eyebrow-pill eyebrow-pill--azure">프로필 맞춤 추천</span>

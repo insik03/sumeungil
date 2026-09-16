@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import ConsentModal from "./ConsentModal";
 import LoginModal from "./LoginModal";
 import { logout, syncSessionFromServer } from "../lib/authStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
@@ -135,6 +136,8 @@ export default function Header() {
   const [openLabel, setOpenLabel] = useState<string | null>(null);
   const nickname = useLoggedInName();
   const [loginOpen, setLoginOpen] = useState(false);
+  // 2026-09-14 — 서버가 "현재 약관 버전 미동의"라고 하면 한 번 동의 모달을 띄운다(ConsentModal.tsx).
+  const [consentOpen, setConsentOpen] = useState(false);
   const triggerRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   // Esc 로 닫은 직후 포커스를 트리거로 되돌리면 onFocus 가 즉시 다시 열어버린다(실측 확인).
   // "이 항목은 방금 Esc 로 닫았다"를 기억해 두고, 포커스가 그룹 밖으로 나가거나 마우스가
@@ -145,7 +148,10 @@ export default function Header() {
   // 부팅 시 서버 세션 동기화만 1회 튼다. "계정 삭제" 버튼(과 그 2단계 확인 상태)은
   // 2026-08-17 대표 지시로 /mypage(MyPageContent.tsx)로 옮겨서 여기엔 더 없다.
   useEffect(() => {
-    void syncSessionFromServer(); // QA M-2 — 부팅 시 1회, 서버 세션 진실과 로컬 캐시를 맞춘다.
+    void syncSessionFromServer().then((info) => {
+      // QA M-2 — 부팅 시 1회, 서버 세션 진실과 로컬 캐시를 맞춘다. 2026-09-14: 약관 미동의면 동의 모달.
+      if (info?.authenticated && info.terms_agreed === false) setConsentOpen(true);
+    });
   }, []);
 
   // 관리자 콘솔은 일반 서비스 셸을 공유하지 않는다(03-admin-console-design.md §4).
@@ -404,6 +410,7 @@ export default function Header() {
           §47.2(2026-08-20) — 헤더 로그인 버튼 경로에서 로그인 성공 시 마이페이지로 이동.
           데스크톱·모바일 메뉴가 이 LoginModal 인스턴스를 공유하므로 이 한 곳만 고치면 된다.
           LoginGateProvider/LoginRequiredGate의 별도 로그인 흐름은 건드리지 않는다(§47.2). */}
+      <ConsentModal open={consentOpen} onDone={() => setConsentOpen(false)} />
       <LoginModal
         open={loginOpen}
         onClose={() => setLoginOpen(false)}

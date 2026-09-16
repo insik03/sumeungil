@@ -123,12 +123,6 @@ function shortMapLabel(name: string): string {
   return name.length > 13 ? `${name.slice(0, 12)}…` : name;
 }
 
-function congestionText(spot: RouteSpot): string {
-  const index = spot.congestion?.index;
-  if (index != null) return `예상 혼잡 ${Math.round(index)}%`;
-  const labels: Record<string, string> = { low: "여유", mid: "보통", high: "혼잡" };
-  return labels[spot.congestion?.level ?? ""] ?? "혼잡 정보 없음";
-}
 
 export default function RegionRouteMap({
   selectedSido,
@@ -201,7 +195,6 @@ export default function RegionRouteMap({
   const mapSummary = routeNames.length
     ? `${selectedSido.shortName}의 시군구 경계 안에서 ${routeNames.join(", ")} 순서로 이어지는 추천 경로`
     : `${selectedSido.shortName} 시도 외곽선과 시군구 경계 지도. 표시할 수 있는 추천 스팟 좌표가 없습니다.`;
-  const leadStop = geometry?.projectedStops[0]?.spot;
 
   return (
     <figure
@@ -307,13 +300,7 @@ export default function RegionRouteMap({
         </div>
       )}
 
-      {leadStop && (
-        <div className={styles.hotspot} aria-hidden="true">
-          <span>추천 경로 01</span>
-          <strong>{leadStop.name}</strong>
-          <small>{congestionText(leadStop)}</small>
-        </div>
-      )}
+      {/* 2026-09-14 대표 지시 — 좌하단 "추천 경로 01" 카드 제거(지도를 가림). */}
       <figcaption className={styles.srOnly}>{mapSummary}</figcaption>
     </figure>
   );

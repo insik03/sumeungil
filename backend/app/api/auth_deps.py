@@ -39,7 +39,8 @@ async def require_login(request: Request) -> UserIdentity:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     db = get_database()
     user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
-    if user is None:
+    if user is None or user_repo.session_epoch_of(user) != identity.epoch:
+        # 2026-09-14: 로그아웃(epoch +1) 뒤 남아 있던 토큰 → 401
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     return identity
 
