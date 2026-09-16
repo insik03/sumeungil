@@ -748,44 +748,8 @@ export default function CourseContent() {
 
   return (
     <>
-      <section className="onboard-hero" aria-label="코스 만들기 소개">
-        <span className="hero__eyebrow">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 2l2.2 6.8H21l-5.6 4.1 2.2 6.9L12 15.8 6.4 19.8l2.2-6.9L3 8.8h6.8L12 2z"
-              fill="currentColor"
-            />
-          </svg>
-          {mode === "ai" ? "AI 추천 코스" : "내 코스 만들기"}
-        </span>
-        {mode === "ai" ? (
-          <>
-            <h1 className="onboard-hero__title">
-              {regionLabel} 하루,
-              <br />
-              순서대로 짜드렸어요
-            </h1>
-            <p className="onboard-hero__sub">
-              {profile
-                ? "온보딩에서 알려주신 취향을 바탕으로 아침부터 저녁까지 이동 동선을 붙여 코스를 짰어요."
-                : "지금은 예상 혼잡도가 낮은 순으로 하루 코스를 짜드리고 있어요. 취향을 알려주시면 더 꼭 맞는 코스로 바꿔드려요."}
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="onboard-hero__title">
-              가고 싶은 곳을 검색해서,
-              <br />
-              순서와 AI 요약까지 받아보세요
-            </h1>
-            <p className="onboard-hero__sub">
-              가게·관광지 이름으로 검색해 코스에 추가하면, 이동 동선을 붙여 하루 코스로 이어드리고
-              AI가 코스를 짧게 요약해드려요. 2곳 이상 추가하면 순서를 짤 수 있어요.
-            </p>
-          </>
-        )}
-      </section>
-
+      {/* 2026-09-16 대표 지시 — 상단 초록 배너(onboard-hero: "…하루, 순서대로 짜드렸어요") 제거.
+          제목은 아래 section 의 h2("{regionLabel} 하루 코스")가 맡는다. */}
       {!loggedIn ? (
         <LoginRequiredGate
           title="로그인이 필요해요"
