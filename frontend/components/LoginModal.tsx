@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import LinkProviderButtons from "./LinkProviderButtons";
 import { API_BASE } from "../lib/api";
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 import { TERMS_VERSION } from "../lib/consent";
@@ -41,7 +42,7 @@ const NICKNAME_MAX = 20;
  * 충돌하지 않는다 — 동의는 최초 1회로 이미 성립했고, 값도 그때와 동일하다.
  */
 export default function LoginModal({ open, onClose, onLoggedIn, title, message }: LoginModalProps) {
-  const [step, setStep] = useState<"provider" | "nickname">("provider");
+  const [step, setStep] = useState<"provider" | "nickname" | "link">("provider");
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [nickname, setNickname] = useState("");
   const [saving, setSaving] = useState(false);
@@ -174,8 +175,12 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     }
     setLoggedInName(trimmed);
     onLoggedIn(trimmed);
-    onClose();
+    // 2026-09-18(대표 결정) — 신규 가입 직후 한 번만 "다른 방식으로 이미 가입했나요?"를 묻는다.
+    // 여기서 다른 provider 로 로그인하면 두 계정이 하나로 합쳐진다(LinkProviderButtons).
+    setStep("link");
   };
+
+  const finishLink = () => onClose();
 
   // 닉네임 단계에서 취소 — 구글 인증(서버 세션 쿠키)까지 됐지만 표시 이름은 안 정했으니
   // 로그인 자체를 취소로 본다(애매한 반쯤 로그인 상태를 남기지 않는다). QA M-3(2026-08-17)
@@ -194,7 +199,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
       aria-modal="true"
       aria-labelledby="loginModalTitle"
       onClick={(e) => {
-        if (e.target === e.currentTarget) (step === "nickname" ? cancelAtNicknameStep : onClose)();
+        if (e.target === e.currentTarget) (step === "nickname" ? cancelAtNicknameStep : step === "link" ? finishLink : onClose)();
       }}
     >
       <div className="login-modal">
@@ -269,6 +274,27 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               </a>{" "}
               동의를 받아요.
             </p>
+          </>
+        ) : step === "link" ? (
+          <>
+            <h2 className="login-modal__title" id="loginModalTitle">
+              다른 방식으로 가입한 적 있나요?
+            </h2>
+            <p className="login-modal__sub">
+              예전에 다른 로그인으로 저장한 코스나 취향이 있다면, 그 방식으로 한 번 더 로그인하면 지금 계정에
+              합쳐져요. 없으면 그냥 시작하면 돼요.
+            </p>
+            <LinkProviderButtons
+              providers={{}}
+              onDone={(_p, outcome) => {
+                if (outcome === "linked" || outcome === "already") finishLink();
+              }}
+            />
+            <div className="login-modal__actions">
+              <button type="button" className="btn btn--mint" onClick={finishLink}>
+                아니요, 이대로 시작하기
+              </button>
+            </div>
           </>
         ) : (
           <>

@@ -784,15 +784,6 @@ input:focus-visible,
   height: 100%;
   min-height: inherit;
 }
-/* 2026-09-03(대표) — /recommend 지도 칸 안에서 NAVER 지도 바로 아래에 같은 크기로 쌓이는 모드.
-   독립 섹션용 min-height(420/560)는 버리고 부모(.recommend-layout__map--stacked)가 준 높이를 쓴다. */
-.region-map-inline {
-  min-height: 0;
-}
-.region-map-inline figure {
-  min-height: 0;
-}
-
 .dest-search__box {
   display: flex;
   align-items: center;
@@ -3234,24 +3225,6 @@ input:focus-visible,
   height: 260px;
   margin-top: var(--sp-3);
 }
-/* 2026-09-03(대표: "지도 크기를 naver map 크기랑 똑같이 해서 그 밑에 붙여줘") — 로그인 시 지도 칸에
-   NAVER 지도(SpotMap)와 지역 지도(RegionMapSection inline)를 세로로 쌓는다. 두 지도는 같은 높이
-   (--rec-map-h)를 갖고, 칸 높이는 내용에 맞춘다. 모바일은 토글이 열렸을 때만 보인다. */
-.recommend-layout__map--stacked {
-  --rec-map-h: 340px; /* 2026-09-04 대표 "경계 사진 너무 작다" — 260→340 */
-}
-.recommend-layout__map--stacked.is-open {
-  height: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-}
-.recommend-layout__map--stacked .spot-map,
-.recommend-layout__map--stacked .region-map-inline {
-  height: var(--rec-map-h);
-  min-height: 0;
-  flex: 0 0 auto;
-}
 .recommend-layout__list {
   margin-top: var(--sp-5);
 }
@@ -3274,16 +3247,6 @@ input:focus-visible,
     /* 2026-09-03(대표: "지도 스크롤하면 따라오는거 없애줘 불편하다") — 원래 sticky로 목록을
        내려도 지도가 따라왔는데, 지도가 두 개 쌓이니 화면을 다 가려 불편. 그냥 흐름에 둔다. */
     margin-top: 0;
-  }
-  /* 두 지도가 뷰포트 안에 같이 들어가도록 칸 높이를 반씩 나눈다(각 최소 300px). */
-  .recommend-layout__map--stacked {
-    /* 2026-09-04 — sticky 를 뺐으니 뷰포트 반에 묶일 이유가 없다. 최소 480px 로 키운다. */
-    --rec-map-h: max(480px, calc((100vh - 76px - var(--sp-10) - var(--sp-3)) / 2));
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
-    height: auto;
-    min-height: 0;
   }
   .recommend-layout__list {
     margin-top: 0;
@@ -6990,4 +6953,23 @@ input:focus-visible,
     --chart-scale-05: oklch(0.68 0.07 270);
     --chart-scale-pattern-color: oklch(0.145 0 0);
   }
+}
+
+/* 2026-09-18 — 로그인 연결 버튼 줄(마이페이지 계정관리·가입 직후 안내). */
+.link-providers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.link-providers__done {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-3);
+  border-radius: 999px;
+  background: var(--g-50);
+  color: var(--g-700);
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
