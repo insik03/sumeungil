@@ -127,13 +127,11 @@ function shortMapLabel(name: string): string {
 export default function RegionRouteMap({
   selectedSido,
   spots,
-  spotsLoading,
   onSelectSido,
   hidePicker = false,
   maxStops = 3,
 }: RegionRouteMapProps) {
   const [asset, setAsset] = useState<RegionMapAsset | null>(null);
-  const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading");
   const rawId = useId().replace(/:/g, "");
   const gridId = `region-map-grid-${rawId}`;
   const clipId = `region-map-clip-${rawId}`;
@@ -141,7 +139,6 @@ export default function RegionRouteMap({
   useEffect(() => {
     const controller = new AbortController();
     setAsset(null);
-    setMapStatus("loading");
     fetch(`/data/region-maps/${selectedSido.sidoCode}.json`, {
       signal: controller.signal,
       cache: "force-cache",
@@ -153,11 +150,9 @@ export default function RegionRouteMap({
       .then((nextAsset) => {
         if (controller.signal.aborted) return;
         setAsset(nextAsset);
-        setMapStatus("ready");
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setMapStatus("error");
       });
     return () => controller.abort();
   }, [selectedSido.sidoCode]);
