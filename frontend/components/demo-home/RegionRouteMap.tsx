@@ -289,16 +289,8 @@ export default function RegionRouteMap({
         )}
       </svg>
 
-      {(mapStatus === "loading" || spotsLoading) && (
-        <div className={styles.mapState} aria-live="polite">
-          {selectedSido.shortName} 경계와 추천 스팟을 불러오는 중…
-        </div>
-      )}
-      {mapStatus === "error" && (
-        <div className={styles.mapState} role="status">
-          경계 지도를 불러오지 못했어요.
-        </div>
-      )}
+      {/* 2026-09-18 대표 지시("이거도 좀 없애줄래") — 지도 위에 얹히던 상태 박스("…불러오는 중", "불러오지
+          못했어요")를 뺐다. 로딩 중엔 경계만, 실패 시엔 빈 격자만 보인다 — 설명은 figcaption(스크린리더)이 맡는다. */}
 
       {/* 2026-09-14 대표 지시 — 좌하단 "추천 경로 01" 카드 제거(지도를 가림). */}
       <figcaption className={styles.srOnly}>{mapSummary}</figcaption>

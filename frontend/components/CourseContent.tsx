@@ -21,7 +21,6 @@ import { CartSpot, MAX_CART_SIZE, MIN_CART_SIZE, loadCart } from "../lib/courseC
 import { useLoggedInName } from "../lib/useLoggedInName";
 import LoginRequiredGate from "./LoginRequiredGate";
 import GeminiMark from "./GeminiMark";
-import RegionMapSection from "./RegionMapSection";
 import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
 import CourseMap from "./course/CourseMap";
 import CourseStepCard from "./course/CourseStepCard";
@@ -218,8 +217,6 @@ interface CourseTimelinePanelProps {
   fallbackTitle: string;
   /** 2026-08-17(Phase C) — "코스 저장하기" 호출 시 함께 보낼 mode(ai/custom 요청 구분용). */
   saveMode: "ai" | "custom";
-  /** 2026-09-04 — 지도 칸에 NAVER 지도 아래로 쌓는 지역 지도(RegionMapSection inline)용 지역 코드. */
-  regionCode: string;
 }
 
 /**
@@ -241,7 +238,6 @@ function CourseTimelinePanel({
   errorHint,
   fallbackTitle,
   saveMode,
-  regionCode,
 }: CourseTimelinePanelProps) {
   // §28(신규) — 스텝 앵커 id. CourseStepPhotoStrip의 썸네일 클릭 시 이 id로 스크롤 이동한다
   // (course-timeline__item에 그대로 부여, 별도 상태 없이 인덱스로만 생성).
@@ -325,30 +321,15 @@ function CourseTimelinePanel({
       )}
 
       <div className="recommend-layout">
-        {/* 2026-09-04(대표) — 지역 지도를 NAVER 코스 지도 **바로 아래 같은 크기**로 쌓는다
-            (/recommend 의 --stacked 와 같은 CSS). 이 패널은 로그인 게이트 뒤에만 그려지므로 조건 없음. */}
-        <div className={`recommend-layout__map recommend-layout__map--stacked${showMap ? " is-open" : ""}`}>
+        {/* 2026-09-18 대표 지시("지도 자체를 없애라") — NAVER 지도 아래 쌓던 시도 경계 지도(RegionMapSection)를
+            뺐다. 지도 칸은 NAVER 코스 지도 하나만 남는다. */}
+        <div className={`recommend-layout__map${showMap ? " is-open" : ""}`}>
           {showMap ? (
-            <>
-              <CourseMap
-                spots={status === "success" && data ? data.spots : []}
-                legs={status === "success" && data ? data.legs : []}
-                regionLabel={data?.region.region_name ?? ""}
-              />
-              {/* 2026-09-04(대표) — 경계 지도의 경로를 featured 픽이 아니라 **이 코스의 실제 스팟**으로.
-                  NAVER CourseMap 과 같은 data.spots 를 잇는다(코스 길이만큼, 순서 그대로). */}
-              {/* QA(2026-09-05 P1): 선택기(regionCode)가 아니라 **코스 응답의 지역**을 쓴다 — 내 코스
-                  만들기에서 서울 스팟으로 짰는데 선택기가 부산이면 서울 좌표가 경계 밖으로 걸러져
-                  경로가 사라졌다. ponytail: 경계는 시/도 하나뿐이라 여러 시/도가 섞인 코스는 그
-                  시/도 안의 스팟만 이어진다 — 전 구간은 위 NAVER 지도가 맡는다. */}
-              <RegionMapSection
-                regionCode={(status === "success" && data?.region.region_code) || regionCode}
-                inline
-                spots={status === "success" && data ? data.spots : []}
-                spotsLoading={status === "loading"}
-                maxStops={status === "success" && data ? data.spots.length : 3}
-              />
-            </>
+            <CourseMap
+              spots={status === "success" && data ? data.spots : []}
+              legs={status === "success" && data ? data.legs : []}
+              regionLabel={data?.region.region_name ?? ""}
+            />
           ) : (
             <div className="spot-map spot-map--placeholder" aria-hidden="true" />
           )}
@@ -891,7 +872,6 @@ export default function CourseContent() {
 
             <CourseTimelinePanel
               status={status}
-              regionCode={selectedRegion.sigunguCd}
               data={data}
               error={error}
               tagLabelMap={tagLabelMap}
@@ -993,8 +973,7 @@ export default function CourseContent() {
                 )}
                 <CourseTimelinePanel
                   status={arrangeStatus}
-                  regionCode={selectedRegion.sigunguCd}
-                  data={arrangeData}
+                      data={arrangeData}
                   error={arrangeError}
                   tagLabelMap={tagLabelMap}
                   mapOpen={mapOpen}

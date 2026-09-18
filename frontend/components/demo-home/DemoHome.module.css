@@ -110,7 +110,6 @@
 .mapPinLabel { fill: rgba(var(--paper-rgb), .9); stroke: rgba(var(--ink-rgb), .13); stroke-width: 1; }
 .mapPinName { fill: var(--ink); font-size: 11px; font-weight: 800; }
 .mapPinNumber { fill: white; font-size: 12px; font-weight: 900; }
-.mapState { position: absolute; top: 48%; left: 50%; z-index: 7; width: max-content; max-width: calc(100% - 48px); padding: 10px 13px; border: 1px solid var(--line); color: var(--ink-soft); background: rgba(var(--paper-rgb), .94); font-size: 11px; transform: translate(-50%,-50%); }
 .srOnly { position: absolute; overflow: hidden; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .proof { position: relative; display: grid; grid-template-columns: .75fr 1.25fr; gap: 8vw; padding: 96px clamp(20px, 7vw, 110px) 112px; color: white; background: var(--ink); isolation: isolate; }
