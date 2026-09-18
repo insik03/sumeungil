@@ -244,6 +244,18 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
     CREATE INDEX IF NOT EXISTS ix_ai_courses_user ON ai_courses (user_id, created_at DESC)
     """,
+    # --- 2026-09-16 신설: 저장한 스팟(대표 지시 "기기가 아닌 계정의 데이터로") ---
+    # 스팟 본문은 두지 않는다(spot_id 만 신뢰, 읽을 때 스토어에서 재구성). congestion 은 저장 시점
+    # 스냅샷 JSON(프론트 SavedSpotCard 가 "저장 시점 기준"으로 보여주던 값)만 보관한다.
+    """
+    CREATE TABLE IF NOT EXISTS saved_spots (
+        user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        spot_id    INTEGER NOT NULL,
+        congestion TEXT,
+        saved_at   TEXT    NOT NULL,
+        PRIMARY KEY (user_id, spot_id)
+    )
+    """,
     # --- 2026-08-18 신설: 고객문의(대표 지시 — "고객문의창도 있어야 할 거 같은데?") ---
     # 접수 시스템이 전무했던 상태(발송 이메일/티켓 시스템 없음)라 "간단한 문의 폼 + DB 저장"
     # 범위로 합의(대표 확인) — admin 콘솔 조회 화면은 별도 후속 작업, 이번엔 저장까지만.

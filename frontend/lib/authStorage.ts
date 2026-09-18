@@ -60,6 +60,9 @@ export function logout(): void {
   clearOnboardingResult();
   try {
     window.localStorage.removeItem(NICKNAME_KEY);
+    // 2026-09-16 — 저장한 스팟은 이제 계정 데이터(서버 정본)라 로컬 캐시도 같이 지운다. 키 문자열은
+    // savedSpotsStorage.ts 의 SAVED_SPOTS_STORAGE_KEY 와 같다(그 모듈이 이 파일을 import 하므로 순환 방지).
+    window.localStorage.removeItem("sumeungil:saved-spots:v1");
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   } catch {
     /* noop */
@@ -111,6 +114,9 @@ export async function deleteAccount(): Promise<void> {
   clearOnboardingResult(); // 리뷰 P1 — 탈퇴한 계정의 자유서술이 다음 계정에 섞이지 않게
   try {
     window.localStorage.removeItem(NICKNAME_KEY);
+    // 2026-09-16 — 저장한 스팟은 이제 계정 데이터(서버 정본)라 로컬 캐시도 같이 지운다. 키 문자열은
+    // savedSpotsStorage.ts 의 SAVED_SPOTS_STORAGE_KEY 와 같다(그 모듈이 이 파일을 import 하므로 순환 방지).
+    window.localStorage.removeItem("sumeungil:saved-spots:v1");
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   } catch {
     /* noop */
