@@ -100,7 +100,10 @@ UGC_METHODS: frozenset[str] = frozenset({"POST", "PATCH", "DELETE"})
 # 라우터의 `deps.get_admin_login_limiter`(항상 동작)다. 여기는 배포 환경의 두 번째 겹이다.
 ADMIN_LOGIN_PATH = "/api/v1/admin/login"
 # 헬스체크는 컨테이너 HEALTHCHECK·모니터링이 주기적으로 두드리므로 제한하지 않는다.
-EXEMPT_PATHS: frozenset[str] = frozenset({"/health", "/api/v1/health"})
+# 2026-09-18 핫픽스 — CSP Report-Only 위반 보고(브라우저가 자동 전송, 페이지당 수십 건)가 default
+# 버킷(120/분)을 통째로 소진해 같은 IP 의 로그인·비콘까지 429 로 막혔다(실측: 30분간 855건, 전부
+# fonts.gstatic.com). 보고 엔드포인트는 상한 있는 카운터만 갱신하는 값싼 경로라 제한에서 뺀다.
+EXEMPT_PATHS: frozenset[str] = frozenset({"/health", "/api/v1/health", "/api/v1/csp-report"})
 
 BUCKET_LLM = "llm"
 BUCKET_COURSE = "course"
