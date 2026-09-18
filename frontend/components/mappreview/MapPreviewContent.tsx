@@ -117,9 +117,13 @@ export default function MapPreviewContent() {
   return (
     <section className="section" style={{ maxWidth: 1560, margin: "0 auto" }}>
       <span className="eyebrow-pill eyebrow-pill--coral">전국 혼잡 현황</span>
-      <h1 className="section__title">지금 전국, 어디가 붐빌까요?</h1>
+      <h1 className="section__title">오늘 전국, 어디가 붐빌 것으로 보일까요?</h1>
+      {/* 2026-09-16(오버투어리즘 검토 P1) — 예측치임을 제목에서부터 밝히고, 분산의 목적을 한 줄로.
+          성과("해결했다")를 단정하는 표현은 쓰지 않는다. */}
       <p style={{ opacity: 0.85, margin: "0 0 6px" }}>
-        시·도를 눌러보세요. 그 지역 혼잡 현황과 관광지를 보여드려요.
+        한국관광공사가 이동통신 데이터로 예측한 방문 집중도예요. 시·도를 눌러 그 지역의 예상 혼잡과
+        아직 붐비지 않는 곳을 보세요 — 한곳에 몰리는 여행 대신 지역을 나누어 만나는 여행을 돕는 게 숨은길의
+        목적이에요.
       </p>
       {err && <p style={{ color: "#b3261e" }}>데이터를 불러오지 못했어요: {err}</p>}
 

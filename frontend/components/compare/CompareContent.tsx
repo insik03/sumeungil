@@ -20,10 +20,15 @@ type ProfileState = OnboardingResult | null | undefined;
  * §D.7-4 델타 표기 — congestion_diff_pct로 "↓{abs}% 낮음" 배지, null은 "비교 불가" 회색.
  * 양수(숨은길이 더 붐빔, 이례적)는 있는 그대로 "높음"으로 표기한다 — 과장·왜곡 없이 사실만.
  */
-function formatCongestionDelta(pct: number | null): { text: string; toneClass: string } {
+/**
+ * 2026-09-16(오버투어리즘 검토 P1-c) — "34% 낮음"은 **상대 감소율**(hidden−hotspot)/hotspot 이라
+ * 퍼센트포인트 차이와 헷갈린다. 원본 index 차이(congestion_diff, %p)를 함께 적는다.
+ */
+function formatCongestionDelta(pct: number | null, diff: number | null): { text: string; toneClass: string } {
   if (pct == null) return { text: "예상 혼잡도 비교 불가", toneClass: "delta-badge--neutral" };
-  if (pct < 0) return { text: `예상 혼잡도 ${Math.abs(pct)}% 낮음`, toneClass: "delta-badge--calm" };
-  if (pct > 0) return { text: `예상 혼잡도 ${pct}% 높음`, toneClass: "delta-badge--hot" };
+  const pp = diff == null ? "" : ` (${Math.abs(Math.round(diff))}%p 차이)`;
+  if (pct < 0) return { text: `예상 혼잡도 ${Math.abs(pct)}% 낮음${pp}`, toneClass: "delta-badge--calm" };
+  if (pct > 0) return { text: `예상 혼잡도 ${pct}% 높음${pp}`, toneClass: "delta-badge--hot" };
   return { text: "예상 혼잡도 차이 없음", toneClass: "delta-badge--neutral" };
 }
 
@@ -179,7 +184,7 @@ export default function CompareContent() {
   if (!data) return null;
 
   const { hotspot, hidden, deltas, verdict, region, meta } = data;
-  const congestionDelta = formatCongestionDelta(deltas.congestion_diff_pct);
+  const congestionDelta = formatCongestionDelta(deltas.congestion_diff_pct, deltas.congestion_diff);
 
   return (
     <section className="compare-section" aria-labelledby="compareHeading">
