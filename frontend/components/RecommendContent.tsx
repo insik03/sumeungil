@@ -13,7 +13,8 @@ import {
   fetchRecommendedPlaces,
   fetchReviewsSummaryBulk,
 } from "../lib/api";
-import { clearOnboardingResult, loadOnboardingResult } from "../lib/onboardingStorage";
+import { clearOnboardingResult } from "../lib/onboardingStorage";
+import { resolveOnboardingProfile } from "../lib/onboardingProfile";
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { safeDistanceKm } from "../lib/geo";
 import CategoryFilter from "./recommend/CategoryFilter";
@@ -23,7 +24,6 @@ import RecommendSpotCard, { SpotCardSkeleton } from "./recommend/SpotCard";
 import SaveToggleButton from "./recommend/SaveToggleButton";
 import RerankBanners from "./recommend/RerankBanners";
 import SpotMap from "./recommend/SpotMap";
-import RegionMapSection from "./RegionMapSection";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import SpotTypeFilter from "./recommend/SpotTypeFilter";
 import SortControl from "./recommend/SortControl";
@@ -55,10 +55,10 @@ const SKELETON_COUNT = 6;
  */
 export default function RecommendContent() {
   const searchParams = useSearchParams();
+  const loggedIn = useLoggedInName();
   const paramRegionCode = searchParams.get("region_code");
 
   // 지역 지도는 /course와 같이 로그인한 사용자에게만(대표: "공개 화면에 둘 거 아님 로그인에 넣으셈").
-  const loggedIn = useLoggedInName();
   const [profile, setProfile] = useState<ProfileState>(undefined);
   // 지연 초기화 — 첫 렌더부터 쿼리 지역으로 시작한다(기본 지역으로 한 번 조회한 뒤 다시 조회하는
   // 이중 호출을 피하기 위함). URL 쿼리는 SSR에서도 동일하게 읽혀 하이드레이션이 안전하다 —
@@ -132,10 +132,16 @@ export default function RecommendContent() {
   }, []);
   const showMap = isDesktop || mapOpen;
 
-  // sessionStorage는 클라이언트에서만 읽는다 — 서버 렌더와 첫 클라이언트 렌더를 일치시켜 하이드레이션 경고를 막는다.
+  // 2026-09-18 — 로컬(sessionStorage) → 없으면 계정 프로필(/onboarding/me). 클라이언트에서만(하이드레이션 안전).
   useEffect(() => {
-    setProfile(loadOnboardingResult()?.result ?? null);
-  }, []);
+    let alive = true;
+    void resolveOnboardingProfile(loggedIn !== null).then((p) => {
+      if (alive) setProfile(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loggedIn]);
 
   // "distance"는 backend sort 값이 아니다(클라이언트 전용) — backend에는 recommended로 요청한다.
   const backendSort: "recommended" | "popular" | "calm" =
@@ -314,17 +320,10 @@ export default function RecommendContent() {
         </button>
 
         <div className="recommend-layout">
-          {/* 2026-09-03(대표) — 지역 지도는 별도 섹션이 아니라 NAVER 지도(SpotMap) **바로 아래에
-              같은 크기로** 쌓는다. 로그인 사용자에게만(비로그인 공개 화면이라 /course와 같은 기준).
-              --stacked 일 때 두 지도가 칸을 반씩 나눠 갖는다(globals.css .recommend-layout__map--stacked). */}
-          <div
-            className={`recommend-layout__map${showMap ? " is-open" : ""}${loggedIn ? " recommend-layout__map--stacked" : ""}`}
-          >
+          {/* 2026-09-18 대표 지시("지도 자체를 없애라") — NAVER 지도 아래 쌓던 시도 경계 지도를 뺐다. */}
+          <div className={`recommend-layout__map${showMap ? " is-open" : ""}`}>
             {showMap ? (
-              <>
-                <SpotMap items={status === "success" && data ? data.items : []} regionLabel={regionLabel} />
-                {loggedIn && <RegionMapSection regionCode={selectedRegion.sigunguCd} inline />}
-              </>
+              <SpotMap items={status === "success" && data ? data.items : []} regionLabel={regionLabel} />
             ) : (
               <div className="spot-map spot-map--placeholder" aria-hidden="true" />
             )}
