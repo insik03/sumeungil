@@ -115,7 +115,7 @@ export default function CongestionBoard({ areaCd, sigunguCd, marquee = false, su
     <section id="board" className="section section--mint" aria-labelledby="boardHeading">
       <span className="eyebrow-pill eyebrow-pill--coral">예상 혼잡 전광판</span>
       <h2 className="section__title" id="boardHeading">
-        지금 이 순간, 얼마나 붐빌까요?
+        오늘의 예상 방문 집중도
       </h2>
 
       {subtitle && <p className="board-subtitle">{subtitle}</p>}
@@ -235,6 +235,10 @@ export default function CongestionBoard({ areaCd, sigunguCd, marquee = false, su
         <div className="board-cta-row">
           <Link className="btn btn--mint" href={`/compare?region_code=${encodeURIComponent(matchedSido?.regionCode ?? DEFAULT_SIDO.regionCode)}`}>
             이 지역, 대신 갈 만한 한적한 곳 보기
+          </Link>
+          {/* 2026-09-16 — 혼잡 확인 → 코스 선택까지 이어지는 동선(오버투어리즘 검토 P2-a). */}
+          <Link className="btn btn--outline" href={`/course?region_code=${encodeURIComponent(matchedSido?.regionCode ?? DEFAULT_SIDO.regionCode)}`}>
+            이 지역으로 코스 짜기
           </Link>
         </div>
       )}

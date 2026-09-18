@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ConsentModal from "./ConsentModal";
 import LoginModal from "./LoginModal";
-import { logout, syncSessionFromServer } from "../lib/authStorage";
+import { AUTH_CHANGED_EVENT, getNickname, logout, syncSessionFromServer } from "../lib/authStorage";
+import { syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 
 /**
@@ -151,7 +152,19 @@ export default function Header() {
     void syncSessionFromServer().then((info) => {
       // QA M-2 — 부팅 시 1회, 서버 세션 진실과 로컬 캐시를 맞춘다. 2026-09-14: 약관 미동의면 동의 모달.
       if (info?.authenticated && info.terms_agreed === false) setConsentOpen(true);
+      // 2026-09-16 — 저장한 스팟은 계정 데이터. 세션이 확인되면 로컬 캐시를 서버 보관함과 맞춘다.
+      if (info?.authenticated) void syncSavedSpotsFromServer();
     });
+  }, []);
+
+  // 로그인 모달로 방금 로그인한 경우(AUTH_CHANGED_EVENT)에도 한 번 맞춘다 — 비로그인 때 저장한 항목이
+  // 이때 계정으로 합쳐진다.
+  useEffect(() => {
+    const onAuth = () => {
+      if (getNickname() !== null) void syncSavedSpotsFromServer();
+    };
+    window.addEventListener(AUTH_CHANGED_EVENT, onAuth);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, onAuth);
   }, []);
 
   // 관리자 콘솔은 일반 서비스 셸을 공유하지 않는다(03-admin-console-design.md §4).

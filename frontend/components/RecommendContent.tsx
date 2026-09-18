@@ -17,7 +17,8 @@ import { clearOnboardingResult, loadOnboardingResult } from "../lib/onboardingSt
 import { loadLastRegion, saveLastRegion } from "../lib/lastRegionStorage";
 import { safeDistanceKm } from "../lib/geo";
 import CategoryFilter from "./recommend/CategoryFilter";
-import RegionPicker, { SelectedRegion } from "./recommend/RegionPicker";
+import type { SelectedRegion } from "./recommend/RegionPicker";
+import RegionBlockPicker from "./recommend/RegionBlockPicker";
 import RecommendSpotCard, { SpotCardSkeleton } from "./recommend/SpotCard";
 import SaveToggleButton from "./recommend/SaveToggleButton";
 import RerankBanners from "./recommend/RerankBanners";
@@ -296,7 +297,8 @@ export default function RecommendContent() {
 
         {status === "success" && data && <RerankBanners rerank={data.rerank} items={data.items} />}
 
-        <RegionPicker selected={selectedRegion} onSelect={setSelectedRegion} />
+        {/* 2026-09-16 대표 지시 — 지역 검색창을 빼고 권역 9개 칩(+내 위치)으로. /course 는 RegionPicker 유지. */}
+        <RegionBlockPicker selected={selectedRegion} onSelect={setSelectedRegion} />
         <CategoryFilter selected={category} onSelect={setCategory} />
         <SpotTypeFilter selected={spotType} onSelect={setSpotType} />
         <SortControl selected={sortOption} onSelect={handleSortSelect} locationNotice={locationNotice} />
