@@ -548,7 +548,8 @@ _, again = db.write(lambda c: user_repo.link_provider(c, user_id=ua["id"], provi
 check("같은 sub 재연결 → already", again == "already", again)
 _, conflict = db.write(lambda c: user_repo.link_provider(c, user_id=ua["id"], provider="kakao", provider_sub="link-k-2", email=None, email_verified=False, now_iso=NOW))
 check("다른 카카오 sub → conflict(덮어쓰지 않음)", conflict == "conflict" and db.read(lambda c: user_repo.get_by_id(c, ua["id"]))["kakao_sub"] == "link-k-1", conflict)
-check("/me providers", user_repo.linked_providers(db.read(lambda c: user_repo.get_by_id(c, ua["id"]))) == {"google": True, "kakao": True})
+_lp = user_repo.linked_providers(db.read(lambda c: user_repo.get_by_id(c, ua["id"])))
+check("/me providers", _lp.get("google") is True and _lp.get("kakao") is True and _lp.get("naver") is False, str(_lp))
 
 db.close()
 drop_schema(_BASE_DSN, _SCHEMA)
