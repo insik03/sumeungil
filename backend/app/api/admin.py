@@ -32,7 +32,9 @@ from fastapi.responses import JSONResponse
 
 from ..config import settings
 from ..db.postgres import Database
-from ..deps import get_admin_auth, get_admin_login_limiter, get_database
+from ..cache.base import Cache
+from ..deps import get_admin_auth, get_admin_login_limiter, get_cache, get_database, get_spot_repository
+from ..repositories.spot_repo import SpotRepository
 from ..middleware.rate_limit import extract_client_ip, rate_limited_response
 from ..repositories import admin_repo
 from ..schemas.admin import (
@@ -46,6 +48,7 @@ from ..schemas.admin import (
     AdminModerationResponse,
     AdminOkResponse,
     AdminReviewListResponse,
+    AdminAiStatusResponse,
     AdminServerStatusResponse,
     AdminSessionResponse,
     AdminStatsResponse,
@@ -440,6 +443,20 @@ async def admin_stats(request: Request, db: Database = Depends(get_database)):
         return await admin_service.stats(db)
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="admin/stats")
+
+
+@router.get("/ai-status", response_model=AdminAiStatusResponse)
+async def admin_ai_status(
+    request: Request,
+    cache: Cache = Depends(get_cache),
+    spot_repo: SpotRepository = Depends(get_spot_repository),
+):
+    """AI 사용량(2026-09-20). Gemini 한도·코스 LLM 일일 상한·사전 생성 요약·CSP 보고 집계."""
+    try:
+        _require_session(request)
+        return await admin_service.ai_status(cache, spot_repo)
+    except Exception as exc:  # noqa: BLE001
+        return to_response(exc, context="admin/ai-status")
 
 
 @router.get("/server-status", response_model=AdminServerStatusResponse)

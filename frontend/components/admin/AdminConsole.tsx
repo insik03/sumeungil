@@ -1,8 +1,10 @@
 "use client";
 
+import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../../lib/api";
 import AdminServerStatusTab from "./AdminServerStatus";
+import AdminAiStatusTab from "./AdminAiStatus";
 import AdminTrafficTab from "./AdminTraffic";
 import {
   AdminCourseItem,
@@ -70,7 +72,7 @@ export default function AdminConsole({
   onSessionLost: () => void;
 }) {
   const [tab, setTab] = useState<
-    "reviews" | "courses" | "inquiries" | "users" | "traffic" | "server"
+    "reviews" | "courses" | "inquiries" | "users" | "traffic" | "server" | "ai"
   >("reviews");
   const [stats, setStats] = useState<AdminStats | null>(null);
 
@@ -300,296 +302,375 @@ export default function AdminConsole({
 
   const threshold = stats?.review_hide_report_threshold ?? 0;
 
+  const TITLES: Record<typeof tab, string> = {
+    reviews: "후기 관리",
+    courses: "공유 코스 관리",
+    inquiries: "고객문의",
+    users: "회원 관리",
+    traffic: "트래픽",
+    server: "서버 상태",
+    ai: "AI 사용량",
+  };
+
+  const navItem = (key: typeof tab, label: string, icon: React.ReactNode, badge?: number) => (
+    <button
+      type="button"
+      className={`admin-nav__item${tab === key ? " is-active" : ""}`}
+      onClick={() => setTab(key)}
+      aria-current={tab === key ? "page" : undefined}
+    >
+      <span className="admin-nav__icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="admin-nav__label">{label}</span>
+      {badge ? <span className="admin-nav__badge">{badge}</span> : null}
+    </button>
+  );
+
   return (
-    <div className="admin">
-      <header className="admin-bar">
-        <span className="admin-bar__brand">
-          <i className="admin-bar__dot" aria-hidden="true" />
-          숨은길 관리자 콘솔
-        </span>
-        <span className="admin-bar__right">
-          <span className="admin-bar__who">
-            {operator ? `${operator}님` : "운영자"} · {fmtTime(expiresAt)}까지 세션 유지
+    <div className="admin admin--shell">
+      {/* 2026-09-20 대표 지시 — KOIN ADMIN(koreatech.in) 오마주: 좌측 그룹 메뉴 + 페이지 제목/액션 + 표.
+          기능·API 호출은 그대로, 배치와 표현만 바꿨다. */}
+      <aside className="admin-side" aria-label="관리 메뉴">
+        <div className="admin-side__brand">
+          <span className="admin-side__mark" aria-hidden="true">숨</span>
+          <span>
+            숨은길 <small>ADMIN</small>
           </span>
-          <button type="button" className="admin-btn admin-btn--ghost" onClick={doLogout}>
+        </div>
+        <nav className="admin-nav">
+          <div className="admin-nav__group">
+            <span className="admin-nav__group-title">커뮤니티</span>
+            {navItem("reviews", "후기 관리", <IconStar />, stats?.reports_pending || undefined)}
+            {navItem("courses", "공유 코스", <IconRoute />)}
+            {navItem("inquiries", "고객문의", <IconMail />, stats?.inquiries_new || undefined)}
+          </div>
+          <div className="admin-nav__group">
+            <span className="admin-nav__group-title">회원</span>
+            {navItem("users", "회원 관리", <IconUser />)}
+          </div>
+          <div className="admin-nav__group">
+            <span className="admin-nav__group-title">운영</span>
+            {navItem("traffic", "트래픽", <IconChart />)}
+            {navItem("server", "서버 상태", <IconServer />)}
+            {navItem("ai", "AI 사용량", <IconSpark />)}
+          </div>
+        </nav>
+        <div className="admin-side__foot">
+          <span className="admin-side__who">
+            {operator ? `${operator}님` : "운영자"}
+            <small>{fmtTime(expiresAt)}까지 세션 유지</small>
+          </span>
+          <button type="button" className="admin-btn admin-btn--ghost admin-btn--sm" onClick={doLogout}>
             로그아웃
           </button>
-        </span>
-      </header>
+        </div>
+      </aside>
 
-      {/* --- 통계 스트립 --- */}
-      <section className="admin-stats" aria-label="운영 현황">
-        {stats ? (
-          <>
-            <button
-              type="button"
-              className={`admin-stat admin-stat--pill ${stats.reports_pending > 0 ? "is-warn" : ""}`}
-              onClick={() => {
-                setTab("reviews");
-                setReviewStatus("reported");
-              }}
-            >
-              {stats.reports_pending > 0
-                ? `신고 대기 ${stats.reports_pending}`
-                : "신고 대기 없음"}
-            </button>
-            <span className="admin-stat">
-              오늘 등록 <b>{stats.reviews_today}</b>
-            </span>
-            <button
-              type="button"
-              className="admin-stat admin-stat--pill"
-              onClick={() => setTab("users")}
-            >
-              회원 <b>{stats.users_total}</b>
-              {stats.users_today > 0 ? ` · 오늘 +${stats.users_today}` : ""}
-            </button>
-            <span className="admin-stat">
-              후기 <b>{stats.reviews_total}</b> · 숨김 <b>{stats.reviews_hidden}</b>
-            </span>
-            <span className="admin-stat">
-              코스 <b>{stats.courses_total}</b> · 숨김 <b>{stats.courses_hidden}</b>
-            </span>
-            <button
-              type="button"
-              className={`admin-stat admin-stat--pill ${stats.inquiries_new > 0 ? "is-warn" : ""}`}
-              onClick={() => {
-                setTab("inquiries");
-                setInquiryStatus("new");
-              }}
-            >
-              {stats.inquiries_new > 0 ? `미답변 문의 ${stats.inquiries_new}` : "미답변 문의 없음"}
-            </button>
-            <span className="admin-stats__meta">
-              누적 신고 {stats.reports_total} · 기준 {fmtTime(stats.generated_at)}
-              <button
-                type="button"
-                className="admin-btn admin-btn--ghost admin-btn--sm"
-                onClick={() => {
-                  void loadStats();
-                  refreshCurrentList();
-                }}
-              >
-                새로고침
-              </button>
-            </span>
-          </>
-        ) : (
-          <span className="admin-stats__meta">현황을 불러오는 중…</span>
-        )}
-      </section>
-
-      {/* --- 탭 --- */}
-      <nav className="admin-tabs">
-        <button
-          type="button"
-          className={`admin-tab ${tab === "reviews" ? "is-active" : ""}`}
-          onClick={() => setTab("reviews")}
-        >
-          후기 관리
-        </button>
-        <button
-          type="button"
-          className={`admin-tab ${tab === "courses" ? "is-active" : ""}`}
-          onClick={() => setTab("courses")}
-        >
-          공유 코스 관리
-        </button>
-        <button
-          type="button"
-          className={`admin-tab ${tab === "inquiries" ? "is-active" : ""}`}
-          onClick={() => setTab("inquiries")}
-        >
-          고객문의
-        </button>
-        <button
-          type="button"
-          className={`admin-tab ${tab === "users" ? "is-active" : ""}`}
-          onClick={() => setTab("users")}
-        >
-          회원
-        </button>
-        <button
-          type="button"
-          className={`admin-tab ${tab === "traffic" ? "is-active" : ""}`}
-          onClick={() => setTab("traffic")}
-        >
-          트래픽
-        </button>
-        <button
-          type="button"
-          className={`admin-tab ${tab === "server" ? "is-active" : ""}`}
-          onClick={() => setTab("server")}
-        >
-          서버 상태
-        </button>
-
-        <span className="admin-tabs__filters">
-          {tab === "traffic" || tab === "users" || tab === "server" ? null : tab === "inquiries" ? (
-            <select
-              className="admin-select"
-              value={inquiryStatus}
-              onChange={(e) => setInquiryStatus(e.target.value as InquiryStatusFilter)}
-              aria-label="문의 상태 필터"
-            >
-              <option value="new">미답변</option>
-              <option value="resolved">답변완료</option>
-              <option value="all">전체</option>
-            </select>
-          ) : tab === "reviews" ? (
-            <>
+      <div className="admin-main">
+        <header className="admin-head">
+          <h1 className="admin-head__title">{TITLES[tab]}</h1>
+          <div className="admin-head__actions">
+            {tab === "inquiries" ? (
               <select
                 className="admin-select"
-                value={reviewStatus}
-                onChange={(e) => setReviewStatus(e.target.value as ReviewStatusFilter)}
-                aria-label="후기 상태 필터"
+                value={inquiryStatus}
+                onChange={(e) => setInquiryStatus(e.target.value as InquiryStatusFilter)}
+                aria-label="문의 상태 필터"
               >
-                <option value="reported">신고됨</option>
-                <option value="hidden">숨김</option>
+                <option value="new">미답변</option>
+                <option value="resolved">답변완료</option>
                 <option value="all">전체</option>
               </select>
+            ) : tab === "reviews" ? (
+              <>
+                <select
+                  className="admin-select"
+                  value={reviewStatus}
+                  onChange={(e) => setReviewStatus(e.target.value as ReviewStatusFilter)}
+                  aria-label="후기 상태 필터"
+                >
+                  <option value="reported">신고됨</option>
+                  <option value="hidden">숨김</option>
+                  <option value="all">전체</option>
+                </select>
+                <select
+                  className="admin-select"
+                  value={reviewSort}
+                  onChange={(e) => setReviewSort(e.target.value as ReviewSortOption)}
+                  aria-label="후기 정렬"
+                >
+                  <option value="reported">신고 많은순</option>
+                  <option value="recent">최신순</option>
+                </select>
+              </>
+            ) : tab === "courses" ? (
+              /* 코스에는 sort 파라미터도 reported 상태값도 API 에 없다. 없는 기능을 있는 것처럼
+                 보이지 않도록 정렬 드롭다운을 만들지 않는다. */
               <select
                 className="admin-select"
-                value={reviewSort}
-                onChange={(e) => setReviewSort(e.target.value as ReviewSortOption)}
-                aria-label="후기 정렬"
+                value={courseStatus}
+                onChange={(e) => setCourseStatus(e.target.value as CourseStatusFilter)}
+                aria-label="코스 상태 필터"
               >
-                <option value="reported">신고 많은순</option>
-                <option value="recent">최신순</option>
+                <option value="all">전체</option>
+                <option value="hidden">숨김</option>
               </select>
-            </>
-          ) : (
-            /* 코스에는 sort 파라미터도 reported 상태값도 API 에 없다. 없는 기능을 있는 것처럼
-               보이지 않도록 정렬 드롭다운을 만들지 않는다. */
-            <select
-              className="admin-select"
-              value={courseStatus}
-              onChange={(e) => setCourseStatus(e.target.value as CourseStatusFilter)}
-              aria-label="코스 상태 필터"
-            >
-              <option value="all">전체</option>
-              <option value="hidden">숨김</option>
-            </select>
-          )}
-        </span>
-      </nav>
-
-      {/* --- 목록 --- */}
-      <section className="admin-list">
-        {tab === "traffic" ? (
-          <AdminTrafficTab onSessionLost={onSessionLost} />
-        ) : tab === "server" ? (
-          <AdminServerStatusTab onSessionLost={onSessionLost} />
-        ) : listError ? (
-          <div className="admin-empty">
-            <p>목록을 불러오지 못했어요.</p>
+            ) : null}
             <button
               type="button"
               className="admin-btn admin-btn--primary"
-              onClick={refreshCurrentList}
+              onClick={() => {
+                void loadStats();
+                refreshCurrentList();
+              }}
             >
-              다시 시도
+              새로고침
             </button>
           </div>
-        ) : tab === "reviews" ? (
-          reviews === null ? (
-            <AdminSkeleton />
-          ) : reviews.length === 0 ? (
+        </header>
+
+        {/* --- 현황 카드 --- */}
+        <section className="admin-cards" aria-label="운영 현황">
+          {stats ? (
+            <>
+              <button
+                type="button"
+                className={`admin-card admin-card--btn${stats.reports_pending > 0 ? " is-warn" : ""}`}
+                onClick={() => {
+                  setTab("reviews");
+                  setReviewStatus("reported");
+                }}
+              >
+                <span className="admin-card__label">신고 대기</span>
+                <b className="admin-card__num">{stats.reports_pending}</b>
+                <span className="admin-card__sub">누적 신고 {stats.reports_total}</span>
+              </button>
+              <button
+                type="button"
+                className={`admin-card admin-card--btn${stats.inquiries_new > 0 ? " is-warn" : ""}`}
+                onClick={() => {
+                  setTab("inquiries");
+                  setInquiryStatus("new");
+                }}
+              >
+                <span className="admin-card__label">미답변 문의</span>
+                <b className="admin-card__num">{stats.inquiries_new}</b>
+                <span className="admin-card__sub">답변 대기</span>
+              </button>
+              <div className="admin-card">
+                <span className="admin-card__label">후기</span>
+                <b className="admin-card__num">{stats.reviews_total}</b>
+                <span className="admin-card__sub">
+                  오늘 +{stats.reviews_today} · 숨김 {stats.reviews_hidden}
+                </span>
+              </div>
+              <div className="admin-card">
+                <span className="admin-card__label">공유 코스</span>
+                <b className="admin-card__num">{stats.courses_total}</b>
+                <span className="admin-card__sub">숨김 {stats.courses_hidden}</span>
+              </div>
+              <div className="admin-card">
+                <span className="admin-card__label">계정 보관함</span>
+                <b className="admin-card__num">{stats.saved_spots_total}</b>
+                <span className="admin-card__sub">저장 스팟 · 내 코스 {stats.my_courses_total}</span>
+              </div>
+              <button type="button" className="admin-card admin-card--btn" onClick={() => setTab("users")}>
+                <span className="admin-card__label">회원</span>
+                <b className="admin-card__num">{stats.users_total}</b>
+                <span className="admin-card__sub">{stats.users_today > 0 ? `오늘 +${stats.users_today}` : "오늘 가입 없음"}</span>
+              </button>
+              <div className="admin-card admin-card--meta">
+                <span className="admin-card__label">기준 시각</span>
+                <span className="admin-card__sub">{fmtTime(stats.generated_at)}</span>
+              </div>
+            </>
+          ) : (
+            <div className="admin-card admin-card--meta">
+              <span className="admin-card__sub">현황을 불러오는 중…</span>
+            </div>
+          )}
+        </section>
+
+        {/* --- 본문 --- */}
+        <section className="admin-panel">
+          {tab === "traffic" ? (
+            <AdminTrafficTab onSessionLost={onSessionLost} />
+          ) : tab === "server" ? (
+            <AdminServerStatusTab onSessionLost={onSessionLost} />
+          ) : tab === "ai" ? (
+            <AdminAiStatusTab onSessionLost={onSessionLost} />
+          ) : listError ? (
             <div className="admin-empty">
-              <p>
-                {reviewStatus === "reported"
-                  ? "신고된 후기가 없어요. 좋은 상태예요."
-                  : reviewStatus === "hidden"
-                    ? "숨겨진 후기가 없어요."
-                    : "아직 등록된 후기가 없어요."}
-              </p>
-              {reviewStatus === "reported" && (
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--ghost"
-                  onClick={() => setReviewStatus("all")}
-                >
-                  전체 후기 보기
-                </button>
-              )}
+              <p>목록을 불러오지 못했어요.</p>
+              <button type="button" className="admin-btn admin-btn--primary" onClick={refreshCurrentList}>
+                다시 시도
+              </button>
+            </div>
+          ) : tab === "reviews" ? (
+            reviews === null ? (
+              <AdminSkeleton />
+            ) : reviews.length === 0 ? (
+              <div className="admin-empty">
+                <p>
+                  {reviewStatus === "reported"
+                    ? "신고된 후기가 없어요. 좋은 상태예요."
+                    : reviewStatus === "hidden"
+                      ? "숨겨진 후기가 없어요."
+                      : "아직 등록된 후기가 없어요."}
+                </p>
+                {reviewStatus === "reported" && (
+                  <button type="button" className="admin-btn admin-btn--ghost" onClick={() => setReviewStatus("all")}>
+                    전체 후기 보기
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>작성자</th>
+                        <th>평점</th>
+                        <th>한줄평</th>
+                        <th>대상</th>
+                        <th>신고</th>
+                        <th>상태</th>
+                        <th>작성일</th>
+                        <th>작업</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reviews.map((r) => (
+                        <ReviewRow
+                          key={r.id}
+                          item={r}
+                          threshold={threshold}
+                          busy={busyId === `r${r.id}`}
+                          onToggle={() => toggleReview(r)}
+                          onDelete={() => setPendingDelete({ kind: "review", item: r })}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="admin-list__count">{reviews.length}건 표시 · 전체 {reviewTotal}건</p>
+              </>
+            )
+          ) : tab === "courses" ? (
+            courses === null ? (
+              <AdminSkeleton />
+            ) : courses.length === 0 ? (
+              <div className="admin-empty">
+                <p>{courseStatus === "hidden" ? "숨겨진 코스가 없어요." : "아직 공유된 코스가 없어요."}</p>
+              </div>
+            ) : (
+              <>
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>제목</th>
+                        <th>작성자</th>
+                        <th>스팟</th>
+                        <th>조회</th>
+                        <th>공유코드</th>
+                        <th>상태</th>
+                        <th>생성일</th>
+                        <th>작업</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {courses.map((c) => (
+                        <CourseRow
+                          key={c.share_code}
+                          item={c}
+                          busy={busyId === `c${c.share_code}`}
+                          onToggle={() => toggleCourse(c)}
+                          onDelete={() => setPendingDelete({ kind: "course", item: c })}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="admin-list__count">{courses.length}건 표시 · 전체 {courseTotal}건</p>
+              </>
+            )
+          ) : tab === "inquiries" ? (
+            inquiries === null ? (
+              <AdminSkeleton />
+            ) : inquiries.length === 0 ? (
+              <div className="admin-empty">
+                <p>
+                  {inquiryStatus === "new"
+                    ? "아직 답변할 문의가 없어요."
+                    : inquiryStatus === "resolved"
+                      ? "답변한 문의가 없어요."
+                      : "아직 들어온 문의가 없어요."}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="admin-table__wrap">
+                  <table className="admin-table admin-table--inquiries">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>작성자</th>
+                        <th>문의 내용</th>
+                        <th>상태</th>
+                        <th>작성일</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inquiries.map((i) => (
+                        <InquiryRow
+                          key={i.id}
+                          item={i}
+                          busy={busyId === `i${i.id}`}
+                          onReply={(reply) => submitReply(i, reply)}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="admin-list__count">{inquiries.length}건 표시 · 전체 {inquiryTotal}건</p>
+              </>
+            )
+          ) : users === null ? (
+            <AdminSkeleton />
+          ) : users.length === 0 ? (
+            <div className="admin-empty">
+              <p>아직 가입한 회원이 없어요.</p>
             </div>
           ) : (
             <>
-              {reviews.map((r) => (
-                <ReviewRow
-                  key={r.id}
-                  item={r}
-                  threshold={threshold}
-                  busy={busyId === `r${r.id}`}
-                  onToggle={() => toggleReview(r)}
-                  onDelete={() => setPendingDelete({ kind: "review", item: r })}
-                />
-              ))}
-              <p className="admin-list__count">{reviews.length}건 표시 · 전체 {reviewTotal}건</p>
+              <div className="admin-table__wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>닉네임</th>
+                      <th>가입 방식</th>
+                      <th>연결된 로그인</th>
+                      <th>약관 동의</th>
+                      <th>가입일</th>
+                      <th>마지막 로그인</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u, idx) => (
+                      <UserRow key={`${u.nickname}-${u.created_at}-${idx}`} item={u} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="admin-list__count">{users.length}명 표시 · 전체 {userTotal}명</p>
             </>
-          )
-        ) : tab === "courses" ? (
-          courses === null ? (
-            <AdminSkeleton />
-          ) : courses.length === 0 ? (
-            <div className="admin-empty">
-              <p>{courseStatus === "hidden" ? "숨겨진 코스가 없어요." : "아직 공유된 코스가 없어요."}</p>
-            </div>
-          ) : (
-            <>
-              {courses.map((c) => (
-                <CourseRow
-                  key={c.share_code}
-                  item={c}
-                  busy={busyId === `c${c.share_code}`}
-                  onToggle={() => toggleCourse(c)}
-                  onDelete={() => setPendingDelete({ kind: "course", item: c })}
-                />
-              ))}
-              <p className="admin-list__count">{courses.length}건 표시 · 전체 {courseTotal}건</p>
-            </>
-          )
-        ) : tab === "inquiries" ? (
-          inquiries === null ? (
-            <AdminSkeleton />
-          ) : inquiries.length === 0 ? (
-            <div className="admin-empty">
-              <p>
-                {inquiryStatus === "new"
-                  ? "아직 답변할 문의가 없어요."
-                  : inquiryStatus === "resolved"
-                    ? "답변한 문의가 없어요."
-                    : "아직 들어온 문의가 없어요."}
-              </p>
-            </div>
-          ) : (
-            <>
-              {inquiries.map((i) => (
-                <InquiryRow
-                  key={i.id}
-                  item={i}
-                  busy={busyId === `i${i.id}`}
-                  onReply={(reply) => submitReply(i, reply)}
-                />
-              ))}
-              <p className="admin-list__count">{inquiries.length}건 표시 · 전체 {inquiryTotal}건</p>
-            </>
-          )
-        ) : users === null ? (
-          <AdminSkeleton />
-        ) : users.length === 0 ? (
-          <div className="admin-empty">
-            <p>아직 가입한 회원이 없어요.</p>
-          </div>
-        ) : (
-          <>
-            {users.map((u, idx) => (
-              <UserRow key={`${u.nickname}-${u.created_at}-${idx}`} item={u} />
-            ))}
-            <p className="admin-list__count">{users.length}명 표시 · 전체 {userTotal}명</p>
-          </>
-        )}
-      </section>
+          )}
+        </section>
+      </div>
 
       {pendingDelete && (
         <DeleteDialog
@@ -608,6 +689,22 @@ export default function AdminConsole({
     </div>
   );
 }
+
+/* 메뉴 아이콘 — 라이브러리 없이 16px 선 아이콘 6개(KOIN 의 Ant 아이콘 자리). */
+function Icon({ d }: { d: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+const IconStar = () => <Icon d="M12 3l2.8 6 6.5.7-4.9 4.4 1.4 6.4L12 17.3 6.2 20.5l1.4-6.4L2.7 9.7l6.5-.7z" />;
+const IconRoute = () => <Icon d="M4 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm16-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM7 16h7a4 4 0 0 0 0-8h-4" />;
+const IconMail = () => <Icon d="M3 6h18v12H3zM3 7l9 6 9-6" />;
+const IconUser = () => <Icon d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-8 9a8 8 0 0 1 16 0" />;
+const IconChart = () => <Icon d="M4 20V10m6 10V4m6 16v-7m6 7H2" />;
+const IconServer = () => <Icon d="M4 4h16v6H4zm0 10h16v6H4zM8 7h.01M8 17h.01" />;
+const IconSpark = () => <Icon d="M12 3v4m0 10v4M3 12h4m10 0h4M6.3 6.3l2.8 2.8m5.8 5.8l2.8 2.8M6.3 17.7l2.8-2.8m5.8-5.8l2.8-2.8" />;
 
 function AdminSkeleton() {
   return (
@@ -635,43 +732,51 @@ function ReviewRow({
   const auto = isAutoHidden(item, threshold);
   const warn = threshold > 0 && item.report_count >= threshold;
   return (
-    <article className={`admin-row ${item.hidden ? "is-hidden-item" : ""}`}>
-      <div className="admin-row__head">
-        <span className="admin-row__id">#{item.id}</span>
-        <span className="admin-row__name">{item.nickname}</span>
-        <span className="admin-row__meta">평점 {item.rating}/5</span>
-        <span className="admin-row__badges">
-          {item.report_count > 0 && (
-            <span className={`admin-badge ${warn ? "is-warn" : ""}`}>신고 {item.report_count}건</span>
-          )}
-          {item.hidden && (
-            /* "자동 숨김" 판정 근거는 lib/adminApi.ts 의 isAutoHidden() 주석 참고.
-               임계값을 화면에 박지 않고 서버 stats 값을 쓴다. */
-            <span className="admin-badge is-hidden">{auto ? "자동 숨김됨" : "운영자가 숨김"}</span>
-          )}
-        </span>
-      </div>
-      <p className="admin-row__body">
-        {item.comment ? item.comment : <i className="admin-row__none">(한줄평 없음)</i>}
-      </p>
-      <p className="admin-row__sub">
-        대상 {item.target_type} #{item.target_id} · 작성 {fmtDateTime(item.created_at)} ·{" "}
-        {item.updated_at !== item.created_at ? `수정 ${fmtDateTime(item.updated_at)}` : "수정 없음"}
+    <tr className={item.hidden ? "is-hidden-item" : undefined}>
+      <td className="admin-table__mono">#{item.id}</td>
+      <td>
+        <b>{item.nickname}</b>
         {item.author_hash && (
-          <span className="admin-row__hash" title="같은 사람이 쓴 글을 묶어보는 지문 — 원본 식별자가 아닙니다">
-            작성자 지문 {item.author_hash}
+          <span className="admin-table__hash" title="같은 사람이 쓴 글을 묶어보는 지문 — 원본 식별자가 아닙니다">
+            {item.author_hash}
           </span>
         )}
-      </p>
-      <div className="admin-row__actions">
-        <button type="button" className="admin-btn admin-btn--primary" onClick={onToggle} disabled={busy}>
+      </td>
+      <td className="admin-table__num">{item.rating}/5</td>
+      <td className="admin-table__text">
+        {item.comment ? item.comment : <i className="admin-row__none">(한줄평 없음)</i>}
+      </td>
+      <td className="admin-table__mono">
+        {item.target_type} #{item.target_id}
+      </td>
+      <td className="admin-table__num">
+        {item.report_count > 0 ? (
+          <span className={`admin-badge ${warn ? "is-warn" : ""}`}>{item.report_count}건</span>
+        ) : (
+          "-"
+        )}
+      </td>
+      <td>
+        {item.hidden ? (
+          /* "자동 숨김" 판정 근거는 lib/adminApi.ts 의 isAutoHidden() 주석 참고. */
+          <span className="admin-badge is-hidden">{auto ? "자동 숨김" : "운영자 숨김"}</span>
+        ) : (
+          <span className="admin-badge is-ok">공개</span>
+        )}
+      </td>
+      <td className="admin-table__date">
+        {fmtDateTime(item.created_at)}
+        {item.updated_at !== item.created_at && <small>수정 {fmtDateTime(item.updated_at)}</small>}
+      </td>
+      <td className="admin-table__actions">
+        <button type="button" className="admin-btn admin-btn--sm admin-btn--ghost" onClick={onToggle} disabled={busy}>
           {busy ? "처리 중…" : item.hidden ? "숨김 해제" : "숨기기"}
         </button>
-        <button type="button" className="admin-btn admin-btn--danger" onClick={onDelete} disabled={busy}>
+        <button type="button" className="admin-btn admin-btn--sm admin-btn--danger" onClick={onDelete} disabled={busy}>
           삭제
         </button>
-      </div>
-    </article>
+      </td>
+    </tr>
   );
 }
 
@@ -687,44 +792,41 @@ function CourseRow({
   onDelete: () => void;
 }) {
   return (
-    <article className={`admin-row ${item.hidden ? "is-hidden-item" : ""}`}>
-      <div className="admin-row__head">
-        <span className="admin-row__name">{item.title}</span>
-        <span className="admin-row__meta">
-          스팟 {item.spot_count}곳 · 조회 {item.view_count}
-        </span>
-        <span className="admin-row__badges">
-          {item.hidden && <span className="admin-badge is-hidden">숨김</span>}
-        </span>
-      </div>
-      <p className="admin-row__sub">
-        {item.nickname} · 공유코드 <span className="admin-row__code">{item.share_code}</span> ·{" "}
-        {fmtDateTime(item.created_at)}
+    <tr className={item.hidden ? "is-hidden-item" : undefined}>
+      <td className="admin-table__text">
+        <b>{item.title}</b>
+      </td>
+      <td>
+        {item.nickname}
         {item.author_hash && (
-          <span className="admin-row__hash" title="같은 사람이 쓴 글을 묶어보는 지문 — 원본 식별자가 아닙니다">
-            작성자 지문 {item.author_hash}
+          <span className="admin-table__hash" title="같은 사람이 쓴 글을 묶어보는 지문 — 원본 식별자가 아닙니다">
+            {item.author_hash}
           </span>
         )}
-      </p>
-      <div className="admin-row__actions">
-        <button type="button" className="admin-btn admin-btn--primary" onClick={onToggle} disabled={busy}>
+      </td>
+      <td className="admin-table__num">{item.spot_count}곳</td>
+      <td className="admin-table__num">{item.view_count}</td>
+      <td className="admin-table__mono">{item.share_code}</td>
+      <td>{item.hidden ? <span className="admin-badge is-hidden">숨김</span> : <span className="admin-badge is-ok">공개</span>}</td>
+      <td className="admin-table__date">{fmtDateTime(item.created_at)}</td>
+      <td className="admin-table__actions">
+        <button type="button" className="admin-btn admin-btn--sm admin-btn--ghost" onClick={onToggle} disabled={busy}>
           {busy ? "처리 중…" : item.hidden ? "숨김 해제" : "숨기기"}
         </button>
-        <button type="button" className="admin-btn admin-btn--danger" onClick={onDelete} disabled={busy}>
+        <button type="button" className="admin-btn admin-btn--sm admin-btn--danger" onClick={onDelete} disabled={busy}>
           삭제
         </button>
-      </div>
-    </article>
+      </td>
+    </tr>
   );
 }
 
 /**
- * 문의 1건 + 답변 작성/수정 칸.
+ * 문의 1건 = 표 한 행 + 바로 아래 답변 칸 행(2행 1조).
  *
  * 리뷰/코스 행과 달리 낙관적 갱신을 흉내내지 않는다 — textarea 입력값은 답변 등록이
- * 성공한 뒤 부모가 내려주는 최신 item.reply로만 갱신된다(리뷰/코스와 같은 원칙:
- * "됐다고 보였는데 실제로는 안 된" 상태를 만들지 않는다). 답변이 이미 있으면 칸에
- * 미리 채워 넣어 오탈자 정정 같은 재작성을 쉽게 한다.
+ * 성공한 뒤 부모가 내려주는 최신 item.reply로만 갱신된다("됐다고 보였는데 실제로는 안 된"
+ * 상태를 만들지 않는다). 답변이 이미 있으면 칸에 미리 채워 넣어 재작성을 쉽게 한다.
  */
 function InquiryRow({
   item,
@@ -745,65 +847,73 @@ function InquiryRow({
   const canSubmit = !busy && trimmed.length > 0 && trimmed !== (item.reply ?? "");
 
   return (
-    <article className="admin-row">
-      <div className="admin-row__head">
-        <span className="admin-row__id">#{item.id}</span>
-        <span className="admin-row__name">{item.nickname}</span>
-        {item.contact_email && <span className="admin-row__meta">{item.contact_email}</span>}
-        <span className="admin-row__badges">
-          <span className={`admin-badge ${item.status === "new" ? "is-warn" : ""}`}>
+    <>
+      <tr>
+        <td className="admin-table__mono">#{item.id}</td>
+        <td>
+          <b>{item.nickname}</b>
+          {item.contact_email && <small className="admin-table__sub">{item.contact_email}</small>}
+        </td>
+        <td className="admin-table__text admin-table__text--wrap">{item.message}</td>
+        <td>
+          <span className={`admin-badge ${item.status === "new" ? "is-warn" : "is-ok"}`}>
             {item.status === "new" ? "미답변" : "답변완료"}
           </span>
-        </span>
-      </div>
-      <p className="admin-row__body">{item.message}</p>
-      <p className="admin-row__sub">작성 {fmtDateTime(item.created_at)}</p>
-
-      <div className="admin-reply">
-        <label className="admin-field">
-          <span className="admin-field__label">
-            답변{item.replied_at ? ` · ${item.replied_by || "운영자"}가 ${fmtDateTime(item.replied_at)}에 작성` : ""}
-          </span>
-          <textarea
-            className="admin-field__input admin-field__input--textarea"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="이 문의에 대한 답변을 입력하세요"
-            disabled={busy}
-            rows={3}
-          />
-        </label>
-        <div className="admin-row__actions">
-          <button
-            type="button"
-            className="admin-btn admin-btn--primary"
-            onClick={() => onReply(trimmed)}
-            disabled={!canSubmit}
-          >
-            {busy ? "등록 중…" : item.reply ? "답변 수정" : "답변 등록"}
-          </button>
-        </div>
-      </div>
-    </article>
+        </td>
+        <td className="admin-table__date">{fmtDateTime(item.created_at)}</td>
+      </tr>
+      <tr className="admin-table__reply-row">
+        <td colSpan={5}>
+          <div className="admin-reply">
+            <label className="admin-field">
+              <span className="admin-field__label">
+                답변{item.replied_at ? ` · ${item.replied_by || "운영자"}가 ${fmtDateTime(item.replied_at)}에 작성` : ""}
+              </span>
+              <textarea
+                className="admin-field__input admin-field__input--textarea"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="이 문의에 대한 답변을 입력하세요"
+                disabled={busy}
+                rows={3}
+              />
+            </label>
+            <div className="admin-row__actions">
+              <button type="button" className="admin-btn admin-btn--primary" onClick={() => onReply(trimmed)} disabled={!canSubmit}>
+                {busy ? "등록 중…" : item.reply ? "답변 수정" : "답변 등록"}
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
 
 /** 회원 1명. 조회 전용 — 숨기기/삭제 같은 조작 버튼이 없다(계정 관리 기능이 아니다). */
 function UserRow({ item }: { item: AdminUserItem }) {
   return (
-    <article className="admin-row">
-      <div className="admin-row__head">
-        <span className="admin-row__name">{item.nickname}</span>
-        <span className="admin-row__badges">
-          <span className="admin-badge">
-            {item.provider === "google" ? "구글" : item.provider === "kakao" ? "카카오" : "-"}
-          </span>
+    <tr>
+      <td>
+        <b>{item.nickname}</b>
+      </td>
+      <td>
+        <span className="admin-badge">
+          {item.provider === "google" ? "구글" : item.provider === "kakao" ? "카카오" : item.provider === "naver" ? "네이버" : "-"}
         </span>
-      </div>
-      <p className="admin-row__sub">
-        가입 {fmtDateTime(item.created_at)} · 마지막 로그인 {fmtDateTime(item.last_login_at)}
-      </p>
-    </article>
+      </td>
+      <td>
+        {item.google_linked && <span className="admin-badge is-ok">구글</span>}{" "}
+        {item.kakao_linked && <span className="admin-badge is-ok">카카오</span>}{" "}
+        {item.naver_linked && <span className="admin-badge is-ok">네이버</span>}
+        {[item.google_linked, item.kakao_linked, item.naver_linked].filter(Boolean).length >= 2 && (
+          <small className="admin-table__sub">계정 연결됨</small>
+        )}
+      </td>
+      <td>{item.terms_agreed ? <span className="admin-badge is-ok">동의</span> : <span className="admin-badge is-warn">미동의</span>}</td>
+      <td className="admin-table__date">{fmtDateTime(item.created_at)}</td>
+      <td className="admin-table__date">{fmtDateTime(item.last_login_at)}</td>
+    </tr>
   );
 }
 

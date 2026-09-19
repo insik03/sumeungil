@@ -202,20 +202,27 @@ def set_inquiry_reply(
 # `/mypage`에서 바꿀 수도 있어 사실상 닉네임과 같다.
 
 
-def list_users(conn: psycopg.Connection, *, limit: int, offset: int) -> list[dict[str, Any]]:
+def list_users(
+    conn: psycopg.Connection, *, limit: int, offset: int, terms_version: str = ""
+) -> list[dict[str, Any]]:
     rows = conn.execute(
         """
         SELECT display_name AS nickname, created_at, last_login_at,
                CASE
                    WHEN google_sub IS NOT NULL THEN 'google'
                    WHEN kakao_sub  IS NOT NULL THEN 'kakao'
+                   WHEN naver_sub  IS NOT NULL THEN 'naver'
                    ELSE 'unknown'
-               END AS provider
+               END AS provider,
+               (google_sub IS NOT NULL) AS google_linked,
+               (kakao_sub  IS NOT NULL) AS kakao_linked,
+               (naver_sub  IS NOT NULL) AS naver_linked,
+               (terms_version = %s)     AS terms_agreed
           FROM users
          ORDER BY created_at DESC, id DESC
          LIMIT %s OFFSET %s
         """,
-        (limit, offset),
+        (terms_version, limit, offset),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -262,6 +269,9 @@ def stats(conn: psycopg.Connection, *, today_prefix: str) -> dict[str, int]:
         "users_today": one(
             "SELECT COUNT(*) AS c FROM users WHERE created_at >= %s", (today_prefix,)
         ),
+        # 2026-09-20 — 계정 보관함 규모
+        "saved_spots_total": one("SELECT COUNT(*) AS c FROM saved_spots"),
+        "my_courses_total": one("SELECT COUNT(*) AS c FROM ai_courses"),
     }
 
 
