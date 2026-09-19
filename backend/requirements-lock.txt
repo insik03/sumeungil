@@ -11,7 +11,7 @@
 # 그래도 사람이 "지금 뭐가 깔리는지" 참고하기 좋으라고 이 파일은 유지·최신화한다.
 annotated-doc==0.0.5
 annotated-types==0.8.0
-anyio==4.14.2
+anyio==4.15.1
 certifi==2026.7.22
 click==8.5.0
 colorama==0.4.6  # Windows 전용(win32) — Linux 배포 이미지엔 없음
@@ -27,13 +27,13 @@ psycopg==3.3.5
 psycopg-binary==3.3.5
 psycopg-pool==3.3.1
 pydantic==2.13.5
-pydantic_core==2.48.0
+pydantic_core==2.49.0
 python-dotenv==1.2.3
 PyYAML==6.0.3
 starlette==1.6.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
-tzdata==2026.3  # Windows 전용(win32) — Linux 배포 이미지엔 없음
-uvicorn==0.52.4
+tzdata==2026.4  # Windows 전용(win32) — Linux 배포 이미지엔 없음
+uvicorn==0.53.0
 watchfiles==1.2.0
 websockets==17.1

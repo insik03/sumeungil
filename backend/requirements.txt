@@ -5,7 +5,7 @@
 # NOTE: keep this file ASCII-only; Windows pip reads it as cp949 and chokes on Korean.
 fastapi==0.141.1
 starlette==1.6.0
-uvicorn[standard]==0.52.4
+uvicorn[standard]==0.53.0
 httpx==0.28.1
 # 2026-08-22: pip-audit found python-dotenv==1.0.1 has PYSEC-2026-2270, fixed in 1.2.2.
 python-dotenv==1.2.3
