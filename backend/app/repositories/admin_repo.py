@@ -217,7 +217,7 @@ def list_users(
                (google_sub IS NOT NULL) AS google_linked,
                (kakao_sub  IS NOT NULL) AS kakao_linked,
                (naver_sub  IS NOT NULL) AS naver_linked,
-               (terms_version = %s)     AS terms_agreed
+               COALESCE(terms_version = %s, FALSE) AS terms_agreed  -- terms_version NULL(미동의)이면 NULL 이 아니라 false
           FROM users
          ORDER BY created_at DESC, id DESC
          LIMIT %s OFFSET %s
