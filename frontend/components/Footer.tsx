@@ -53,20 +53,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="footer__info">
-          <div className="footer__logo">숨은길</div>
-          <p className="footer__tag">사람 대신, 설렘을 만나는 여행</p>
-          {/* 2026-09-16(오버투어리즘 검토 P1-d) — 서비스의 사회적 목적. 성과를 단정하지 않는다. */}
-          <p className="footer__desc">
-            한곳에 몰리는 여행에서, 지역을 나누어 만나는 여행으로. 예상 혼잡도와 대체 여행지 정보로 덜 붐비는
-            장소와 시기를 고르도록 돕습니다.
-          </p>
-          <p className="footer__source">
-            데이터 출처 · 한국관광공사 TourAPI 4.0(관광지·축제·사진) · 한국관광공사 관광지별 방문자 집중률
-            예측(KT 이동통신 데이터 기반) · 행정안전부 전국문화축제표준데이터 · 기상청 관광코스별 날씨
-          </p>
-        </div>
-
+        {/* 2026-09-20 대표 지시 — 브랜드·슬로건·목적 문단·데이터 출처 블록 제거. 출처는 아래 마크 3개가 대신한다. */}
         <ul className="footer__policy" aria-label="약관과 안내">
           {POLICY_LINKS.map((p) => (
             <li key={p.label}>

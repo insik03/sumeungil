@@ -49,6 +49,8 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   const [saveError, setSaveError] = useState<string | null>(null);
   // 2026-09-14 — 첫 로그인(표시 이름 단계)에서 약관·처리방침 동의를 명시적으로 받는다.
   const [agreed, setAgreed] = useState(false);
+  // 2026-09-20 — 서버에 설정된 로그인 방식만 버튼을 보인다(네이버 키 미설정 시 버튼 숨김).
+  const [enabled, setEnabled] = useState<{ google: boolean; kakao: boolean; naver: boolean }>({ google: true, kakao: true, naver: false });
   const popupRef = useRef<Window | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const startButtonRef = useRef<HTMLButtonElement>(null);
@@ -102,6 +104,18 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     }
   }, [step]);
 
+  useEffect(() => {
+    if (!open) return;
+    const c = new AbortController();
+    fetch(`${API_BASE}/api/v1/auth/providers`, { signal: c.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && typeof j.google === "boolean") setEnabled(j);
+      })
+      .catch(() => undefined);
+    return () => c.abort();
+  }, [open]);
+
   // 팝업이 보내는 postMessage 수신 — 모달이 열려 있는 동안만 리스너를 둔다.
   useEffect(() => {
     if (!open) return;
@@ -119,6 +133,14 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
         } else {
           // 2026-08-18(대표 지시) — 재로그인마다 매번 닉네임을 확인시키지 않는다. 이미
           // DB에 저장된 이름을 그대로 신뢰하고 바로 로그인 완료로 처리한다.
+          // 2026-09-20 — 동의는 로그인 전에 받았으므로 기존 사용자도 여기서 현재 약관 버전을 기록한다
+          // (Header 의 ConsentModal 이 다시 뜨지 않게). 실패해도 로그인은 완료 — 다음 부팅 때 모달이 보완한다.
+          void fetch(`${API_BASE}/api/v1/auth/consent`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ terms_version: TERMS_VERSION }),
+          }).catch(() => undefined);
           setLoggedInName(data.name);
           onLoggedIn(data.name);
           onClose();
@@ -132,7 +154,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
 
   if (!open) return null;
 
-  const startProviderLogin = (provider: "google" | "kakao") => {
+  const startProviderLogin = (provider: "google" | "kakao" | "naver") => {
     setPopupBlocked(false);
     const url = `${API_BASE}/api/v1/auth/${provider}/login?next=${encodeURIComponent("/")}`;
     const popup = window.open(url, "sumeungil-login", "width=480,height=640");
@@ -211,10 +233,25 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
             <p className="login-modal__sub">{message ?? "간편로그인으로 바로 시작해요."}</p>
             {/* 구글 브랜딩 가이드라인(Sign in with Google branding guidelines) 준수 — 흰 배경 +
                 공식 4색 G 로고 + 회색 테두리. 로고 색상·비율을 임의로 바꾸지 않는다. */}
+            {/* 2026-09-20 대표 지시 — 약관 동의를 로그인(구글/카카오) 버튼을 누르기 전에 받는다. 동의 전엔 버튼 비활성. */}
+            <label className="consent-check">
+              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+              <span>
+                <a href="/terms" target="_blank" rel="noopener noreferrer">
+                  이용약관
+                </a>
+                과{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                  개인정보처리방침
+                </a>
+                을 확인했고 동의해요. (만 14세 이상)
+              </span>
+            </label>
             <button
               ref={startButtonRef}
               type="button"
               className="btn-google"
+              disabled={!agreed}
               onClick={() => startProviderLogin("google")}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -241,6 +278,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 텍스트/아이콘은 검정 계열 고정색, 임의 배색 금지. 2026-08-17 신설. */}
             <button
               type="button"
+              disabled={!agreed}
               className="btn-kakao"
               onClick={() => startProviderLogin("kakao")}
             >
@@ -252,6 +290,18 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               </svg>
               <span>카카오로 로그인</span>
             </button>
+            {/* 2026-09-20 대표 결정 — 네이버 로그인. 서버에 키가 없으면(/auth/providers naver:false) 버튼을 숨긴다. */}
+            {enabled.naver && (
+              <button
+                type="button"
+                className="btn-naver"
+                disabled={!agreed}
+                onClick={() => startProviderLogin("naver")}
+              >
+                <span className="btn-naver__mark" aria-hidden="true">N</span>
+                <span>네이버로 로그인</span>
+              </button>
+            )}
             {popupBlocked && (
               <p className="login-modal__note" role="alert">
                 팝업이 차단됐어요. 브라우저 주소창의 팝업 차단 아이콘을 눌러 이 사이트의 팝업을
@@ -263,17 +313,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 취소
               </button>
             </div>
-            <p className="login-modal__note">
-              로그인 제공자에게서 이메일·이름만 받아요. 첫 로그인 뒤 표시 이름을 정하는 단계에서{" "}
-              <a href="/terms" target="_blank" rel="noopener noreferrer">
-                이용약관
-              </a>
-              과{" "}
-              <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                개인정보처리방침
-              </a>{" "}
-              동의를 받아요.
-            </p>
+            <p className="login-modal__note">로그인 제공자에게서 이메일·이름만 받아요.</p>
           </>
         ) : step === "link" ? (
           <>
@@ -320,19 +360,6 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 if (e.key === "Enter") confirmNickname();
               }}
             />
-            <label className="consent-check">
-              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-              <span>
-                <a href="/terms" target="_blank" rel="noopener noreferrer">
-                  이용약관
-                </a>
-                과{" "}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                  개인정보처리방침
-                </a>
-                을 확인했고 동의해요. (만 14세 이상)
-              </span>
-            </label>
             {saveError && (
               <p className="login-modal__note" role="alert">
                 {saveError}
@@ -350,7 +377,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               <button
                 type="button"
                 className="btn btn--mint"
-                disabled={nickname.trim().length === 0 || saving || !agreed}
+                disabled={nickname.trim().length === 0 || saving}
                 onClick={confirmNickname}
               >
                 {saving ? "저장 중…" : "시작하기"}
