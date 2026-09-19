@@ -63,7 +63,7 @@ from ..spots.region_map import get_tourapi_region
 
 logger = logging.getLogger("sumeungil.services.festival")
 
-LIMIT_MIN, LIMIT_MAX, LIMIT_DEFAULT = 1, 200, 10   # 상한 30→200 (축제 전용 페이지. 기본값은 유지)
+LIMIT_MIN, LIMIT_MAX, LIMIT_DEFAULT = 1, 500, 10  # 2026-09-20: 페이지 나누기용으로 500(전량은 캐시 메모리)   # 상한 30→200 (축제 전용 페이지. 기본값은 유지)
 HORIZON_DAYS = 90            # 진행중 + 이 일수 내 시작하는 예정 축제까지 (요청 기본 윈도우)
 WINDOW_MIN, WINDOW_MAX = 1, 365      # window_days 클램프 범위
 SWEEP_HORIZON_DAYS = WINDOW_MAX      # 전국 스윕 캐시가 보유하는 최대 미래 범위(=365일)

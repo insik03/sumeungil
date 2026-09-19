@@ -51,6 +51,10 @@ from ..clients.kakao_oauth_client import KakaoOAuthError
 from ..clients.kakao_oauth_client import build_authorize_url as kakao_authorize_url
 from ..clients.kakao_oauth_client import exchange_code as kakao_exchange_code
 from ..clients.kakao_oauth_client import fetch_userinfo as kakao_fetch_userinfo
+from ..clients.naver_oauth_client import NaverOAuthError
+from ..clients.naver_oauth_client import build_authorize_url as naver_authorize_url
+from ..clients.naver_oauth_client import exchange_code as naver_exchange_code
+from ..clients.naver_oauth_client import fetch_userinfo as naver_fetch_userinfo
 from ..config import settings
 from ..deps import get_database, get_user_auth
 from ..repositories import user_repo
@@ -117,8 +121,16 @@ def _start_oauth_login(
     return response
 
 
+# 2026-09-18 계정 연결 — 로그인 중인 사용자가 `?link=1` 로 시작하면 콜백에서 새 세션을 만들지 않고
+# **현재 세션 계정에 그 provider 를 붙인다**(user_repo.link_provider). state 의 next_path 자리에 이
+# 표식을 넣어 왕복시킨다(안전 경로 정규식에 맞는 값). 완료 후 팝업은 부모에게 linked 결과를 보낸다.
+LINK_NEXT = "/__link"
+
+
 @router.get("/google/login")
-async def google_login(next: str = Query(default="/")):
+async def google_login(next: str = Query(default="/"), link: bool = Query(default=False)):
+    if link:
+        next = LINK_NEXT
     auth = get_user_auth()
     if not auth.google_enabled:
         raise HTTPException(status_code=404)
@@ -126,7 +138,9 @@ async def google_login(next: str = Query(default="/")):
 
 
 @router.get("/kakao/login")
-async def kakao_login(next: str = Query(default="/")):
+async def kakao_login(next: str = Query(default="/"), link: bool = Query(default=False)):
+    if link:
+        next = LINK_NEXT
     auth = get_user_auth()
     if not auth.kakao_enabled:
         raise HTTPException(status_code=404)
@@ -147,7 +161,7 @@ def _js_safe_json(value: object) -> str:
 
 
 def _popup_close_html(
-    *, ok: bool, name: str = "", is_new: bool = False, next_path: str = "/"
+    *, ok: bool, name: str = "", is_new: bool = False, next_path: str = "/", linked: str | None = None
 ) -> HTMLResponse:
     """팝업 안에서만 뜨는 최소 HTML. window.opener로 결과를 postMessage하고 스스로 닫는다.
     postMessage target origin을 FRONTEND_BASE_URL로 고정해(외부 페이지 위조 방지) 부모가
@@ -157,7 +171,9 @@ def _popup_close_html(
     가입일 때만 프론트가 "표시 이름 정하기" 확인 단계를 보여주게 하는 신호다. 재로그인마다
     매번 물어보면 성가시다는 지적에 따라, LoginModal.tsx가 이 값이 false면 그 단계를
     건너뛰고 바로 로그인을 완료 처리한다(_complete_oauth_login 참고)."""
-    payload = _js_safe_json({"source": POPUP_MESSAGE_SOURCE, "ok": ok, "name": name, "is_new": is_new})
+    payload = _js_safe_json(
+        {"source": POPUP_MESSAGE_SOURCE, "ok": ok, "name": name, "is_new": is_new, "linked": linked}
+    )
     frontend_origin_js = _js_safe_json(settings.frontend_base_url)  # 이미 따옴표 포함(JSON 문자열)
     fallback_link = html.escape(f"{settings.frontend_base_url}{next_path}", quote=True)
     status_text = "로그인 완료" if ok else "로그인 실패"
@@ -209,6 +225,7 @@ def _sanitize_display_name(raw_name: str, email: str | None) -> str:
 
 async def _complete_oauth_login(
     *,
+    request: Request,
     provider: user_repo.Provider,
     provider_sub: str,
     email: str | None,
@@ -222,6 +239,37 @@ async def _complete_oauth_login(
     auth = get_user_auth()
     display_name = _sanitize_display_name(raw_name, email)
     db = get_database()
+
+    if next_path == LINK_NEXT:
+        # 계정 연결 모드 — 현재 세션이 있어야 한다(팝업은 같은 브라우저라 쿠키가 같이 온다).
+        identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
+        if identity is None:
+            response = _popup_close_html(ok=False, next_path="/mypage", linked="not_logged_in")
+            _clear_state_cookie(response)
+            return response
+        try:
+            linked_user, outcome = await db.awrite(
+                lambda conn: user_repo.link_provider(
+                    conn,
+                    user_id=identity.user_id,
+                    provider=provider,
+                    provider_sub=provider_sub,
+                    email=email,
+                    email_verified=email_verified,
+                    now_iso=to_iso_kst(now_kst()),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("%s 계정 연결 실패", provider)
+            response = _popup_close_html(ok=False, next_path="/mypage", linked="error")
+            _clear_state_cookie(response)
+            return response
+        response = _popup_close_html(
+            ok=outcome != "conflict", name=linked_user["display_name"], next_path="/mypage", linked=outcome
+        )
+        _clear_state_cookie(response)
+        return response  # 세션 쿠키는 그대로(현재 계정 유지)
+
     try:
         user = await db.awrite(
             lambda conn: user_repo.upsert_login(
@@ -300,6 +348,7 @@ async def google_callback(request: Request, code: str | None = None, state: str 
     # 구글은 여기까지 왔다는 것 자체가 "미검증으로 거부"를 통과했다는 뜻이라
     # email_verified=True로 계정 통합 판정에 넘긴다(user_repo.upsert_login 참고).
     return await _complete_oauth_login(
+        request=request,
         provider="google",
         provider_sub=google_sub,
         email=email,
@@ -355,10 +404,80 @@ async def kakao_callback(request: Request, code: str | None = None, state: str |
     raw_name = ((kakao_account.get("profile") or {}).get("nickname") or "").strip()
 
     return await _complete_oauth_login(
+        request=request,
         provider="kakao",
         provider_sub=kakao_sub,
         email=email,
         email_verified=email_verified,
+        raw_name=raw_name,
+        next_path=next_path,
+    )
+
+
+@router.get("/providers")
+async def auth_providers():
+    """설정된 로그인 방식(2026-09-20). 프론트가 설정 안 된 provider 버튼을 숨긴다. 비밀값 없음."""
+    auth = get_user_auth()
+    return {"google": auth.google_enabled, "kakao": auth.kakao_enabled, "naver": auth.naver_enabled}
+
+
+@router.get("/naver/login")
+async def naver_login(next: str = Query(default="/"), link: bool = Query(default=False)):
+    """네이버 로그인 시작(2026-09-20). 설정이 없으면 404 — 프론트가 버튼을 숨긴다."""
+    if link:
+        next = LINK_NEXT
+    auth = get_user_auth()
+    if not auth.naver_enabled:
+        return error_response(404, "NOT_FOUND", "네이버 로그인이 설정되지 않았습니다.")
+    return _start_oauth_login(next_path=next, authorize_url_builder=naver_authorize_url)
+
+
+@router.get("/naver/callback")
+async def naver_callback(request: Request, code: str | None = None, state: str | None = None):
+    auth = get_user_auth()
+    cookie_nonce = request.cookies.get(STATE_COOKIE_NAME)
+    next_path = auth.verify_state(state, cookie_nonce=cookie_nonce)
+    if next_path is None:
+        logger.warning("네이버 콜백 state 검증 실패")
+        response = _popup_close_html(ok=False)
+        _clear_state_cookie(response)
+        return response
+    if not code or not state:
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+
+    try:
+        tokens = await naver_exchange_code(code, state)
+        access_token = tokens.get("access_token")
+        if not access_token:
+            raise NaverOAuthError("no access_token in response")
+        userinfo = await naver_fetch_userinfo(access_token)
+    except NaverOAuthError as exc:
+        logger.warning("네이버 로그인 실패: %s", exc)
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+
+    naver_sub = str(userinfo.get("id") or "").strip()
+    if not naver_sub:
+        logger.warning("네이버 로그인 실패: id 없음")
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+
+    # 네이버의 email 은 "연락처 이메일"이라 계정 통합 기준(검증된 이메일)으로는 쓰지 않는다 —
+    # 보안검토 K-C1(미검증 이메일 자동 통합 = 계정 탈취) 원칙. 같은 사람의 구글/카카오 계정과 묶는 건
+    # 마이페이지 "로그인 연결"(두 provider 모두 로그인으로 증명)로 한다. 이메일은 표시 이름 폴백에만.
+    email = (userinfo.get("email") or "").strip() or None
+    raw_name = (userinfo.get("nickname") or userinfo.get("name") or "").strip()
+
+    return await _complete_oauth_login(
+        request=request,
+        provider="naver",
+        provider_sub=naver_sub,
+        email=email,
+        email_verified=False,
         raw_name=raw_name,
         next_path=next_path,
     )
@@ -412,7 +531,10 @@ async def me(request: Request, response: Response):
     token, _ = auth.issue_token(user_id=identity.user_id, email=identity.email, epoch=identity.epoch)
     _set_session_cookie(response, auth, token)
     return UserSessionResponse(
-        authenticated=True, name=user["display_name"], terms_agreed=_terms_agreed(user)
+        authenticated=True,
+        name=user["display_name"],
+        terms_agreed=_terms_agreed(user),
+        providers=user_repo.linked_providers(user),
     )
 
 
@@ -467,7 +589,10 @@ async def update_display_name(request: Request, body: UpdateDisplayNameRequest):
             )
         ) or user
     return UserSessionResponse(
-        authenticated=True, name=user["display_name"], terms_agreed=_terms_agreed(user)
+        authenticated=True,
+        name=user["display_name"],
+        terms_agreed=_terms_agreed(user),
+        providers=user_repo.linked_providers(user),
     )
 
 

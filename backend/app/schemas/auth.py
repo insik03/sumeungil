@@ -20,6 +20,8 @@ class UserSessionResponse(BaseModel):
     email: str | None = None
     # 2026-09-14 — 현재 약관 버전에 동의했는가. false 면 프론트가 ConsentModal 을 띄운다.
     terms_agreed: bool = False
+    # 2026-09-18 — 연결된 로그인 방식(google/kakao → bool). 마이페이지 "로그인 연결" 표시용. 값(sub)은 절대 내리지 않는다.
+    providers: dict[str, bool] = Field(default_factory=dict)
 
 
 class UpdateDisplayNameRequest(BaseModel):

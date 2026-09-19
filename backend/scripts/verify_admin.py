@@ -249,7 +249,8 @@ def phase_b() -> int:
     # 14 = 12(부록 T) + /admin/operators(부록 V) + /admin/traffic(부록 X 트래픽 집계).
     # 16 = 14 + /admin/inquiries(목록)·/admin/inquiries/{id}/reply(답변, 2026-08-18 추가).
     # 18 = 16 + /admin/users(회원 탭)·/admin/server-status(서버 상태 탭, 둘 다 2026-08-24 추가).
-    check("OpenAPI 에 admin 경로 18개 노출", len(admin_paths) == 18, str(admin_paths))
+    # 19 = 18 + /admin/ai-status(AI 사용량 탭, 2026-09-20 추가).
+    check("OpenAPI 에 admin 경로 19개 노출", len(admin_paths) == 19, str(admin_paths))
 
     r1 = client.post("/api/v1/admin/login", json={"password": "wrong-password"})
     check("틀린 비밀번호 → 401", r1.status_code == 401, str(r1.status_code))
@@ -556,6 +557,22 @@ def phase_b() -> int:
     check("stats: inquiries_total=1, inquiries_new=0(답변 완료)",
           st["inquiries_total"] == 1 and st["inquiries_new"] == 0, str(st))
     check("stats: generated_at KST", st["generated_at"].endswith("+09:00"), st["generated_at"])
+    check("stats: 계정 보관함 카운트 존재(2026-09-20)",
+          isinstance(st.get("saved_spots_total"), int) and isinstance(st.get("my_courses_total"), int), str(st))
+
+    # AI 사용량(2026-09-20) — 메모리 카운터라 값은 0 이어도 되고, 키·개인정보가 없어야 한다.
+    r = client.get("/api/v1/admin/ai-status")
+    check("GET /admin/ai-status 200", r.status_code == 200, str(r.status_code))
+    ai = r.json()
+    check("ai-status: 필수 필드", all(k in ai for k in ("provider", "model", "course_llm_cap_global", "summaries_pregenerated", "spots_total", "csp_top")), str(ai)[:200])
+    check("ai-status: 키/비밀 없음", "key" not in str(ai).lower() and "secret" not in str(ai).lower())
+    check("ai-status: 비로그인 401", TestClient(app).get("/api/v1/admin/ai-status").status_code == 401)
+
+    r = client.get("/api/v1/admin/users")
+    check("GET /admin/users 200", r.status_code == 200, str(r.status_code))
+    if r.status_code == 200 and r.json().get("items"):
+        u0 = r.json()["items"][0]
+        check("users: 연결 로그인·약관 필드(2026-09-20)", all(k in u0 for k in ("google_linked", "kakao_linked", "terms_agreed")), str(u0))
 
     section("B7. 로그아웃 · 로그 위생")
 

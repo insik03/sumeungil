@@ -122,6 +122,9 @@ class UserAuth:
         kakao_client_id: str,
         kakao_client_secret: str,
         kakao_redirect_uri: str,
+        naver_client_id: str = "",
+        naver_client_secret: str = "",
+        naver_redirect_uri: str = "",
         session_secret: str,
         session_ttl_sec: int,
         cookie_name: str,
@@ -133,6 +136,9 @@ class UserAuth:
         self.kakao_client_id = (kakao_client_id or "").strip()
         self.kakao_client_secret = (kakao_client_secret or "").strip()
         self.kakao_redirect_uri = (kakao_redirect_uri or "").strip()
+        self.naver_client_id = (naver_client_id or "").strip()
+        self.naver_client_secret = (naver_client_secret or "").strip()
+        self.naver_redirect_uri = (naver_redirect_uri or "").strip()
         self.cookie_name = cookie_name
         self.cookie_secure = cookie_secure
         self.session_ttl_sec = max(60, int(session_ttl_sec))
@@ -157,6 +163,10 @@ class UserAuth:
     @property
     def kakao_enabled(self) -> bool:
         return bool(self.kakao_client_id and self.kakao_client_secret and self.kakao_redirect_uri)
+
+    @property
+    def naver_enabled(self) -> bool:
+        return bool(self.naver_client_id and self.naver_client_secret and self.naver_redirect_uri)
 
     # --- OAuth state(CSRF 방어) ---------------------------------------------------
 

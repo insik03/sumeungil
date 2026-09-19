@@ -17,10 +17,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import logging
 import psycopg
 
 from ..config import settings
+from ..api.auth import TERMS_VERSION
+from ..repositories.spot_repo import SpotRepository
+from ..cache.base import Cache
 from ..db.postgres import Database
 from ..repositories import admin_repo, visit_repo
 from ..schemas.admin import (
@@ -32,13 +37,14 @@ from ..schemas.admin import (
     AdminModerationResponse,
     AdminReviewItem,
     AdminReviewListResponse,
+    AdminAiStatusResponse,
     AdminServerStatusResponse,
     AdminStatsResponse,
     AdminUserItem,
     AdminUserListResponse,
 )
 from ..security.admin_auth import AdminAuth
-from ..util.time import now_kst, to_iso_kst
+from ..util.time import KST, now_kst, to_iso_kst
 from .metrics_service import fetch_operational_metrics
 from . import community_errors as errors
 
@@ -166,7 +172,7 @@ async def list_users(db: Database, *, limit: int, offset: int) -> AdminUserListR
     offset = max(0, offset)
 
     def _tx(conn: psycopg.Connection):
-        rows = admin_repo.list_users(conn, limit=limit, offset=offset)
+        rows = admin_repo.list_users(conn, limit=limit, offset=offset, terms_version=TERMS_VERSION)
         total = admin_repo.count_users(conn)
         return rows, total
 
@@ -190,6 +196,44 @@ async def stats(db: Database) -> AdminStatsResponse:
         **counts,
         review_hide_report_threshold=settings.review_hide_report_threshold,
         generated_at=to_iso_kst(now),
+    )
+
+
+async def ai_status(cache: Cache, spot_repo: SpotRepository) -> AdminAiStatusResponse:
+    """관리자 "AI 사용량"(2026-09-20). health/llm 의 쿼터 상태 + 코스 LLM 일일 카운터 + 사전 생성 요약
+    커버리지 + CSP 보고 집계를 한 번에. 전부 메모리 값이라 DB 를 보지 않는다."""
+    from ..ai import gemini_client
+    from ..api import csp_report
+    from ..services import course_service, spot_detail_service
+
+    q = gemini_client.quota_status()
+    day = course_service._kst_day()
+    used = int(await cache.get("llm-cap:global:" + day) or 0)
+    csp = csp_report.snapshot()
+    now = to_iso_kst(now_kst())
+
+    def _iso(ts: float | None) -> str | None:
+        return to_iso_kst(datetime.fromtimestamp(ts, tz=KST)) if ts else None
+
+    last_429 = q.get("last_429_ts")
+    last_ok = q.get("last_success_ts")
+    return AdminAiStatusResponse(
+        provider=settings.llm_provider,
+        model=settings.gemini_model if settings.llm_provider == "gemini" else settings.ollama_model,
+        quota_429_last_hour=int(q.get("quota_429_last_hour") or 0),
+        quota_429_last_24h=int(q.get("quota_429_last_24h") or 0),
+        last_429_at=_iso(last_429),
+        last_success_at=_iso(last_ok),
+        fallback_suspected=bool(last_429 and (not last_ok or last_429 > last_ok)),
+        course_llm_used_today=used,
+        course_llm_cap_global=settings.course_llm_daily_cap_global,
+        course_llm_cap_per_user=settings.course_llm_daily_cap_per_user,
+        summaries_pregenerated=len(spot_detail_service._pregenerated_summaries()),
+        spots_total=len(spot_repo.all_spots()),
+        csp_total=int(csp.get("total") or 0),
+        csp_distinct=int(csp.get("distinct") or 0),
+        csp_top=[(str(k), int(n)) for k, n in (csp.get("top") or [])],
+        generated_at=now,
     )
 
 

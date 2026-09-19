@@ -81,6 +81,9 @@ export interface AdminStats {
   inquiries_new: number;
   users_total: number;
   users_today: number;
+  /** 2026-09-20 — 계정 보관함 규모 */
+  saved_spots_total: number;
+  my_courses_total: number;
   /**
    * 신고 몇 건이면 자동 숨김되는지. 서버 설정값(`REVIEW_HIDE_REPORT_THRESHOLD`, 기본 3)이다.
    * **화면에 3을 박지 말고 반드시 이 값을 쓸 것** — env 로 바뀌면 박아둔 숫자는 조용히 틀려진다.
@@ -113,7 +116,12 @@ export interface AdminUserItem {
   nickname: string;
   created_at: string;
   last_login_at: string;
-  provider: "google" | "kakao" | "unknown";
+  provider: "google" | "kakao" | "naver" | "unknown";
+  /** 2026-09-20 — 연결된 로그인·약관 동의. 값(sub·이메일)은 오지 않는다. */
+  google_linked: boolean;
+  kakao_linked: boolean;
+  naver_linked: boolean;
+  terms_agreed: boolean;
 }
 
 export interface AdminUserList {
@@ -353,6 +361,30 @@ export async function fetchAdminUsers(params?: {
     { method: "GET" },
     "회원 목록을 불러오지 못했습니다.",
   );
+}
+
+/** AI 사용량(2026-09-20) — 전부 백엔드 프로세스 메모리 카운터. */
+export interface AdminAiStatus {
+  provider: string;
+  model: string;
+  quota_429_last_hour: number;
+  quota_429_last_24h: number;
+  last_429_at: string | null;
+  last_success_at: string | null;
+  fallback_suspected: boolean;
+  course_llm_used_today: number;
+  course_llm_cap_global: number;
+  course_llm_cap_per_user: number;
+  summaries_pregenerated: number;
+  spots_total: number;
+  csp_total: number;
+  csp_distinct: number;
+  csp_top: [string, number][];
+  generated_at: string;
+}
+
+export async function fetchAdminAiStatus(): Promise<AdminAiStatus> {
+  return adminFetch<AdminAiStatus>("/ai-status", { method: "GET" }, "AI 사용 현황을 불러오지 못했습니다.");
 }
 
 export async function fetchAdminServerStatus(): Promise<AdminServerStatus> {

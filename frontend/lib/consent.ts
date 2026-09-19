@@ -11,4 +11,6 @@ export interface SessionInfo {
   name?: string | null;
   /** 현재 TERMS_VERSION 에 동의했는가. 비로그인·구버전 동의·미동의는 false. */
   terms_agreed?: boolean;
+  /** 2026-09-18 — 연결된 로그인 방식(google/kakao → true). 마이페이지 "로그인 연결"과 가입 직후 안내에 쓴다. */
+  providers?: Record<string, boolean>;
 }
