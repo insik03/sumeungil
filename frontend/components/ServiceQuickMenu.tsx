@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { animate, stagger } from "animejs";
 import {
+  ArrowLeftRight,
   BookOpenText,
   Compass,
   Flower2,
@@ -31,7 +32,9 @@ interface QuickMenuItem {
  * 아이콘은 여행 안내소의 픽토그램처럼 목적지를 즉시 연상할 수 있는 상징으로 통일했다.
  */
 const QUICK_MENU_ITEMS: QuickMenuItem[] = [
-  { key: "onboarding", label: "AI 취향분석", href: "/onboarding", icon: Luggage },
+  { key: "board", label: "혼잡 현황", href: "/congestion", icon: Gauge },
+  { key: "compare", label: "붐비는 곳 대신", href: "/compare", icon: ArrowLeftRight, regionAware: true },
+  { key: "course", label: "AI 코스", href: "/course", icon: Route, regionAware: true },
   {
     key: "recommend",
     label: "맞춤 추천",
@@ -39,12 +42,11 @@ const QUICK_MENU_ITEMS: QuickMenuItem[] = [
     icon: Compass,
     regionAware: true,
   },
-  { key: "course", label: "AI 코스", href: "/course", icon: Route, regionAware: true },
+  { key: "onboarding", label: "AI 취향분석", href: "/onboarding", icon: Luggage },
   { key: "regions", label: "지역별 여행", href: "/regions", icon: MapPinned },
   { key: "seasonal", label: "계절 여행", href: "/seasonal", icon: Flower2 },
-  { key: "board", label: "전국 혼잡 현황", href: "/congestion", icon: Gauge },
-  { key: "stamp", label: "방문 스탬프", href: "/saved", icon: Stamp },
   { key: "festival", label: "축제", href: "/festivals", icon: PartyPopper },
+  { key: "stamp", label: "방문 스탬프", href: "/saved", icon: Stamp },
   { key: "tips", label: "여행 팁", href: "/tips", icon: BookOpenText },
 ];
 
@@ -78,16 +80,21 @@ function useQuickMenuEnterAnimation(gridRef: React.RefObject<HTMLUListElement>) 
   }, [gridRef]);
 }
 
+// 2026-09-20 회의(모바일 단순화) — 모바일 첫 화면엔 핵심 4개만: 전국 혼잡 현황 · 붐비는 곳 대신 · AI 코스 · 맞춤 추천.
+// 나머지는 "전체 메뉴 보기"로 펼친다. 데스크톱은 10개 전부 한 줄.
+const CORE_KEYS = new Set(["board", "compare", "course", "recommend"]);
+
 export default function ServiceQuickMenu({ regionCode = null }: ServiceQuickMenuProps) {
   const gridRef = useRef<HTMLUListElement>(null);
   useQuickMenuEnterAnimation(gridRef);
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <nav className="quick-menu" aria-label="숨은길 서비스 바로가기">
+    <nav className={`quick-menu${expanded ? " is-expanded" : ""}`} aria-label="숨은길 서비스 바로가기">
       <h2 className="quick-menu__title">숨은길 서비스</h2>
       <ul className="quick-menu__grid" ref={gridRef}>
         {QUICK_MENU_ITEMS.map((item) => (
-          <li key={item.key}>
+          <li key={item.key} data-core={CORE_KEYS.has(item.key) ? "" : undefined}>
             <Link
               href={item.regionAware ? withRegionCode(item.href, regionCode) : item.href}
               className="quick-menu__item"
@@ -100,6 +107,14 @@ export default function ServiceQuickMenu({ regionCode = null }: ServiceQuickMenu
           </li>
         ))}
       </ul>
+      <button
+        type="button"
+        className="quick-menu__more"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? "메뉴 접기" : "전체 메뉴 보기"}
+      </button>
     </nav>
   );
 }

@@ -165,7 +165,10 @@ function FeaturedSection({ eyebrowClass, eyebrowLabel, title, items, summaries }
   if (items !== null && items.length === 0) return null;
 
   return (
-    <section className="section featured-section" aria-label={eyebrowLabel}>
+    <section
+      className={`section featured-section ${eyebrowLabel.includes("PICK") ? "featured-section--hidden" : "featured-section--trending"}`}
+      aria-label={eyebrowLabel}
+    >
       <span className={`eyebrow-pill ${eyebrowClass}`}>{eyebrowLabel}</span>
       <h2 className="section__title">{title}</h2>
       <div className="featured-scroll" role="list">
