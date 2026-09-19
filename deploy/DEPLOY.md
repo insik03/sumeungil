@@ -181,6 +181,7 @@ nano deploy/.env
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 구글 로그인. **로컬 개발용과 별도의 OAuth 클라이언트**로 발급받는다 — 아래 (h-3) 참고. 셋 중 하나라도 비면 `/api/v1/auth/google/*` 만 없다(404, 카카오와 독립) |
 | `GOOGLE_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/google/callback` — 구글 클라이언트의 "승인된 리디렉션 URI"와 문자 그대로 일치해야 한다 |
 | `KAKAO_CLIENT_ID` / `KAKAO_CLIENT_SECRET` | 카카오 로그인(2026-08-17, 대표 지시). 아래 (i-4) 참고. 셋 중 하나라도 비면 `/api/v1/auth/kakao/*` 만 없다(404, 구글은 정상 동작) |
+| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` / `NAVER_REDIRECT_URI` | 네이버 로그인(2026-09-20, 대표 결정). 네이버 개발자센터 > 애플리케이션 등록: 사용 API "네이버 로그인", 제공 정보 **이메일·별명**, 서비스 URL `https://sumeungil.co.kr`, Callback URL `https://sumeungil.co.kr/api/v1/auth/naver/callback`. 셋 중 하나라도 비면 `/api/v1/auth/naver/*` 만 404(구글·카카오 정상) |
 | `KAKAO_REDIRECT_URI` | `https://sumeungil.co.kr/api/v1/auth/kakao/callback` — 카카오 콘솔의 "Redirect URI"와 문자 그대로 일치해야 한다 |
 | `FRONTEND_BASE_URL` | `https://sumeungil.co.kr`. 로그인 팝업의 postMessage 대상 오리진(구글·카카오 공용) — 와일드카드 금지 |
 | `USER_SESSION_SECRET` | **필수, 로컬 값을 재사용하지 말고 새로 생성**: `py -c "import secrets; print(secrets.token_hex(32))"`. 비우면 `JWT_SECRET_KEY` 로 대체되지만, 그마저 없으면 세션 위조가 가능해진다(2026-08-17 보안검토 C-1) |

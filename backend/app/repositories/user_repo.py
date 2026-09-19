@@ -21,9 +21,9 @@ from typing import Any, Literal
 
 import psycopg
 
-Provider = Literal["google", "kakao"]
+Provider = Literal["google", "kakao", "naver"]
 
-_PROVIDER_COLUMNS: dict[str, str] = {"google": "google_sub", "kakao": "kakao_sub"}
+_PROVIDER_COLUMNS: dict[str, str] = {"google": "google_sub", "kakao": "kakao_sub", "naver": "naver_sub"}
 
 
 def _row(r: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -114,6 +114,79 @@ def upsert_login(
     )
     new_id = cur.fetchone()["id"]
     return get_by_id(conn, new_id)  # type: ignore[return-value]
+
+
+LinkOutcome = Literal["linked", "already", "conflict"]
+
+# 계정 병합 시 옮길 사용자 소유 데이터. (테이블, 중복 판정 열) — 중복 열이 있으면 옮겨받는 계정에 이미
+# 같은 키가 있는 행은 버린다(PK 충돌 방지). None 이면 그냥 user_id 만 바꾼다.
+_MERGE_TABLES: tuple[tuple[str, str | None], ...] = (
+    ("ai_courses", None),
+    ("inquiries", None),
+    ("saved_spots", "spot_id"),
+    ("course_likes", "share_code"),
+)
+
+
+def link_provider(
+    conn: psycopg.Connection,
+    *,
+    user_id: int,
+    provider: Provider,
+    provider_sub: str,
+    email: str | None,
+    email_verified: bool,
+    now_iso: str,
+) -> tuple[dict[str, Any], LinkOutcome]:
+    """2026-09-18(대표 결정 "로그인으로 묶기") — **로그인 중인 계정(user_id)**에 방금 OAuth 로 증명한
+    다른 provider 계정을 붙인다. 이름·전화번호 같은 입력값이 아니라 두 provider 모두에 실제로
+    로그인했다는 사실로만 묶는다(탈취 불가).
+
+    - 그 provider sub 가 이미 이 계정에 있으면 "already".
+    - 이 계정에 같은 provider 의 **다른** sub 가 이미 붙어 있으면 "conflict"(한 계정에 구글 둘 불가).
+    - 그 sub 로 **다른 계정**이 있으면 그 계정의 데이터(_MERGE_TABLES, 온보딩 프로필)를 이 계정으로
+      옮기고 그 계정 행을 지운다(세션도 함께 죽는다). 없으면 sub 만 채운다.
+    호출부는 트랜잭션(db.awrite) 안에서 부른다.
+    """
+    column = _PROVIDER_COLUMNS[provider]
+    me = get_by_id(conn, user_id)
+    if me is None:
+        raise ValueError("user not found")
+    if me.get(column) == provider_sub:
+        return me, "already"
+    if me.get(column):
+        return me, "conflict"
+    other = get_by_provider_sub(conn, provider=provider, provider_sub=provider_sub)
+    if other is not None and other["id"] != user_id:
+        oid = other["id"]
+        for table, dedupe_col in _MERGE_TABLES:
+            if dedupe_col:
+                conn.execute(
+                    f"DELETE FROM {table} WHERE user_id = %s AND {dedupe_col} IN "
+                    f"(SELECT {dedupe_col} FROM {table} WHERE user_id = %s)",
+                    (oid, user_id),
+                )
+            conn.execute(f"UPDATE {table} SET user_id = %s WHERE user_id = %s", (user_id, oid))
+        # 온보딩 프로필(PK user_id): 내 것이 없을 때만 옮긴다.
+        conn.execute(
+            "UPDATE onboarding_profiles SET user_id = %s WHERE user_id = %s "
+            "AND NOT EXISTS (SELECT 1 FROM onboarding_profiles WHERE user_id = %s)",
+            (user_id, oid, user_id),
+        )
+        conn.execute("DELETE FROM users WHERE id = %s", (oid,))  # 남은 행은 CASCADE
+    stored_email = email if email_verified else None
+    conn.execute(
+        f"UPDATE users SET {column} = %s, email = COALESCE(email, %s), last_login_at = %s WHERE id = %s",
+        (provider_sub, stored_email, now_iso, user_id),
+    )
+    return get_by_id(conn, user_id), "linked"  # type: ignore[return-value]
+
+
+def linked_providers(user: dict[str, Any] | None) -> dict[str, bool]:
+    """/me 용 — 어떤 provider 가 붙어 있는지(값 자체는 노출하지 않는다)."""
+    if not user:
+        return {}
+    return {p: bool(user.get(col)) for p, col in _PROVIDER_COLUMNS.items()}
 
 
 def update_display_name(

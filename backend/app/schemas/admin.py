@@ -139,7 +139,12 @@ class AdminUserItem(BaseModel):
     nickname: str
     created_at: str
     last_login_at: str
-    provider: Literal["google", "kakao", "unknown"]
+    provider: Literal["google", "kakao", "naver", "unknown"]
+    # 2026-09-20 — 연결된 로그인 방식(둘 다면 계정 연결 완료)과 현재 약관 동의 여부. 값(sub·이메일)은 없다.
+    google_linked: bool = False
+    kakao_linked: bool = False
+    naver_linked: bool = False
+    terms_agreed: bool = False
 
 
 class AdminUserListResponse(BaseModel):
@@ -172,6 +177,9 @@ class AdminStatsResponse(BaseModel):
     inquiries_new: int = 0
     users_total: int = 0
     users_today: int = 0
+    # 2026-09-20 — 계정 보관함 규모(저장한 스팟·저장한 AI 코스). 운영 화면 현황 카드용.
+    saved_spots_total: int = 0
+    my_courses_total: int = 0
     # 신고가 몇 건 쌓이면 자동 숨김되는지(REVIEW_HIDE_REPORT_THRESHOLD, 기본 3).
     # 관리자 화면이 "자동 숨김"과 "운영자가 숨김"을 구분하는 데 쓴다:
     #   hidden && report_count >= 이 값  →  자동 숨김 (임계 도달로만 hidden 이 되고,
@@ -179,6 +187,28 @@ class AdminStatsResponse(BaseModel):
     #   hidden && report_count <  이 값  →  운영자가 직접 숨김
     # **프론트에 숫자를 박지 않기 위해** 서버가 내려준다 — env 로 바뀌어도 화면이 따라온다.
     review_hide_report_threshold: int = 0
+    generated_at: str
+
+
+class AdminAiStatusResponse(BaseModel):
+    """관리자 "AI 사용량" 탭(2026-09-20). Gemini 무료 한도·코스 LLM 일일 상한·사전 생성 요약 커버리지·
+    CSP 보고 집계. 전부 프로세스 메모리 카운터(재시작 시 0)이며 키·개인정보 없음."""
+
+    provider: str
+    model: str
+    quota_429_last_hour: int = 0
+    quota_429_last_24h: int = 0
+    last_429_at: str | None = None
+    last_success_at: str | None = None
+    fallback_suspected: bool = False
+    course_llm_used_today: int = 0
+    course_llm_cap_global: int = 0
+    course_llm_cap_per_user: int = 0
+    summaries_pregenerated: int = 0
+    spots_total: int = 0
+    csp_total: int = 0
+    csp_distinct: int = 0
+    csp_top: list[tuple[str, int]] = Field(default_factory=list)
     generated_at: str
 
 

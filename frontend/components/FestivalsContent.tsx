@@ -12,7 +12,9 @@ import FestivalStatusFilter, { FestivalStatusValue } from "./festivals/FestivalS
 type FetchStatus = "loading" | "success" | "error";
 
 const SKELETON_COUNT = 8;
-const FETCH_LIMIT = 200; // 지시서 한도("최대200")를 그대로 요청 상한으로 쓴다.
+const FETCH_LIMIT = 500; // 2026-09-20: 서버 상한 500 — 전량 받아 30건씩 페이지로 나눈다.
+// 2026-09-20 대표 결정 — 한 페이지 30건, 1·2·3… 페이지 번호로 나눈다(정렬은 서버: 진행중 종료 임박순 → 예정 시작일순).
+const PAGE_SIZE = 30;
 /** 월 필터를 쓰지 않는 기본 뷰의 조회 기간. 지시서: "기본 뷰는 90 유지". */
 const DEFAULT_WINDOW_DAYS = 90;
 /** 월 필터 선택 시 — 가을 축제 등 먼 시점도 놓치지 않도록 넉넉히 요청(지시서 근거). */
@@ -98,6 +100,14 @@ export default function FestivalsContent() {
     return festivals;
   }, [data?.festivals, statusFilter]);
 
+  // 페이지 번호 — 필터·지역·월이 바뀌면 1페이지로.
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [selectedRegion, month, statusFilter]);
+  const pageCount = Math.max(1, Math.ceil(filteredFestivals.length / PAGE_SIZE));
+  const pageFestivals = filteredFestivals.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const retry = () => setRetryTick((t) => t + 1);
 
   return (
@@ -142,7 +152,7 @@ export default function FestivalsContent() {
 
       {status === "success" && filteredFestivals.length > 0 && (
         <div className="festivals-grid" role="list">
-          {filteredFestivals.map((festival) => {
+          {pageFestivals.map((festival) => {
             const s = summaries[String(festival.id)];
             return (
               <FestivalCard
@@ -154,6 +164,31 @@ export default function FestivalsContent() {
             );
           })}
         </div>
+      )}
+
+      {status === "success" && pageCount > 1 && (
+        <nav className="pager" aria-label="축제 목록 페이지">
+          <button type="button" className="pager__btn" disabled={page === 1} onClick={() => setPage(page - 1)}>
+            이전
+          </button>
+          {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`pager__btn pager__num${n === page ? " is-active" : ""}`}
+              aria-current={n === page ? "page" : undefined}
+              onClick={() => {
+                setPage(n);
+                document.getElementById("festivalsHeading")?.scrollIntoView({ block: "start" });
+              }}
+            >
+              {n}
+            </button>
+          ))}
+          <button type="button" className="pager__btn" disabled={page === pageCount} onClick={() => setPage(page + 1)}>
+            다음
+          </button>
+        </nav>
       )}
 
       {status === "error" && (

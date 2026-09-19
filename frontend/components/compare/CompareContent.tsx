@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ApiError, CompareRequest, CompareResponse, OnboardingResult, fetchCompare } from "../../lib/api";
-import { clearOnboardingResult, loadOnboardingResult } from "../../lib/onboardingStorage";
+import { clearOnboardingResult } from "../../lib/onboardingStorage";
+import { resolveOnboardingProfile } from "../../lib/onboardingProfile";
+import { useLoggedInName } from "../../lib/useLoggedInName";
 import { DEFAULT_REGION } from "../recommend/constants";
 import { SIDO_REGIONS } from "../regions/constants";
 import RegionDropdown from "../regions/RegionDropdown";
@@ -59,9 +61,17 @@ export default function CompareContent() {
   const [error, setError] = useState<ApiError | null>(null);
   const [retryTick, setRetryTick] = useState(0);
 
+  // 2026-09-18 — 로컬 → 계정 프로필 순으로 읽는다(RecommendContent 와 동일). 로그인 여부가 바뀌면 다시 본다.
+  const loggedIn = useLoggedInName();
   useEffect(() => {
-    setProfile(loadOnboardingResult()?.result ?? null);
-  }, []);
+    let alive = true;
+    void resolveOnboardingProfile(loggedIn !== null).then((p) => {
+      if (alive) setProfile(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loggedIn]);
 
   useEffect(() => {
     if (profile === undefined) return; // 프로필 확인 전엔 대기(깜빡임 방지)

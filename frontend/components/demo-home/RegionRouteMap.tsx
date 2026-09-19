@@ -127,13 +127,11 @@ function shortMapLabel(name: string): string {
 export default function RegionRouteMap({
   selectedSido,
   spots,
-  spotsLoading,
   onSelectSido,
   hidePicker = false,
   maxStops = 3,
 }: RegionRouteMapProps) {
   const [asset, setAsset] = useState<RegionMapAsset | null>(null);
-  const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading");
   const rawId = useId().replace(/:/g, "");
   const gridId = `region-map-grid-${rawId}`;
   const clipId = `region-map-clip-${rawId}`;
@@ -141,7 +139,6 @@ export default function RegionRouteMap({
   useEffect(() => {
     const controller = new AbortController();
     setAsset(null);
-    setMapStatus("loading");
     fetch(`/data/region-maps/${selectedSido.sidoCode}.json`, {
       signal: controller.signal,
       cache: "force-cache",
@@ -153,11 +150,9 @@ export default function RegionRouteMap({
       .then((nextAsset) => {
         if (controller.signal.aborted) return;
         setAsset(nextAsset);
-        setMapStatus("ready");
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setMapStatus("error");
       });
     return () => controller.abort();
   }, [selectedSido.sidoCode]);
@@ -289,16 +284,8 @@ export default function RegionRouteMap({
         )}
       </svg>
 
-      {(mapStatus === "loading" || spotsLoading) && (
-        <div className={styles.mapState} aria-live="polite">
-          {selectedSido.shortName} 경계와 추천 스팟을 불러오는 중…
-        </div>
-      )}
-      {mapStatus === "error" && (
-        <div className={styles.mapState} role="status">
-          경계 지도를 불러오지 못했어요.
-        </div>
-      )}
+      {/* 2026-09-18 대표 지시("이거도 좀 없애줄래") — 지도 위에 얹히던 상태 박스("…불러오는 중", "불러오지
+          못했어요")를 뺐다. 로딩 중엔 경계만, 실패 시엔 빈 격자만 보인다 — 설명은 figcaption(스크린리더)이 맡는다. */}
 
       {/* 2026-09-14 대표 지시 — 좌하단 "추천 경로 01" 카드 제거(지도를 가림). */}
       <figcaption className={styles.srOnly}>{mapSummary}</figcaption>

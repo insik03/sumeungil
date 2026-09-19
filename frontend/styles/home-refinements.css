@@ -26,7 +26,7 @@
   margin-bottom: 10px;
 }
 .page--home .quick-menu__grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* 2026-09-20 모바일 핵심 4개 한 줄 */
   gap: 6px;
 }
 .page--home .quick-menu__item {
@@ -76,8 +76,11 @@
   outline-offset: 3px;
 }
 .page--home .dest-search__box:focus-within { outline: 2px solid var(--g-700); outline-offset: 3px; }
+@media (min-width: 640px) {
+  .page--home .quick-menu__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } /* 2026-09-20 태블릿 5×2 */
+}
 @media (min-width: 1024px) {
-  .page--home .quick-menu__grid { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+  .page--home .quick-menu__grid { grid-template-columns: repeat(10, minmax(0, 1fr)); } /* 2026-09-20 붐비는 곳 대신 추가 → 10칸 */
   .page--home .quick-menu__icon { width: 46px; height: 46px; }
   .page--home .hero-carousel__card { aspect-ratio: 16 / 10; max-height: 380px; }
 }

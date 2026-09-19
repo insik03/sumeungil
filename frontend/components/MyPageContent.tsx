@@ -17,6 +17,8 @@ import { loadMySharedCourses } from "../lib/sharedCoursesStorage";
 import { loadSavedSpots } from "../lib/savedSpotsStorage";
 import { loadStamps, STAMP_MILESTONES } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
+import { syncSessionFromServer } from "../lib/authStorage";
+import LinkProviderButtons, { LinkOutcome, LinkProvider } from "./LinkProviderButtons";
 import LoginRequiredGate from "./LoginRequiredGate";
 
 const NICKNAME_MAX = 20; // LoginModal.tsx와 동일 상수(서버 NICKNAME_MAX가 실제 기준, 이건 입력창 UX용).
@@ -69,6 +71,22 @@ export default function MyPageContent() {
   // 닉네임(표시 이름) 변경 — 로그인 직후 LoginModal의 "표시 이름 정하기" 단계와 같은
   // PATCH /api/v1/auth/display-name을 재사용한다. 서버가 사칭 차단·HTML 제거 등 실제
   // 검증을 하므로 여기서는 빈 값만 막는다(서버 400 메시지를 그대로 보여준다).
+  // 2026-09-18 — 연결된 로그인 방식(/me providers). 연결에 성공하면 다시 읽는다.
+  const [providers, setProviders] = useState<Record<string, boolean> | null>(null);
+  const [linkNote, setLinkNote] = useState<string | null>(null);
+  useEffect(() => {
+    void syncSessionFromServer().then((info) => setProviders(info?.providers ?? {}));
+  }, []);
+  const handleLinkDone = (provider: LinkProvider, outcome: LinkOutcome) => {
+    const name = provider === "google" ? "구글" : provider === "kakao" ? "카카오" : "네이버";
+    if (outcome === "linked") {
+      setLinkNote(`${name} 계정을 연결했어요. 그 계정의 저장 코스·취향이 이 계정으로 합쳐졌어요.`);
+      void syncSessionFromServer().then((info) => setProviders(info?.providers ?? {}));
+    } else if (outcome === "already") setLinkNote(`${name} 계정은 이미 이 계정에 연결돼 있어요.`);
+    else if (outcome === "conflict") setLinkNote(`이 계정에는 이미 다른 ${name} 계정이 연결돼 있어요.`);
+    else if (outcome === "not_logged_in") setLinkNote("로그인이 풀렸어요. 다시 로그인한 뒤 시도해주세요.");
+    else setLinkNote("연결에 실패했어요. 잠시 후 다시 시도해주세요.");
+  };
   const [nicknameEditing, setNicknameEditing] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   const [nicknameSaving, setNicknameSaving] = useState(false);
@@ -340,6 +358,23 @@ export default function MyPageContent() {
                     변경
                   </button>
                 </div>
+              )}
+            </div>
+
+            <hr className="mypage-divider" />
+
+            {/* 2026-09-18(대표 결정) — 구글·카카오를 로그인으로 증명해 한 계정으로 묶는다. */}
+            <div className="mypage-field">
+              <span className="onboard-label">로그인 연결</span>
+              <p className="onboard-result__sub" style={{ marginBottom: "var(--sp-3)" }}>
+                구글과 카카오를 모두 연결해 두면 어느 쪽으로 로그인해도 같은 계정이에요. 연결할 때 그 계정에
+                있던 저장 코스·취향은 이 계정으로 합쳐져요.
+              </p>
+              {providers && <LinkProviderButtons providers={providers} onDone={handleLinkDone} />}
+              {linkNote && (
+                <p className="onboard-result__sub" role="status" style={{ marginTop: "var(--sp-2)" }}>
+                  {linkNote}
+                </p>
               )}
             </div>
 
