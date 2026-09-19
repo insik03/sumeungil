@@ -51,6 +51,10 @@ from ..clients.kakao_oauth_client import KakaoOAuthError
 from ..clients.kakao_oauth_client import build_authorize_url as kakao_authorize_url
 from ..clients.kakao_oauth_client import exchange_code as kakao_exchange_code
 from ..clients.kakao_oauth_client import fetch_userinfo as kakao_fetch_userinfo
+from ..clients.naver_oauth_client import NaverOAuthError
+from ..clients.naver_oauth_client import build_authorize_url as naver_authorize_url
+from ..clients.naver_oauth_client import exchange_code as naver_exchange_code
+from ..clients.naver_oauth_client import fetch_userinfo as naver_fetch_userinfo
 from ..config import settings
 from ..deps import get_database, get_user_auth
 from ..repositories import user_repo
@@ -405,6 +409,75 @@ async def kakao_callback(request: Request, code: str | None = None, state: str |
         provider_sub=kakao_sub,
         email=email,
         email_verified=email_verified,
+        raw_name=raw_name,
+        next_path=next_path,
+    )
+
+
+@router.get("/providers")
+async def auth_providers():
+    """설정된 로그인 방식(2026-09-20). 프론트가 설정 안 된 provider 버튼을 숨긴다. 비밀값 없음."""
+    auth = get_user_auth()
+    return {"google": auth.google_enabled, "kakao": auth.kakao_enabled, "naver": auth.naver_enabled}
+
+
+@router.get("/naver/login")
+async def naver_login(next: str = Query(default="/"), link: bool = Query(default=False)):
+    """네이버 로그인 시작(2026-09-20). 설정이 없으면 404 — 프론트가 버튼을 숨긴다."""
+    if link:
+        next = LINK_NEXT
+    auth = get_user_auth()
+    if not auth.naver_enabled:
+        return error_response(404, "NOT_FOUND", "네이버 로그인이 설정되지 않았습니다.")
+    return _start_oauth_login(next_path=next, authorize_url_builder=naver_authorize_url)
+
+
+@router.get("/naver/callback")
+async def naver_callback(request: Request, code: str | None = None, state: str | None = None):
+    auth = get_user_auth()
+    cookie_nonce = request.cookies.get(STATE_COOKIE_NAME)
+    next_path = auth.verify_state(state, cookie_nonce=cookie_nonce)
+    if next_path is None:
+        logger.warning("네이버 콜백 state 검증 실패")
+        response = _popup_close_html(ok=False)
+        _clear_state_cookie(response)
+        return response
+    if not code or not state:
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+
+    try:
+        tokens = await naver_exchange_code(code, state)
+        access_token = tokens.get("access_token")
+        if not access_token:
+            raise NaverOAuthError("no access_token in response")
+        userinfo = await naver_fetch_userinfo(access_token)
+    except NaverOAuthError as exc:
+        logger.warning("네이버 로그인 실패: %s", exc)
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+
+    naver_sub = str(userinfo.get("id") or "").strip()
+    if not naver_sub:
+        logger.warning("네이버 로그인 실패: id 없음")
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+
+    # 네이버의 email 은 "연락처 이메일"이라 계정 통합 기준(검증된 이메일)으로는 쓰지 않는다 —
+    # 보안검토 K-C1(미검증 이메일 자동 통합 = 계정 탈취) 원칙. 같은 사람의 구글/카카오 계정과 묶는 건
+    # 마이페이지 "로그인 연결"(두 provider 모두 로그인으로 증명)로 한다. 이메일은 표시 이름 폴백에만.
+    email = (userinfo.get("email") or "").strip() or None
+    raw_name = (userinfo.get("nickname") or userinfo.get("name") or "").strip()
+
+    return await _complete_oauth_login(
+        request=request,
+        provider="naver",
+        provider_sub=naver_sub,
+        email=email,
+        email_verified=False,
         raw_name=raw_name,
         next_path=next_path,
     )

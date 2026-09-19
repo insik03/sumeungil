@@ -18,7 +18,7 @@ import { loadSavedSpots } from "../lib/savedSpotsStorage";
 import { loadStamps, STAMP_MILESTONES } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import { syncSessionFromServer } from "../lib/authStorage";
-import LinkProviderButtons, { LinkOutcome } from "./LinkProviderButtons";
+import LinkProviderButtons, { LinkOutcome, LinkProvider } from "./LinkProviderButtons";
 import LoginRequiredGate from "./LoginRequiredGate";
 
 const NICKNAME_MAX = 20; // LoginModal.tsx와 동일 상수(서버 NICKNAME_MAX가 실제 기준, 이건 입력창 UX용).
@@ -77,8 +77,8 @@ export default function MyPageContent() {
   useEffect(() => {
     void syncSessionFromServer().then((info) => setProviders(info?.providers ?? {}));
   }, []);
-  const handleLinkDone = (provider: "google" | "kakao", outcome: LinkOutcome) => {
-    const name = provider === "google" ? "구글" : "카카오";
+  const handleLinkDone = (provider: LinkProvider, outcome: LinkOutcome) => {
+    const name = provider === "google" ? "구글" : provider === "kakao" ? "카카오" : "네이버";
     if (outcome === "linked") {
       setLinkNote(`${name} 계정을 연결했어요. 그 계정의 저장 코스·취향이 이 계정으로 합쳐졌어요.`);
       void syncSessionFromServer().then((info) => setProviders(info?.providers ?? {}));

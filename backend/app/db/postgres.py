@@ -196,6 +196,10 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
     ALTER TABLE users ADD COLUMN IF NOT EXISTS kakao_sub TEXT UNIQUE
     """,
+    # 2026-09-20 네이버 로그인 — kakao_sub 와 같은 성질(UNIQUE, NULL 다수 허용).
+    """
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS naver_sub TEXT UNIQUE
+    """,
     # --- 2026-09-14: 로그아웃 즉시 무효화 + 약관 동의 기록 ------------------------------
     #   session_epoch: 세션 토큰에 박히는 정수. 로그아웃하면 +1 → 그 전에 발급된 토큰은 전부 무효
     #   (무상태 서명 토큰의 "서버가 끊을 수단 없음" 한계 해소, 보안검토 M-2/M-5 후속).

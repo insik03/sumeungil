@@ -21,9 +21,9 @@ from typing import Any, Literal
 
 import psycopg
 
-Provider = Literal["google", "kakao"]
+Provider = Literal["google", "kakao", "naver"]
 
-_PROVIDER_COLUMNS: dict[str, str] = {"google": "google_sub", "kakao": "kakao_sub"}
+_PROVIDER_COLUMNS: dict[str, str] = {"google": "google_sub", "kakao": "kakao_sub", "naver": "naver_sub"}
 
 
 def _row(r: dict[str, Any] | None) -> dict[str, Any] | None:

@@ -6,15 +6,16 @@ import { API_BASE } from "../lib/api";
 const POPUP_MESSAGE_SOURCE = "sumeungil-login";
 
 export type LinkOutcome = "linked" | "already" | "conflict" | "not_logged_in" | "error";
+export type LinkProvider = "google" | "kakao" | "naver";
 
 interface LinkProviderButtonsProps {
   /** /me 의 providers — 이미 붙은 provider 는 버튼 대신 "연결됨"으로 보인다. */
   providers: Record<string, boolean>;
   /** 연결 시도가 끝나면(성공·이미 연결·충돌·실패) 호출. 성공이면 호출부가 /me 를 다시 읽는다. */
-  onDone: (provider: "google" | "kakao", outcome: LinkOutcome) => void;
+  onDone: (provider: LinkProvider, outcome: LinkOutcome) => void;
 }
 
-const LABEL: Record<"google" | "kakao", string> = { google: "구글", kakao: "카카오" };
+const LABEL: Record<LinkProvider, string> = { google: "구글", kakao: "카카오", naver: "네이버" };
 
 /**
  * 2026-09-18(대표 결정 "로그인으로 묶자") — 로그인 중인 계정에 다른 로그인 방식을 붙인다.
@@ -23,7 +24,7 @@ const LABEL: Record<"google" | "kakao", string> = { google: "구글", kakao: "�
  * provider 를 붙이고(user_repo.link_provider) `linked` 결과를 postMessage 로 돌려준다.
  */
 export default function LinkProviderButtons({ providers, onDone }: LinkProviderButtonsProps) {
-  const [busy, setBusy] = useState<"google" | "kakao" | null>(null);
+  const [busy, setBusy] = useState<LinkProvider | null>(null);
   const [blocked, setBlocked] = useState(false);
   const popupRef = useRef<Window | null>(null);
 
@@ -40,7 +41,7 @@ export default function LinkProviderButtons({ providers, onDone }: LinkProviderB
     return () => window.removeEventListener("message", onMessage);
   }, [busy, onDone]);
 
-  const start = (provider: "google" | "kakao") => {
+  const start = (provider: LinkProvider) => {
     setBlocked(false);
     const url = `${API_BASE}/api/v1/auth/${provider}/login?link=1&next=${encodeURIComponent("/mypage")}`;
     const popup = window.open(url, "sumeungil-login", "width=480,height=640");
@@ -55,7 +56,7 @@ export default function LinkProviderButtons({ providers, onDone }: LinkProviderB
 
   return (
     <div className="link-providers">
-      {(["google", "kakao"] as const).map((p) =>
+      {(["google", "kakao", "naver"] as const).map((p) =>
         providers[p] ? (
           <span key={p} className="link-providers__done">
             {LABEL[p]} 연결됨

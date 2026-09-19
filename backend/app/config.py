@@ -361,6 +361,10 @@ class Settings:
         self.kakao_client_id: str = os.getenv("KAKAO_CLIENT_ID", "").strip()
         self.kakao_client_secret: str = os.getenv("KAKAO_CLIENT_SECRET", "").strip()
         self.kakao_redirect_uri: str = os.getenv("KAKAO_REDIRECT_URI", "").strip()
+        # 2026-09-20 네이버 로그인(대표 결정 "네이버까지만"). 셋 중 하나라도 비면 /auth/naver/* 만 404.
+        self.naver_client_id: str = os.getenv("NAVER_CLIENT_ID", "").strip()
+        self.naver_client_secret: str = os.getenv("NAVER_CLIENT_SECRET", "").strip()
+        self.naver_redirect_uri: str = os.getenv("NAVER_REDIRECT_URI", "").strip()
 
         # 로그인 팝업이 postMessage로 결과를 돌려줄 때 origin 검증에 쓴다(다른 탭이 위조한
         # 메시지를 프론트가 신뢰하지 않게). 로컬은 프론트/백엔드 포트가 달라 필수로 채워야 한다.
