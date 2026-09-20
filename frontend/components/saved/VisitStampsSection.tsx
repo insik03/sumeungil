@@ -5,17 +5,19 @@ import Link from "next/link";
 import {
   RegionSummary,
   STAMP_MILESTONES,
+  STAMPS_CHANGED,
   Stamp,
   loadStamps,
   removeStamp,
   summarizeByRegion,
+  syncStampsFromServer,
 } from "../../lib/stampStorage";
 import StampCard from "./StampCard";
 
 /**
- * Phase 4(신규, §A) — 방문 스탬프 모아보기. 저장한 스팟(즐겨찾기)과 완전히 독립된 로컬 기록이다.
- * GPS·사진 등 개인정보는 전혀 쓰지 않는다 — 스팟 상세에서 "내가 직접 눌러" 남긴 체크인 시각만 기록한다
- * (서버 호출 0). SavedContent와 동일한 null-first 하이드레이션 패턴(첫 렌더는 항상 "아직 안 읽음")을
+ * 방문 스탬프 모아보기(2026-09-20 계정 데이터로 전환). 저장한 스팟(즐겨찾기)과는 별개의 기록이다.
+ * 스팟 상세에서 브라우저 위치로 현장을 인증해 찍은 스탬프가 계정에 저장되고, 여기서 서버 목록을 보여준다
+ * (좌표는 저장하지 않는다). SavedContent와 동일한 null-first 하이드레이션 패턴(첫 렌더는 항상 "아직 안 읽음")을
  * 따라 하이드레이션 경고를 막는다.
  *
  * 저장한 스팟 섹션과 시각적으로 구분하기 위해(홈 CongestionBoard처럼) section--mint 배경을 쓴다 —
@@ -24,13 +26,17 @@ import StampCard from "./StampCard";
 export default function VisitStampsSection() {
   const [stamps, setStamps] = useState<Stamp[] | null>(null);
 
+  // 2026-09-20 — 스탬프는 계정 데이터. 서버 목록과 맞추고, 다른 화면(스팟 상세 등)에서 찍은 변경을 구독한다.
   useEffect(() => {
-    setStamps(loadStamps());
+    const refresh = () => setStamps(loadStamps());
+    refresh();
+    window.addEventListener(STAMPS_CHANGED, refresh);
+    void syncStampsFromServer().then(refresh);
+    return () => window.removeEventListener(STAMPS_CHANGED, refresh);
   }, []);
 
   const handleRemove = (spotId: number) => {
-    removeStamp(spotId);
-    setStamps((prev) => (prev ?? []).filter((s) => s.spot_id !== spotId));
+    removeStamp(spotId); // 메모리에서 바로 빼고 STAMPS_CHANGED 로 화면이 따라온다
   };
 
   const sorted = stamps
@@ -47,7 +53,7 @@ export default function VisitStampsSection() {
         내 방문 스탬프
       </h2>
       <p className="stamp-intro">
-        위치 인증이 아니라, 다녀온 곳을 스팟 상세에서 직접 눌러 남긴 기록이에요 — 이 기기에만 저장돼요.
+        다녀온 곳에서 스팟 상세의 “방문 스탬프 찍기”를 누르면 브라우저 위치로 현장을 확인해 계정에 저장돼요. 위치(좌표)는 저장하지 않아요.
       </p>
 
       {stamps !== null && count === 0 && (

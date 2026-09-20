@@ -58,7 +58,7 @@ export default function StampCard({ stamp, onRemove }: StampCardProps) {
           <h3 className="spot-card__name">{stamp.name}</h3>
 
           <p className="stamp-card__meta">
-            {stamp.region_name ?? stamp.region_code} · 직접 체크한 기록 · {relativeStampedAt(stamp.stamped_at)}
+            {stamp.region_name ?? stamp.region_code} · 현장 인증 · {relativeStampedAt(stamp.stamped_at)}
           </p>
         </article>
       </Link>

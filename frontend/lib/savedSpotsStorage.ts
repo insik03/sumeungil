@@ -1,11 +1,11 @@
-/** 저장한 스팟 보관소 — **로그인 여부로 정본이 갈린다**(2026-09-16, #148/#163).
+/** 저장한 스팟 보관소 — **계정 데이터다. 로그인해야만 저장할 수 있다**(2026-09-16, #148/#163; 2026-09-20 게스트 저장 폐지).
  *
  *  - 로그인: 서버(/api/v1/saved-spots)가 정본이다. 받아온 목록은 `accountSpots` 메모리에만 두고
  *    localStorage 에 쓰지 않는다 — 다른 기기에서 지운 항목이 이 기기 캐시로 되살아나던 문제
  *    (#163) 때문에 로컬→서버 업로드를 없앴고, 캐시까지 남기면 같은 부활 경로가 다시 생긴다.
  *    메모리라 하드 리로드하면 비는데, `Header` 가 부팅·로그인 직후에 서버 동기화를 돌려 채운다.
- *  - 비로그인(게스트): 종전대로 localStorage(STORAGE_KEY)가 정본. 이 목록은 **다른 계정으로
- *    조용히 업로드되지 않는다** — 로그인한다고 게스트 저장이 그 계정 것이 되지는 않는다.
+ *  - 비로그인(게스트): **저장할 수 없다**(대표 지시 2026-09-20 "비로그인은 저장도 못하고"). 기기에만
+ *    남던 예전 게스트 저장(localStorage)은 더 읽지도 쓰지도 않고 발견 즉시 지운다.
  *
  *  화면은 이 모듈을 직접 폴링하지 않고 `SAVED_SPOTS_CHANGED` 를 구독한다(SavedContent·
  *  MyPageContent·SaveToggleButton·SpotDetailContent). 계정이 바뀌면 `AUTH_CHANGED_EVENT`
@@ -37,49 +37,27 @@ export interface SavedSpot {
   saved_at: string;
 }
 
-function isSavedSpot(item: unknown): item is SavedSpot {
-  if (!item || typeof item !== "object") return false;
-  const s = item as Record<string, unknown>;
-  return (
-    typeof s.id === "number" &&
-    typeof s.name === "string" &&
-    typeof s.category === "string" &&
-    typeof s.region_code === "string" &&
-    typeof s.saved_at === "string"
-  );
-}
-
 /** 표시용 로그인 캐시. 서버가 모든 저장 요청의 실제 인증을 검사한다. */
 function loggedIn(): boolean {
   return getNickname() !== null;
 }
 
-/**
- * localStorage 파싱 실패/버전 불일치(:v1 ≠ 현재 스키마)면 조용히 빈 목록으로 폴백한다
- * (F.2-6-3, 손상 데이터로 화면이 죽지 않게 한다).
- */
+/** 로그인 중이면 계정 목록(메모리), 게스트면 항상 빈 목록. 예전 게스트 localStorage 는 지운다. */
 export function loadSavedSpots(): SavedSpot[] {
   if (typeof window === "undefined") return [];
   if (loggedIn()) return accountSpots;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isSavedSpot);
+    window.localStorage.removeItem(STORAGE_KEY);
   } catch {
-    return [];
+    // localStorage 비활성 — 조용히 무시.
   }
+  return [];
 }
 
 function persist(list: SavedSpot[]): void {
-  if (typeof window === "undefined") return;
-  if (loggedIn()) { accountSpots = list; notify(); return; }
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  } catch {
-    // localStorage 비활성/용량초과(시크릿 모드 등) — 조용히 무시. 화면 흐름을 막지 않는다.
-  }
+  if (typeof window === "undefined" || !loggedIn()) return;
+  accountSpots = list;
+  notify();
 }
 
 export function isSpotSaved(id: number): boolean {
@@ -130,6 +108,7 @@ function enqueueWrite(action: () => Promise<unknown>, id: number, saved: SavedSp
 }
 
 export function toggleSavedSpot(spot: SpotCard): boolean {
+  if (!loggedIn()) return false; // 게스트는 저장 불가 — 호출부가 requireLogin 으로 먼저 막지만 여기서도 지킨다
   revision += 1;
   const list = [...loadSavedSpots()];
   const idx = list.findIndex((s) => s.id === spot.id);
@@ -147,6 +126,7 @@ export function toggleSavedSpot(spot: SpotCard): boolean {
 }
 
 export function removeSavedSpot(id: number): void {
+  if (!loggedIn()) return;
   revision += 1;
   persist(loadSavedSpots().filter((s) => s.id !== id));
   if (loggedIn()) enqueueWrite(() => deleteSavedSpotRemote(id), id, null);

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useLoggedInName } from "../lib/useLoggedInName";
+import { useLoginGate } from "./LoginGateProvider";
 import { SAVED_SPOTS_CHANGED, SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
 import SavedSpotCard from "./saved/SavedSpotCard";
 import VisitStampsSection from "./saved/VisitStampsSection";
@@ -25,6 +27,8 @@ import SavedAiCoursesSection from "./saved/SavedAiCoursesSection";
  */
 export default function SavedContent() {
   const [spots, setSpots] = useState<SavedSpot[] | null>(null);
+  const loggedIn = useLoggedInName();
+  const { requireLogin } = useLoginGate();
 
   useEffect(() => {
     const refresh = () => setSpots(loadSavedSpots());
@@ -60,10 +64,18 @@ export default function SavedContent() {
           내가 저장한 스팟
         </h1>
         <p className="saved-content__intro">
-          로그인한 계정에 저장되어 다른 기기에서도 볼 수 있어요. 예전에 비로그인으로 저장한 목록은 기기에 남아 있으며 계정으로 자동 이전되지 않아요.
+          로그인한 계정에 저장되어 다른 기기에서도 볼 수 있어요. 저장하려면 로그인이 필요해요.
         </p>
 
-        {spots !== null && sorted.length === 0 && (
+        {spots !== null && sorted.length === 0 && loggedIn === null && (
+          <div className="board-error" role="status">
+            <p className="board-error__msg">로그인하면 저장한 스팟과 방문 스탬프를 계정에 모아 볼 수 있어요.</p>
+            <button type="button" className="btn btn--mint" onClick={() => requireLogin(() => undefined)}>
+              로그인하기
+            </button>
+          </div>
+        )}
+        {spots !== null && sorted.length === 0 && loggedIn !== null && (
           <div className="board-error" role="status">
             <p className="board-error__msg">아직 저장한 스팟이 없어요.</p>
             <p className="board-error__hint">추천 화면에서 마음에 드는 스팟을 하트로 저장해보세요.</p>

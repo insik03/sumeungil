@@ -15,7 +15,7 @@ import {
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 import { loadMySharedCourses } from "../lib/sharedCoursesStorage";
 import { SAVED_SPOTS_CHANGED, loadSavedSpots } from "../lib/savedSpotsStorage";
-import { loadStamps, STAMP_MILESTONES } from "../lib/stampStorage";
+import { STAMPS_CHANGED, loadStamps, STAMP_MILESTONES, syncStampsFromServer } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import { syncSessionFromServer } from "../lib/authStorage";
 import LinkProviderButtons, { LinkOutcome, LinkProvider } from "./LinkProviderButtons";
@@ -108,6 +108,15 @@ export default function MyPageContent() {
     return () => window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
   }, []);
 
+  // 방문 스탬프도 계정 데이터(2026-09-20) — 서버 목록을 받아 세고, 다른 화면의 변경을 구독한다.
+  useEffect(() => {
+    const refresh = () => setStampCount(loadStamps().length);
+    refresh();
+    window.addEventListener(STAMPS_CHANGED, refresh);
+    void syncStampsFromServer();
+    return () => window.removeEventListener(STAMPS_CHANGED, refresh);
+  }, []);
+
   // §47.1(신규) — "여행 준비" 섹션 프로필 유무 판정. GET /api/v1/onboarding/me(이미 존재,
   // CourseContent.tsx의 fetchMyOnboardingProfile 재사용) 1회 호출. 새 API 0.
   // undefined=확인 전(문구 숨김), null=아직 취향 미분석, OnboardingResult=분석 완료.
@@ -115,8 +124,7 @@ export default function MyPageContent() {
 
   useEffect(() => {
     if (!nickname) return;
-    // savedSpotCount 는 위 SAVED_SPOTS_CHANGED 이펙트가 맡는다(여기서 또 세지 않는다).
-    setStampCount(loadStamps().length);
+    // savedSpotCount·stampCount 는 위 이펙트들이 맡는다(여기서 또 세지 않는다).
     const sharedCount = loadMySharedCourses().length;
     let cancelled = false;
     fetchMyCourses()
