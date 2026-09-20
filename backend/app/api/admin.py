@@ -365,7 +365,8 @@ async def admin_list_inquiries(
 ):
     try:
         _require_session(request)
-        return await admin_service.list_inquiries(db, status=status, limit=limit, offset=offset)
+        return await admin_service.list_inquiries(db, status=status, limit=limit, offset=offset,
+                                                  operator=_operator(request), ip_hash=_ip_hash(request))
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="admin/inquiries/list")
 
@@ -414,7 +415,8 @@ async def admin_list_users(
     """닉네임·가입일·마지막 로그인·로그인수단만. email·외부 provider ID는 응답에 없다."""
     try:
         _require_session(request)
-        return await admin_service.list_users(db, limit=limit, offset=offset)
+        return await admin_service.list_users(db, limit=limit, offset=offset,
+                                              operator=_operator(request), ip_hash=_ip_hash(request))
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="admin/users/list")
 

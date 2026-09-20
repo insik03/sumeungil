@@ -81,7 +81,7 @@ def get_database() -> Database:
     2026-08-17: 이 함수가 원래 "상용 전환 시 PostgreSQL 구현으로 바꾼다"고 예고했던 지점
     그대로 — db/postgres.py로 교체했다. 라우터·서비스·리포지토리 함수 시그니처는 불변.
     """
-    return Database(settings.database_url)
+    return Database(settings.database_url, auto_migrate=settings.database_auto_migrate)
 
 
 @lru_cache(maxsize=1)
