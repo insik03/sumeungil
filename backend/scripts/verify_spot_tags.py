@@ -119,6 +119,15 @@ with tempfile.TemporaryDirectory() as d:
     saved = SpotTagCache(d).load()
     check("429 로 멈추면 quota_aborted, 그때까지 만든 것은 저장", st.quota_aborted and st.generated == 2 and saved.tags(20) and saved.tags(21), str(st))
 
+with tempfile.TemporaryDirectory() as d:
+    overviews.update({30: "한적한 곳", 31: "힐링 공간", 32: "산책로", 33: "카페"})
+    calls.clear()
+    st = asyncio.run(run_batch([30, 31, 32, 33], {30, 31, 32, 33}, SpotTagCache(d), None, 60, fetch=fake_fetch, max_api_calls=2))
+    check("호출 상한 2 → 2곳만 처리하고 cap_reached", st.api_calls == 2 and st.cap_reached and len(calls) == 2, f"{st} calls={calls}")
+    check("상한으로 멈춰도 만든 것은 저장", SpotTagCache(d).load().tags(30) != [])
+    st2 = asyncio.run(run_batch([30, 31, 32, 33], {30, 31, 32, 33}, SpotTagCache(d).load(), None, 60, fetch=fake_fetch, max_api_calls=2))
+    check("다음 실행은 이미 한 곳을 건너뛰고 이어서 처리", st2.fresh_skipped == 2 and st2.api_calls == 2 and not st2.cap_reached, str(st2))
+
 print("\n[d] 저장소 overlay")
 with tempfile.TemporaryDirectory() as d:
     seed = {"spots": [
