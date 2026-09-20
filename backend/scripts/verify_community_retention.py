@@ -37,6 +37,11 @@ from _pg_test_helpers import drop_schema, isolated_database_url  # noqa: E402
 
 _ISOLATED_DSN, _BASE_DSN, _SCHEMA = isolated_database_url()
 os.environ["DATABASE_URL"] = _ISOLATED_DSN
+
+# 2026-09-20 — 후기 쓰기가 로그인 필수가 되면서 세션 서명키가 필요해졌다.
+# UserAuth.enabled 가 이 값으로 판정되고, 비어 있으면 require_login 이 항상 401 이다.
+os.environ.setdefault("USER_SESSION_SECRET", "verify-session-secret-not-for-prod")
+
 os.environ["SHARE_MAX_PER_DEVICE"] = "3"
 os.environ["SHARE_MAX_TOTAL"] = "10"
 os.environ["SHARE_RETENTION_DAYS"] = "180"
