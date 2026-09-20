@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SpotCard } from "../../lib/api";
-import { isSpotSaved, toggleSavedSpot } from "../../lib/savedSpotsStorage";
+import { SAVED_SPOTS_CHANGED, isSpotSaved, toggleSavedSpot } from "../../lib/savedSpotsStorage";
 import { useLoginGate } from "../LoginGateProvider";
 
 interface SaveToggleButtonProps {
@@ -23,7 +23,10 @@ export default function SaveToggleButton({ spot }: SaveToggleButtonProps) {
   const { requireLogin } = useLoginGate();
 
   useEffect(() => {
-    setSaved(isSpotSaved(spot.id));
+    const refresh = () => setSaved(isSpotSaved(spot.id));
+    refresh();
+    window.addEventListener(SAVED_SPOTS_CHANGED, refresh);
+    return () => window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
   }, [spot.id]);
 
   return (

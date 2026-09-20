@@ -58,6 +58,7 @@ from ..clients.naver_oauth_client import fetch_userinfo as naver_fetch_userinfo
 from ..config import settings
 from ..deps import get_database, get_user_auth
 from ..repositories import user_repo
+from .auth_deps import require_login
 from ..schemas.auth import ConsentRequest, UpdateDisplayNameRequest, UserSessionResponse
 
 # 약관·개인정보처리방침 동의 버전 (2026-09-14). 프론트 lib/consent.ts 와 같은 값. 실질 변경 시 둘 다 올린다.
@@ -242,7 +243,15 @@ async def _complete_oauth_login(
 
     if next_path == LINK_NEXT:
         # 계정 연결 모드 — 현재 세션이 있어야 한다(팝업은 같은 브라우저라 쿠키가 같이 온다).
-        identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
+        try:
+            identity = await require_login(request)
+        except HTTPException:
+            identity = None
+        except Exception:  # DB unavailable: finish the OAuth popup cleanly.
+            logger.exception("계정 연결 세션 확인 실패")
+            response = _popup_close_html(ok=False, next_path="/mypage", linked="error")
+            _clear_state_cookie(response)
+            return response
         if identity is None:
             response = _popup_close_html(ok=False, next_path="/mypage", linked="not_logged_in")
             _clear_state_cookie(response)
@@ -335,10 +344,9 @@ async def google_callback(request: Request, code: str | None = None, state: str 
 
     email = (userinfo.get("email") or "").strip() or None
     google_sub = (userinfo.get("sub") or "").strip()
-    # email_verified가 명시적으로 false인 경우만 거른다(필드 자체가 없는 계정 유형도 있어
-    # 존재 여부만으로는 판단하지 않는다 — 과도한 차단 방지). 구글은 이메일이 사실상 필수라
-    # email이 없으면(원천 응답 이상) 함께 거부한다.
-    if not email or not google_sub or userinfo.get("email_verified") is False:
+    # email_verified가 명시적으로 true인 이메일만 계정 통합에 사용한다(누락도 거부).
+    # 값 누락 또는 문자열 "true"를 인증 완료로 승격하지 않는다.
+    if not email or not google_sub or userinfo.get("email_verified") is not True:
         logger.warning("구글 로그인 실패: 이메일/sub 없음 또는 이메일 미검증")
         response = _popup_close_html(ok=False, next_path=next_path)
         _clear_state_cookie(response)
