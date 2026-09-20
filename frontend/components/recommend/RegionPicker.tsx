@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ApiError, RegionSearchItem, fetchNationwideCongestion, fetchRegionSearch } from "../../lib/api";
+import { ApiError, RegionSearchItem, fetchRegionSearch } from "../../lib/api";
+import { useHotRegions } from "../../lib/useHotRegions";
 import { QUICK_REGIONS, QuickRegionChip } from "./constants";
 import ChipScrollRow from "../ChipScrollRow";
 
@@ -42,23 +43,11 @@ export default function RegionPicker({ selected, onSelect }: RegionPickerProps) 
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 2026-09-20 대표 지시 — "자주 찾는 지역"을 고정 17개가 아니라 **지금 사람들이 많이 찾는 지역**으로.
-  // 한국관광공사 방문자 집중률 예측(전국 시도)을 높은 순으로 8곳. 실패·로딩 중엔 고정 목록.
-  const [hotRegions, setHotRegions] = useState<QuickRegionChip[] | null>(null);
-  useEffect(() => {
-    const c = new AbortController();
-    fetchNationwideCongestion(c.signal)
-      .then((res) => {
-        const top = (res.items ?? [])
-          .filter((i) => i.available && i.index != null)
-          .sort((a, b) => (b.index ?? 0) - (a.index ?? 0))
-          .slice(0, 8)
-          .map((i) => ({ name: i.short_name, sigunguCd: i.region_code, label: i.basis_region_name ?? i.short_name }));
-        if (!c.signal.aborted && top.length >= 4) setHotRegions(top);
-      })
-      .catch(() => undefined);
-    return () => c.abort();
-  }, []);
-  const quickRegions = hotRegions ?? QUICK_REGIONS;
+  // 순위 계산은 useHotRegions 가 맡는다(홈 Hero 와 같은 훅 — 두 화면의 순서가 갈리지 않게).
+  const hotRegions = useHotRegions();
+  const quickRegions: QuickRegionChip[] = hotRegions
+    ? hotRegions.map((h) => ({ name: h.shortName, sigunguCd: h.regionCode, label: h.basisLabel ?? h.shortName }))
+    : QUICK_REGIONS;
 
   // 검색창 타이핑 디바운스(200ms) → /regions/search 호출. Hero.tsx §A.3와 동일 패턴.
   // §30 — 칩은 더 이상 이 API를 사전조회하지 않으므로, 이 효과는 순수하게 자유 텍스트 검색만 맡는다.
