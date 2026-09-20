@@ -7,6 +7,7 @@ import ConsentModal from "./ConsentModal";
 import LoginModal from "./LoginModal";
 import { AUTH_CHANGED_EVENT, getNickname, logout, syncSessionFromServer } from "../lib/authStorage";
 import { syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
+import { syncStampsFromServer } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 
 /**
@@ -159,6 +160,7 @@ export default function Header() {
     if (info.terms_agreed === false) setConsentOpen(true);
     // 2026-09-16 — 저장한 스팟은 계정 데이터. 세션이 확인되면 로컬 캐시를 서버 보관함과 맞춘다.
     void syncSavedSpotsFromServer();
+    void syncStampsFromServer(); // 방문 스탬프도 계정 데이터(2026-09-20)
   }, []);
 
   useEffect(() => {

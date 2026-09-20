@@ -36,6 +36,10 @@ const flush=()=>new Promise(r=>setImmediate(r));
  f.setFail(true);f.m.toggleSavedSpot(spot(3));await flush();
  assert.equal(f.m.isSpotSaved(3),false);assert.equal(f.alerts(),1);
  assert.equal(JSON.parse(f.storage.get('sumeungil:saved-spots:v1'))[0].id,99);
+ // 게스트(비로그인)는 저장할 수 없고, 예전 기기 저장은 읽지 않고 지운다
+ const guest=fixture();guest.storage.delete('sumeungil:nickname:v1');guest.storage.set('sumeungil:saved-spots:v1',JSON.stringify([spot(77)]));
+ assert.equal(guest.m.loadSavedSpots().length,0);assert.equal(guest.storage.has('sumeungil:saved-spots:v1'),false,'legacy guest saves must be cleared');
+ assert.equal(guest.m.toggleSavedSpot(spot(6)),false);await flush();assert.equal(guest.calls.length,0);assert.equal(guest.storage.has('sumeungil:saved-spots:v1'),false);
  const g=fixture();g.setFail(id=>id===4);g.m.toggleSavedSpot(spot(4));g.m.toggleSavedSpot(spot(5));await flush();
  assert.equal(g.m.isSpotSaved(4),false);assert.equal(g.m.isSpotSaved(5),true);
  let ok=false, cleared=0, events=0, storageError=false;
@@ -46,6 +50,6 @@ const flush=()=>new Promise(r=>setImmediate(r));
   {exports,window,Event,fetch:async()=>({ok}),require:name=>name==='./api'?{API_BASE:'http://unused'}:{clearOnboardingResult:()=>{}}});
  await assert.rejects(exports.deleteAccount());assert.equal(cleared,0);assert.equal(events,0);
  ok=true;storageError=true;await exports.deleteAccount();assert.equal(events,1);
- console.log('PASS: server authority, no resurrection/upload, account isolation, ordered writes, failed-save rollback, guest preservation');
+ console.log('PASS: server authority, no resurrection/upload, account isolation, ordered writes, failed-save rollback, guests cannot save');
  console.log('PASS: independent write failures, failed deletion retains cache, successful deletion survives storage exception');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ApiError, SpotCard, SpotDetail, fetchSpotDetail } from "../../lib/api";
 import { SAVED_SPOTS_CHANGED, isSpotSaved, toggleSavedSpot } from "../../lib/savedSpotsStorage";
-import { StampInput, isSpotStamped, toggleStamp } from "../../lib/stampStorage";
+import { STAMPS_CHANGED, isSpotStamped, stampHere, syncStampsFromServer } from "../../lib/stampStorage";
 import { CartSpotInput, MAX_CART_SIZE, isInCart, toggleCartSpot } from "../../lib/courseCartStorage";
 import { CATEGORY_META } from "../recommend/constants";
 import VisitTipCard from "./VisitTipCard";
@@ -65,6 +65,10 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
   const [saved, setSaved] = useState(false);
   // Phase 4(신규) — 방문 스탬프도 저장 토글과 동일한 null-first 하이드레이션 패턴을 따른다.
   const [stamped, setStamped] = useState(false);
+  // 2026-09-20 — 스탬프는 브라우저 위치로 현장 인증한다. 위치를 받아 서버에 대조하는 동안(stamping)과
+  // 실패 사유(stampError: 너무 멀다·권한 거부 등)를 버튼 아래에 그대로 보여준다.
+  const [stamping, setStamping] = useState(false);
+  const [stampError, setStampError] = useState<string | null>(null);
   // §25(신규) — 코스 담기도 동일한 null-first 하이드레이션 패턴. cartFullNotice는 8개 초과 시도 시에만 켠다.
   const [inCart, setInCart] = useState(false);
   const [cartFullNotice, setCartFullNotice] = useState(false);
@@ -106,6 +110,15 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
     refresh();
     window.addEventListener(SAVED_SPOTS_CHANGED, refresh);
     return () => window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
+  }, [data]);
+
+  // 스탬프도 계정 데이터 — 서버 목록과 맞추고(로그인 시), 다른 화면의 변경을 구독한다.
+  useEffect(() => {
+    const refresh = () => setStamped(data ? isSpotStamped(data.id) : false);
+    refresh();
+    void syncStampsFromServer();
+    window.addEventListener(STAMPS_CHANGED, refresh);
+    return () => window.removeEventListener(STAMPS_CHANGED, refresh);
   }, [data]);
 
   const retry = () => setRetryTick((t) => t + 1);
@@ -187,20 +200,18 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
     );
   };
 
-  // Phase 4(신규) — 방문 스탬프 입력. 위치/좌표는 넣지 않는다(개인정보 0, §A 지시).
-  const stampInput: StampInput = {
-    id: data.id,
-    name: data.name,
-    region_code: data.region_code,
-    region_name: data.region_name,
-    category: data.category,
-  };
-
-  const handleToggleStamp = () => {
-    requireLogin(
-      () => setStamped(toggleStamp(stampInput)),
-      "로그인하면 방문 스탬프를 모아 마일스톤을 확인할 수 있어요."
-    );
+  // 방문 스탬프 — 로그인 필수 + 브라우저 위치로 현장 인증(서버가 스팟과의 거리를 대조, 좌표는 저장 안 함).
+  // 이미 찍은 스탬프는 여기서 지우지 않는다(내 스탬프 화면에서 지운다) — 잘못 눌러 인증 기록을 잃지 않게.
+  const handleStamp = () => {
+    if (stamped || stamping) return;
+    requireLogin(() => {
+      setStamping(true);
+      setStampError(null);
+      stampHere(data.id)
+        .then(() => setStamped(true))
+        .catch((e: unknown) => setStampError(e instanceof Error ? e.message : "스탬프를 찍지 못했어요."))
+        .finally(() => setStamping(false));
+    }, "로그인하면 방문 스탬프를 모아 마일스톤을 확인할 수 있어요.");
   };
 
   // §25(신규) — 코스 담기 입력. 순서(slot_label)는 담지 않는다 — arrange 호출 시 backend가 채운다.
@@ -366,13 +377,14 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
         >
           {saved ? "저장됨" : "저장"}
         </button>
-        {/* Phase 4(신규) — 방문 스탬프. 위치 인증이 아니라 "내가 직접 눌러 남기는" 셀프 체크인이다
-            (개인정보 0, §A 지시). 저장 버튼과 같은 흰 배경 토글 레시피를 쓰되 색만 mint로 구분한다. */}
+        {/* 방문 스탬프 — 브라우저 위치로 현장을 인증해 계정에 저장한다(2026-09-20). 저장 버튼과 같은
+            흰 배경 레시피에 색만 mint 로 구분한다. */}
         <button
           type="button"
           className={`btn btn--white btn--lg${stamped ? " is-stamped" : ""}`}
           aria-pressed={stamped}
-          onClick={handleToggleStamp}
+          disabled={stamping}
+          onClick={handleStamp}
         >
           {stamped ? (
             <>
@@ -392,7 +404,7 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
               방문함
             </>
           ) : (
-            "방문 스탬프 찍기"
+            stamping ? "위치 확인 중…" : "여기서 방문 스탬프 찍기"
           )}
         </button>
         {/* §25(신규) — 코스 담기. AI가 짜주는 코스 대신 직접 고른 스팟들로 순서를 짜고 싶을 때 쓴다
@@ -426,6 +438,11 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
           )}
         </button>
       </div>
+      {stampError && (
+        <p className="spot-detail__cart-notice" role="alert">
+          {stampError}
+        </p>
+      )}
       {cartFullNotice && (
         <p className="spot-detail__cart-notice" role="status">
           코스에는 최대 {MAX_CART_SIZE}곳까지 담을 수 있어요. /course 화면에서 몇 곳 빼고 다시

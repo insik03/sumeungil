@@ -44,7 +44,7 @@ logger = logging.getLogger("sumeungil.db.postgres")
 
 T = TypeVar("T")
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # --- 스키마 (기동 시 CREATE TABLE IF NOT EXISTS 로 멱등 적용) ----------------------
 #
@@ -389,6 +389,18 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END $$
+    """,
+    # --- schema_version 12 (2026-09-20): 방문 스탬프를 기기 → **계정**으로 ------------------
+    # 종전엔 프론트 localStorage 단독("내가 눌러서 기록")이라 기기를 바꾸면 사라졌고 누구나 아무 데나
+    # 찍을 수 있었다. 이제 브라우저 위치로 현장 인증한 스탬프만 계정에 둔다. **좌표는 저장하지
+    # 않는다** — spot_id 와 찍은 시각뿐(스팟 본문은 읽을 때 스토어에서 재구성, saved_spots 와 같은 관례).
+    """
+    CREATE TABLE IF NOT EXISTS visit_stamps (
+        user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        spot_id    INTEGER NOT NULL,
+        stamped_at TEXT    NOT NULL,
+        PRIMARY KEY (user_id, spot_id)
+    )
     """,
 )
 
