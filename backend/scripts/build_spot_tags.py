@@ -43,6 +43,9 @@ from build_spot_summaries import (  # noqa: E402
 logger = logging.getLogger("sumeungil.scripts.build_spot_tags")
 
 SAVE_EVERY = 50
+# 한 번 실행에서 부를 수 있는 TourAPI(detailCommon2) 호출 상한 기본값. 이 키의 일일 쿼터는 **운영 서비스의 스팟 상세
+# 조회와 나눠 쓴다** — 2026-09-20 배치가 쿼터를 다 써서 운영의 소개·요약이 일시적으로 비었다. 상한을 넘기면 저장하고 멈춘다.
+DEFAULT_MAX_API_CALLS = 150
 
 
 @dataclass
@@ -53,10 +56,12 @@ class TagRunStats:
     unchanged: int = 0       # API 는 불렀지만 소개글 해시·규칙 버전이 같아 추출 생략
     no_overview: int = 0
     quota_aborted: bool = False
+    cap_reached: bool = False   # --max-api-calls 에 도달해 멈춤(쿼터를 운영에 남기기 위함)
+    api_calls: int = 0
 
 
 async def run_batch(target_ids, spot_ids: set[int], cache: SpotTagCache, limiter, stale_days: int,
-                    fetch=_fetch_overview_with_backoff) -> TagRunStats:
+                    fetch=_fetch_overview_with_backoff, max_api_calls: int | None = None) -> TagRunStats:
     stats = TagRunStats()
     done_since_save = 0
     for sid in target_ids:
@@ -66,7 +71,11 @@ async def run_batch(target_ids, spot_ids: set[int], cache: SpotTagCache, limiter
         if cache.is_fresh(sid, stale_days):
             stats.fresh_skipped += 1
             continue
+        if max_api_calls is not None and stats.api_calls >= max_api_calls:
+            stats.cap_reached = True
+            break
         try:
+            stats.api_calls += 1
             overview = await fetch(sid, limiter)
         except QuotaExhausted:
             stats.quota_aborted = True
@@ -89,8 +98,9 @@ async def run_batch(target_ids, spot_ids: set[int], cache: SpotTagCache, limiter
             cache.save()
             done_since_save = 0
     cache.save()  # 429 로 멈춰도 지금까지 만든 것은 남는다
-    logger.info("spot tags attempted=%d generated=%d unchanged=%d fresh_skipped=%d no_overview=%d",
-                stats.attempted, stats.generated, stats.unchanged, stats.fresh_skipped, stats.no_overview)
+    logger.info("spot tags attempted=%d api_calls=%d generated=%d unchanged=%d fresh_skipped=%d no_overview=%d cap_reached=%s",
+                stats.attempted, stats.api_calls, stats.generated, stats.unchanged, stats.fresh_skipped,
+                stats.no_overview, stats.cap_reached)
     return stats
 
 
@@ -102,12 +112,14 @@ async def main() -> int:
     parser.add_argument("--rate-limit-per-min", type=int, default=25)
     parser.add_argument("--stale-days", type=int, default=60,
                         help="이 기간 안에 확인한 스팟은 소개글을 다시 받아오지 않는다(기본 60일)")
+    parser.add_argument("--max-api-calls", type=int, default=DEFAULT_MAX_API_CALLS,
+                        help="이번 실행에서 부를 TourAPI 호출 상한(기본 %d). 일일 쿼터를 운영 조회에 남기려는 안전장치" % DEFAULT_MAX_API_CALLS)
     parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args()
     if not args.all and not args.report_only and (args.limit is None or args.limit <= 0):
         parser.error("--limit 양수 또는 --all이 필요합니다")
-    if args.rate_limit_per_min <= 0 or args.stale_days < 0:
-        parser.error("--rate-limit-per-min은 양수, --stale-days는 0 이상이어야 합니다")
+    if args.rate_limit_per_min <= 0 or args.stale_days < 0 or args.max_api_calls <= 0:
+        parser.error("--rate-limit-per-min·--max-api-calls는 양수, --stale-days는 0 이상이어야 합니다")
 
     spots = JsonSpotRepository()
     if spots.total() == 0:
@@ -127,7 +139,8 @@ async def main() -> int:
     # 같은 API 쿼터를 쓰는 요약 배치와 동시에 돌지 않게 같은 잠금을 쓴다.
     store = SummaryRepository(settings.summary_store_dir, settings.ollama_model)
     with store.batch_lock():
-        stats = await run_batch(order, set(ids_all), cache, RateLimiter(args.rate_limit_per_min), args.stale_days)
+        stats = await run_batch(order, set(ids_all), cache, RateLimiter(args.rate_limit_per_min), args.stale_days,
+                                max_api_calls=args.max_api_calls)
     print(stats)
     return 1 if stats.quota_aborted else 0
 
