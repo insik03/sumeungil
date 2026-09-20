@@ -4480,6 +4480,23 @@ input:focus-visible,
   font-weight: 600;
 }
 
+/* 저장 화면 그리드 — 혼잡 배지가 있는 카드만 길어져 카드 높이가 들쭉날쭉했다.
+   grid-auto-rows:1fr 로 모든 행을 같은 높이로 깔고(.spot-grid 는 열만 정의하므로 행은 전부
+   암시적 행이다), 그 안의 link/card 가 내용 높이가 아니라 행 높이를 채우게 한다.
+   래퍼(.spot-card-wrap)는 그리드 아이템이라 이미 stretch 다 — height:100% 를 주면 오히려
+   stretch 가 풀려 내용 높이로 줄어들므로 건드리지 않는다.
+   저장 시각 줄은 아래로 밀어 카드끼리 기준선을 맞춘다. /recommend 의 .spot-grid 는 무변경. */
+.spot-grid--equal {
+  grid-auto-rows: 1fr;
+}
+.spot-grid--equal .spot-card-link,
+.spot-grid--equal .spot-card {
+  height: 100%;
+}
+.spot-grid--equal .saved-spot-card__meta {
+  margin-top: auto;
+}
+
 /* 여행 팁(F.3-6) */
 .tips-intro {
   margin-top: var(--sp-2);
