@@ -54,8 +54,7 @@ export default function OnboardingForm({
           {text.length}/{TEXT_MAX_LENGTH}
         </div>
         <p className="onboard-hint">
-          전화번호·이메일 등 개인정보는 적지 마세요. 입력한 문장은 AI 분석을 위해 Google(해외) 서버로
-          전송됩니다. <Link href="/privacy">자세히</Link>
+          이름·연락처·주소 등 개인정보는 적지 마세요. 취향 분석은 서비스 서버에서만 처리되고, AI 코스 생성을 요청하면 이 문장이 Google(해외) 서버로 전송됩니다. <Link href="/privacy">자세히</Link>
         </p>
 
         {schemaStatus === "loading" &&

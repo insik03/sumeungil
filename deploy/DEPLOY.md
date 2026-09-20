@@ -653,6 +653,34 @@ docker stats                            # CPU/메모리 실시간
 체크섬을 남긴다. 로컬 사본은 기본 14일 보관한다. `BACKUP_S3_URI`가 설정되어 있으면 같은
 파일과 체크섬을 AES-256 서버측 암호화로 S3 호환 외부 저장소에도 올린다.
 
+**개인정보처리방침과의 약속(2026-09-20)** — 처방 4·7항은 "백업은 서비스 서버 안에 14일 보관 후 자동 삭제,
+외부 저장소는 쓰지 않는다, 복구할 때는 복구 전에 처리된 삭제·탈퇴 요청을 다시 반영해 지운다"고 안내한다.
+운영에서 이 약속을 지키려면:
+
+- `BACKUP_RETENTION_DAYS=14` 유지. `BACKUP_S3_URI` 를 설정하면(외부 저장소 사용) 그쪽 수명주기도 14일로 맞추고
+  **처방 7항의 "외부 저장소는 사용하지 않습니다" 문구를 먼저 고친다.**
+- **수동 덤프도 14일을 넘기지 않는다.** 배포 전 손으로 뜬 덤프(`pg_dump ... > 파일`)는 자동 삭제 대상이 아니다
+  (자동 삭제는 `backups/sumeungil-*.dump` 만 지운다). 수동 덤프는 배포 확인 후 바로, 늦어도 14일 안에 지운다.
+- **복구했다면**: 복구한 DB 에서, 백업 시점 이후에 처리된 삭제·탈퇴 요청(마이페이지 계정 삭제, 문의로 받은 삭제
+  요청)을 다시 실행한다. 복구 작업 기록에 어떤 요청을 다시 반영했는지 남긴다.
+
+## 접속·오류 로그 보관 (2026-09-20)
+
+nginx 접속·오류 로그에는 원본 IP 가 있어 처방이 "90일 보관 후 자동 삭제"라고 안내한다. `docker-compose.yml` 의
+`log-retention` 서비스가 `deploy/logs/nginx/` 의 `access.log`·`error.log` 를 하루 1회 gzip 사본으로 순환하고
+`LOG_RETENTION_DAYS`(기본 90)가 지난 사본을 지운다(`deploy/logs/retention.sh`, 검증: `sh deploy/logs/test-retention.sh`).
+다른 컨테이너 로그는 `json-file` 용량 상한(10MB × 5개)만 둔다(IP 없음).
+
+```bash
+# 최초 적용(서버에서, 1회) — nginx 가 로그를 파일로 쓰도록 재생성된다(수 초 끊김)
+mkdir -p logs/nginx
+docker compose up -d nginx log-retention
+docker compose logs --tail=20 log-retention
+ls -lh logs/nginx/
+```
+
+보관일을 바꾸면 처방 1·4·7항의 "90일"도 같이 고친다.
+
 ```bash
 # 마지막 자동 백업과 업로드 로그 확인
 docker compose ps postgres-backup
