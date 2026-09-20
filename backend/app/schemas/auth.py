@@ -24,6 +24,13 @@ class UserSessionResponse(BaseModel):
     providers: dict[str, bool] = Field(default_factory=dict)
 
 
+class SignupCompleteRequest(BaseModel):
+    """POST /auth/signup/complete (2026-09-20) — 약관 동의 + 표시 이름. 가입 보류 쿠키가 있어야 한다."""
+
+    display_name: str = Field(min_length=1, max_length=NICKNAME_MAX)
+    terms_version: str = Field(min_length=1, max_length=20)
+
+
 class UpdateDisplayNameRequest(BaseModel):
     # 리뷰 nickname과 동일한 상한 재사용(schemas/community.py) — 표시 이름이라는 같은
     # 성격의 값이라 별도 상한을 만들지 않는다.
