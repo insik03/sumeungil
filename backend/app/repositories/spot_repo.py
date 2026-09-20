@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -99,12 +101,25 @@ class SpotRepository(ABC):
     def total(self) -> int:
         raise NotImplementedError
 
+    def tag_weights(self) -> list[float] | None:
+        """태그별 희소성 가중치(36차원). 없으면 None — 호출부는 가중 없이(모두 1) 계산한다."""
+        return None
+
 
 class JsonSpotRepository(SpotRepository):
     """spots_seed.json 기반 인메모리 리포지토리. 프로세스 수명 동안 불변."""
 
-    def __init__(self, seed_path: Path | None = None) -> None:
+    # 파생 태그 캐시 파일이 바뀌었는지 보는 최소 간격(초). 배치가 캐시를 채우면 재시작 없이 반영된다.
+    TAG_CACHE_CHECK_SEC = 60.0
+
+    def __init__(self, seed_path: Path | None = None, tag_cache=None) -> None:
+        """tag_cache: SpotTagCache(소개글 파생 태그). None 이면 시드 태그만 쓴다(테스트·로컬 기본)."""
         path = seed_path or SEED_PATH
+        self._tag_cache = tag_cache
+        self._tag_cache_mtime = -1.0
+        self._tag_cache_checked = 0.0
+        self._base_tags: dict[int, list[tuple[str, str]]] = {}
+        self._weights: list[float] | None = None
         self._by_region: dict[str, list[SpotRecord]] = {}
         self._by_id: dict[int, SpotRecord] = {}
         self._all: list[SpotRecord] = []
@@ -157,17 +172,65 @@ class JsonSpotRepository(SpotRepository):
 
         self._region_counts = {rc: len(v) for rc, v in self._by_region.items()}
         logger.info("스팟 시드 로드 완료: 총 %d개, 지역 %d곳", self._total, len(self._by_region))
+        self._base_tags = {r.id: list(r.tags) for r in self._all}
+        self._apply_tag_cache(force=True)
+
+    # --- 소개글 파생 태그 overlay (2026-09-20) -------------------------------------
+    # 시드 태그는 72% 가 1개뿐이라 매칭도가 계단처럼 몰렸다. 배치가 소개글에서 뽑아 캐시한 태그를
+    # 시드 태그에 **더한다**(없애지 않는다). 캐시 파일이 바뀌면 재시작 없이 다시 적용한다.
+
+    def _apply_tag_cache(self, force: bool = False) -> None:
+        cache = self._tag_cache
+        if cache is None:
+            return
+        now = time.monotonic()
+        if not force and now - self._tag_cache_checked < self.TAG_CACHE_CHECK_SEC:
+            return
+        self._tag_cache_checked = now
+        mtime = cache.mtime()
+        if not force and mtime == self._tag_cache_mtime:
+            return
+        self._tag_cache_mtime = mtime
+        cache.load()
+        merged_count = 0
+        for rec in self._all:
+            base = self._base_tags.get(rec.id, [])
+            extra = _valid_tags(cache.tags(rec.id))
+            tags = base + [t for t in extra if t not in base]
+            if len(tags) != len(rec.tags) or extra:
+                rec.tags = tags
+                rec.tag_vector = _build_vector(tags)
+            if extra:
+                merged_count += 1
+        self._weights = None
+        logger.info("스팟 파생 태그 적용: 캐시 %d건 중 %d곳에 태그 추가", len(cache), merged_count)
+
+    def tag_weights(self) -> list[float] | None:
+        """희소한 태그가 맞을수록 더 높게 — IDF. w_i = ln((N+1)/(df_i+1)) + 1 (실제 스팟 분포에서 계산)."""
+        self._apply_tag_cache()
+        if self._weights is None and self._all:
+            n = len(self._all)
+            df = [0] * tag_registry.VECTOR_DIM
+            for r in self._all:
+                for i, v in enumerate(r.tag_vector):
+                    if v:
+                        df[i] += 1
+            self._weights = [math.log((n + 1) / (d + 1)) + 1.0 for d in df]
+        return self._weights
 
     def by_region(self, region_code: str, category: str | None = None) -> list[SpotRecord]:
+        self._apply_tag_cache()
         spots = self._by_region.get(region_code.strip(), [])
         if category:
             return [s for s in spots if s.category == category]
         return list(spots)
 
     def by_id(self, content_id: int) -> SpotRecord | None:
+        self._apply_tag_cache()
         return self._by_id.get(content_id)
 
     def all_spots(self) -> list[SpotRecord]:
+        self._apply_tag_cache()
         return list(self._all)
 
     def region_counts(self) -> dict[str, int]:

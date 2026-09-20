@@ -15,6 +15,7 @@ import {
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 import { loadMySharedCourses } from "../lib/sharedCoursesStorage";
 import { SAVED_SPOTS_CHANGED, loadSavedSpots } from "../lib/savedSpotsStorage";
+import { STAMPS_ENABLED } from "../lib/features";
 import { STAMPS_CHANGED, loadStamps, syncStampsFromServer } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import { syncSessionFromServer } from "../lib/authStorage";
@@ -301,7 +302,7 @@ export default function MyPageContent() {
               count={savedSpotCount}
               icon={<BookmarkIcon />}
             />
-            <ActivityTile href="/saved" label="방문 스탬프" count={stampCount} icon={<StampIcon />} />
+            {STAMPS_ENABLED && <ActivityTile href="/saved" label="방문 스탬프" count={stampCount} icon={<StampIcon />} />}
             <ActivityTile href="/saved" label="코스" count={courseCount} icon={<RouteIcon />} />
             <ActivityTile onClick={() => setView("account")} label="계정관리" count={null} icon={<GearIcon />} />
             <ActivityTile onClick={openInquiryView} label="고객문의" count={null} icon={<MailIcon />} />

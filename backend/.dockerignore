@@ -18,3 +18,4 @@ README.md
 scripts/*
 !scripts/build_spot_summaries.py
 !scripts/build_festival_summaries.py
+!scripts/build_spot_tags.py

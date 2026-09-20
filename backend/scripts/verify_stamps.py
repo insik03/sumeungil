@@ -33,6 +33,7 @@ from _pg_test_helpers import drop_schema, isolated_database_url  # noqa: E402
 _ISOLATED_DSN, _BASE_DSN, _SCHEMA = isolated_database_url()
 os.environ["DATABASE_URL"] = _ISOLATED_DSN
 os.environ.setdefault("PUBLIC_DATA_API_KEY", "verify-only")
+os.environ["STAMPS_ENABLED"] = "true"  # 기본은 꺼져 있다(대표 지시로 접어 둠) — 검증은 켠 상태로
 os.environ["GOOGLE_CLIENT_ID"] = "verify-client-id"
 os.environ["GOOGLE_CLIENT_SECRET"] = "verify-client-secret"
 os.environ["GOOGLE_REDIRECT_URI"] = "http://localhost:8000/api/v1/auth/google/callback"

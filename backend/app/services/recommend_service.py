@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -181,13 +182,24 @@ class _Scored:
     _sort_cong: float = field(default=101.0)  # 정렬용: 낮을수록 여유(없으면 뒤로)
 
 
+# 희소 태그 가중(IDF) 공급자. 앱 시작 시 main.py 가 연결한다 — 추천·비교·코스가 **같은 스팟에 같은
+# 매칭도**를 내도록 셋 다 이 한 곳을 거친다. 연결하지 않으면(테스트) 종전 이진 코사인이다.
+_TAG_WEIGHTS_SOURCE: Callable[[], list[float] | None] | None = None
+
+
+def use_tag_weights(source: Callable[[], list[float] | None] | None) -> None:
+    global _TAG_WEIGHTS_SOURCE
+    _TAG_WEIGHTS_SOURCE = source
+
+
 def _score_spot(
     spot: SpotRecord,
     congestion: SpotCongestion | None,
     prof: ValidatedProfile,
 ) -> tuple[float, MatchReasons]:
     w = prof.scoring_weights
-    fit = spot_fit.cosine_spot_fit(prof.tag_vector, spot.tag_vector)
+    tag_weights = _TAG_WEIGHTS_SOURCE() if _TAG_WEIGHTS_SOURCE is not None else None
+    fit = spot_fit.cosine_spot_fit(prof.tag_vector, spot.tag_vector, tag_weights)
 
     scores: dict[str, float] = {"profile_fit": fit, "local_exposure": 1.0 if spot.is_hidden_gem else 0.0}
     weights: dict[str, float] = {"profile_fit": w["profile_fit"], "local_exposure": w["local_exposure"]}
