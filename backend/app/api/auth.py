@@ -58,7 +58,13 @@ from ..clients.naver_oauth_client import fetch_userinfo as naver_fetch_userinfo
 from ..config import settings
 from ..deps import get_database, get_user_auth
 from ..repositories import user_repo
-from ..schemas.auth import ConsentRequest, UpdateDisplayNameRequest, UserSessionResponse
+from .auth_deps import require_login
+from ..schemas.auth import (
+    ConsentRequest,
+    SignupCompleteRequest,
+    UpdateDisplayNameRequest,
+    UserSessionResponse,
+)
 
 # 약관·개인정보처리방침 동의 버전 (2026-09-14). 프론트 lib/consent.ts 와 같은 값. 실질 변경 시 둘 다 올린다.
 TERMS_VERSION = "2026-09-14"
@@ -70,6 +76,7 @@ from ..schemas.community import NICKNAME_MAX
 from ..security.user_auth import UserAuth, UserIdentity
 from ..util.time import now_kst, to_iso_kst
 from ..util.user_text import clean_user_text, is_impersonating_staff
+from .community_common import error_response
 
 logger = logging.getLogger("sumeungil.api.auth")
 
@@ -80,6 +87,8 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 # 구글·카카오가 공유한다(한 번에 한 팝업만 여는 UX 전제 — LoginModal.tsx 참고).
 STATE_COOKIE_NAME = "sumeungil_oauth_state"
 STATE_COOKIE_PATH = "/api/v1/auth"
+# 2026-09-20 — 가입 보류 쿠키(약관 동의 전). 세션 쿠키가 아니다 — 이것만으로는 아무 API 도 못 쓴다.
+SIGNUP_COOKIE_NAME = "sumeungil_signup"
 
 # 팝업이 postMessage로 보내는 결과 봉투의 source 값. 2026-08-17 카카오 추가 전에는
 # "sumeungil-google-login"으로 구글 전용이었는데, 프론트(LoginModal.tsx)가 provider를
@@ -211,6 +220,16 @@ def _clear_state_cookie(response: Response) -> None:
     response.delete_cookie(key=STATE_COOKIE_NAME, path=STATE_COOKIE_PATH)
 
 
+def _clear_signup_cookie(response: Response) -> None:
+    """가입 보류 쿠키를 지운다(2026-09-20 security-engineer F-1).
+
+    이 쿠키는 provider 가 증명한 신원(이메일 포함)을 담고 있어, 가입이 끝났거나 더는
+    진행하지 않기로 한 순간 바로 없애야 한다. 붙이는 곳은 네 갈래다 — 가입 완료,
+    가입 취소, 로그아웃/탈퇴, 그리고 **다음 로그인 콜백**(이전 시도의 잔여 신원이
+    다음 사용자에게 넘어가지 않게 한다. 공용 PC 시나리오가 정확히 이것이다)."""
+    response.delete_cookie(key=SIGNUP_COOKIE_NAME, path=STATE_COOKIE_PATH)
+
+
 def _sanitize_display_name(raw_name: str, email: str | None) -> str:
     """로그인 제공자가 돌려준 이름을 표시 이름으로 쓰기 전 정제한다(구글·카카오 공용,
     2026-08-17 보안검토 C-2) — 리뷰 nickname과 동일한 파이프라인(clean_user_text:
@@ -242,7 +261,15 @@ async def _complete_oauth_login(
 
     if next_path == LINK_NEXT:
         # 계정 연결 모드 — 현재 세션이 있어야 한다(팝업은 같은 브라우저라 쿠키가 같이 온다).
-        identity = auth.verify_token(request.cookies.get(auth.cookie_name)) if auth.enabled else None
+        try:
+            identity = await require_login(request)
+        except HTTPException:
+            identity = None
+        except Exception:  # DB 장애 — 팝업을 무한 로딩으로 두지 않고 linked=error 로 닫는다.
+            logger.exception("계정 연결 세션 확인 실패")
+            response = _popup_close_html(ok=False, next_path="/mypage", linked="error")
+            _clear_state_cookie(response)
+            return response
         if identity is None:
             response = _popup_close_html(ok=False, next_path="/mypage", linked="not_logged_in")
             _clear_state_cookie(response)
@@ -268,7 +295,47 @@ async def _complete_oauth_login(
             ok=outcome != "conflict", name=linked_user["display_name"], next_path="/mypage", linked=outcome
         )
         _clear_state_cookie(response)
+        _clear_signup_cookie(response)
         return response  # 세션 쿠키는 그대로(현재 계정 유지)
+
+    # 2026-09-20 대표 지시 — "약관 동의 안 하면 가입이 안 돼야". 신규 사용자(같은 provider sub 도,
+    # 검증된 같은 이메일 계정도 없음)는 여기서 계정·세션을 만들지 않는다. provider 가 증명한 신원을
+    # 5분짜리 서명 쿠키로 맡기고, /auth/signup/complete 가 동의+표시 이름을 받은 뒤에야 만든다.
+    try:
+        def _find_existing(conn):
+            found = user_repo.get_by_provider_sub(conn, provider=provider, provider_sub=provider_sub)
+            if found is None and email and email_verified:
+                found = user_repo.get_by_email(conn, email)
+            return found
+
+        existing = await db.aread(_find_existing)
+    except Exception:  # noqa: BLE001
+        logger.exception("%s 로그인 계정 조회 실패", provider)
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+    if existing is None:
+        pending = auth.issue_pending_signup(
+            {
+                "provider": provider,
+                "sub": provider_sub,
+                "email": email,
+                "email_verified": bool(email_verified),
+                "name": display_name,
+            }
+        )
+        response = _popup_close_html(ok=True, name=display_name, is_new=True, next_path=next_path)
+        _clear_state_cookie(response)
+        response.set_cookie(
+            key=SIGNUP_COOKIE_NAME,
+            value=pending,
+            max_age=15 * 60,
+            httponly=True,
+            secure=auth.cookie_secure,
+            samesite="lax",
+            path=STATE_COOKIE_PATH,
+        )
+        return response
 
     try:
         user = await db.awrite(
@@ -292,16 +359,10 @@ async def _complete_oauth_login(
     # 팝업엔 provider 원본 이름이 아니라 **DB의 현재 display_name**을 돌려준다 — 재로그인한
     # 사용자라면 이전에 직접 정한 이름이 그대로 뜬다(매번 원본 이름으로 되돌아가지 않음).
     #
-    # is_new 판정 — upsert_login이 신규/기존 여부를 별도 플래그로 돌려주지 않아, created_at
-    # == last_login_at(초 단위)로 판정한다. 신규 생성 시 두 값이 같은 now_iso로 함께
-    # 채워지고(user_repo.py INSERT 참고), 재로그인부터는 last_login_at만 갱신되어 반드시
-    # created_at보다 뒤가 된다 — 사람이 브라우저 팝업+버튼 클릭을 1초 안에 두 번 왕복할 수
-    # 없으므로 초 단위 비교로 충분하다.
-    is_new = user["created_at"] == user["last_login_at"]
-    response = _popup_close_html(
-        ok=True, name=user["display_name"], is_new=is_new, next_path=next_path
-    )
+    # 신규는 위에서 가입 보류로 빠졌으므로 여기는 항상 기존 사용자(재로그인 또는 이메일 통합).
+    response = _popup_close_html(ok=True, name=user["display_name"], is_new=False, next_path=next_path)
     _clear_state_cookie(response)
+    _clear_signup_cookie(response)
     _set_session_cookie(response, auth, token)
     return response
 
@@ -335,10 +396,9 @@ async def google_callback(request: Request, code: str | None = None, state: str 
 
     email = (userinfo.get("email") or "").strip() or None
     google_sub = (userinfo.get("sub") or "").strip()
-    # email_verified가 명시적으로 false인 경우만 거른다(필드 자체가 없는 계정 유형도 있어
-    # 존재 여부만으로는 판단하지 않는다 — 과도한 차단 방지). 구글은 이메일이 사실상 필수라
-    # email이 없으면(원천 응답 이상) 함께 거부한다.
-    if not email or not google_sub or userinfo.get("email_verified") is False:
+    # email_verified가 명시적으로 true인 이메일만 계정 통합에 사용한다(누락도 거부).
+    # 값 누락 또는 문자열 "true"를 인증 완료로 승격하지 않는다.
+    if not email or not google_sub or userinfo.get("email_verified") is not True:
         logger.warning("구글 로그인 실패: 이메일/sub 없음 또는 이메일 미검증")
         response = _popup_close_html(ok=False, next_path=next_path)
         _clear_state_cookie(response)
@@ -500,6 +560,7 @@ async def logout(request: Request):
         secure=auth.cookie_secure,
         samesite="lax",
     )
+    _clear_signup_cookie(response)
     return response
 
 
@@ -558,6 +619,85 @@ async def delete_account(request: Request):
         secure=_auth.cookie_secure,
         samesite="lax",
     )
+    _clear_signup_cookie(response)
+    return response
+
+
+@router.post("/signup/complete", response_model=UserSessionResponse)
+async def signup_complete(request: Request, body: SignupCompleteRequest, response: Response):
+    """약관 동의 + 표시 이름 → 이때 비로소 계정을 만들고 세션을 발급한다(2026-09-20).
+    가입 보류 쿠키(콜백이 신규 사용자에게만 심음)가 없거나 만료·변조면 401 — 다시 로그인부터."""
+    auth = get_user_auth()
+    pending = auth.verify_pending_signup(request.cookies.get(SIGNUP_COOKIE_NAME)) if auth.enabled else None
+    if not pending:
+        return error_response(401, "SIGNUP_EXPIRED", "가입 정보가 만료됐어요. 다시 로그인해 주세요.")
+    if body.terms_version != TERMS_VERSION:
+        return error_response(400, "TERMS_VERSION_MISMATCH", "약관 버전이 바뀌었어요. 화면을 새로고침해 주세요.")
+    cleaned = clean_user_text(body.display_name, max_chars=NICKNAME_MAX)
+    if not cleaned:
+        return error_response(400, "INVALID_NAME", "표시 이름을 입력해주세요.")
+    if is_impersonating_staff(cleaned):
+        return error_response(400, "NAME_RESERVED", "운영자로 오인될 수 있는 이름은 쓸 수 없어요.")
+    provider = pending.get("provider")
+    if provider not in ("google", "kakao", "naver") or not pending.get("sub"):
+        return error_response(401, "SIGNUP_EXPIRED", "가입 정보가 올바르지 않아요. 다시 로그인해 주세요.")
+    now_iso = to_iso_kst(now_kst())
+    db = get_database()
+
+    def _tx(conn):
+        # 2026-09-20(security-engineer F-3) — 콜백에서 "신규"로 판정한 뒤 여기까지 오는 사이에
+        # 같은 신원의 계정이 이미 만들어졌을 수 있다(보류 쿠키 재사용·동시 로그인). upsert_login
+        # 은 그 경우 **기존 행**을 돌려주므로, 그대로 update_display_name 을 태우면 남의 계정
+        # 표시 이름(리뷰에 노출되는 값)을 보류 쿠키 소지자가 정한 값으로 덮어쓴다. 기존 계정이면
+        # 이름도 동의 시각도 건드리지 않고 세션만 발급한다 — upsert_login 이 모듈 docstring 에서
+        # 약속한 "재로그인은 display_name 을 건드리지 않는다"를 호출부가 깨지 않게 한다.
+        existed = user_repo.get_by_provider_sub(
+            conn, provider=provider, provider_sub=str(pending["sub"])  # type: ignore[arg-type]
+        )
+        if existed is None and pending.get("email") and pending.get("email_verified"):
+            existed = user_repo.get_by_email(conn, str(pending["email"]))
+        user = user_repo.upsert_login(
+            conn,
+            provider=provider,  # type: ignore[arg-type]
+            provider_sub=str(pending["sub"]),
+            email=pending.get("email"),
+            email_verified=bool(pending.get("email_verified")),
+            default_display_name=cleaned,  # 신규일 때만 쓰인다(기존 행은 이름 유지)
+            now_iso=now_iso,
+        )
+        if existed is None or not _terms_agreed(user):
+            # 신규 가입이거나, 기존 계정인데 이번 버전 동의가 아직 없는 경우만 기록한다.
+            user = user_repo.set_terms_agreed(
+                conn, user_id=user["id"], version=TERMS_VERSION, now_iso=now_iso
+            ) or user
+        return user
+
+    try:
+        user = await db.awrite(_tx)
+    except Exception:  # noqa: BLE001 — 이 파일의 다른 DB 호출과 같은 취급(500 노출 금지)
+        logger.exception("가입 완료 처리 실패")
+        return error_response(503, "SIGNUP_FAILED", "가입을 마치지 못했어요. 잠시 후 다시 시도해 주세요.")
+    token, _ = auth.issue_token(user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user))
+    _set_session_cookie(response, auth, token)
+    _clear_signup_cookie(response)
+    return UserSessionResponse(
+        authenticated=True,
+        name=user["display_name"],
+        terms_agreed=_terms_agreed(user),
+        providers=user_repo.linked_providers(user),
+    )
+
+
+@router.post("/signup/cancel", status_code=204)
+async def signup_cancel() -> Response:
+    """가입을 중도에 그만둘 때 보류 쿠키를 즉시 폐기한다(2026-09-20 security-engineer F-1).
+
+    동의 화면에서 취소·닫기를 누르면 프론트(LoginModal.tsx)가 이걸 부른다. 안 부르고 그냥
+    떠나도 SIGNUP_TTL_SEC(5분) 뒤엔 만료되지만, 공용 PC 에서 다음 사람이 그 사이에 모달을
+    열면 **이전 사용자 신원으로 가입이 완료**될 수 있어 명시적으로 지우는 경로를 둔다.
+    인증이 필요 없다 — 지우는 동작뿐이라 남의 쿠키엔 손댈 수 없다."""
+    response = Response(status_code=204)
+    _clear_signup_cookie(response)
     return response
 
 

@@ -36,21 +36,23 @@ function formatCongestionDelta(pct: number | null, diff: number | null): { text:
 
 /**
  * 비교 화면(MVP-5, 01-interface-contract.md 부록 D) 오케스트레이터.
- * - 진입: 추천 화면의 스팟 탭에서 hidden_id·region_code를 쿼리로 받는다(§D.7-1). hotspot는 항상 auto(backend 소유).
+ * - 진입: 추천 화면의 스팟 탭에서 spot_id·region_code를 쿼리로 받는다(§D.7-1). 그 스팟이 곧 hotspot_id 다(§169).
  * - profile은 RecommendContent와 동일하게 sessionStorage를 그대로 재전송한다(조작·재계산 금지).
  * - 404 COMPARE_UNAVAILABLE은 에러가 아니라 "이 지역은 비교 준비 중"으로 부드럽게 처리한다(§D.5).
  */
 export default function CompareContent() {
   const searchParams = useSearchParams();
-  const hiddenIdParam = searchParams.get("hidden_id");
-  const parsedHiddenId = hiddenIdParam ? Number(hiddenIdParam) : NaN;
-  const hiddenId = Number.isFinite(parsedHiddenId) ? parsedHiddenId : null;
+  // 2026-09-20 대표 지적 — "내가 누른 곳이 왼쪽, AI 는 그보다 한적한 대안을 오른쪽에".
+  // 종전엔 누른 스팟을 hidden_id(오른쪽 숨은길)로 보내 역할이 뒤집혀 있었다. 이제 spot_id → hotspot_id.
+  const spotIdParam = searchParams.get("spot_id");
+  const parsedSpotId = spotIdParam ? Number(spotIdParam) : NaN;
+  const pickedId = Number.isFinite(parsedSpotId) ? parsedSpotId : null;
   const queryRegion = searchParams.get("region_code");
 
   // 부록 D.7(2026-08-01) — /compare 를 **독립 목적지**로 쓸 수 있게 지역 선택을 붙인다.
   // 종전엔 스팟 상세에서 hidden_id 와 함께 들어오는 경유 화면이라 지역이 쿼리로만 정해졌고,
   // 쿼리 없이 들어오면 항상 기본 지역(부산 해운대) 고정이었다. GNB 진입점을 새로 다는 이상
-  // 사용자가 지역을 바꿀 수 있어야 한다. hidden_id 로 들어온 경우(특정 스팟과의 비교)는
+  // 사용자가 지역을 바꿀 수 있어야 한다. spot_id 로 들어온 경우(특정 스팟과의 비교)는
   // 그 스팟의 지역이 곧 맥락이므로 선택기를 띄우지 않는다.
   const [pickedRegion, setPickedRegion] = useState<string | null>(null);
   const regionCode = queryRegion || pickedRegion || DEFAULT_REGION.sigunguCd;
@@ -90,8 +92,8 @@ export default function CompareContent() {
             tags: profile.tags,
           }
         : null,
-      hidden_id: hiddenId,
-      hotspot_id: null,
+      hidden_id: null,
+      hotspot_id: pickedId,
     };
 
     fetchCompare(payload, controller.signal)
@@ -117,7 +119,7 @@ export default function CompareContent() {
       });
 
     return () => controller.abort();
-  }, [profile, regionCode, hiddenId, retryTick]);
+  }, [profile, regionCode, pickedId, retryTick]);
 
   // §D.7-3: matched_tags(registry 코드)는 사용자 본인 프로필의 tags 라벨로 치환한다(§C.7-4 승계).
   const tagLabelMap = useMemo(() => {
@@ -195,21 +197,23 @@ export default function CompareContent() {
 
   const { hotspot, hidden, deltas, verdict, region, meta } = data;
   const congestionDelta = formatCongestionDelta(deltas.congestion_diff_pct, deltas.congestion_diff);
+  // 내가 고른 곳에서 시작한 비교(local_store)면 왼쪽은 "핫플"이 아니라 "내가 고른 곳"이다.
+  const picked = meta.hotspot_source === "local_store";
 
   return (
     <section className="compare-section" aria-labelledby="compareHeading">
       <Link href="/recommend" className="compare-back">
         ← 추천 목록으로
       </Link>
-      <span className="eyebrow-pill eyebrow-pill--coral">핫플 vs 숨은길</span>
+      <span className="eyebrow-pill eyebrow-pill--coral">{picked ? "내가 고른 곳 vs 더 한적한 대안" : "핫플 vs 숨은길"}</span>
       <h1 className="section__title" id="compareHeading">
         {region.region_name ?? "이 지역"} 비교 리포트
       </h1>
 
-      {/* 부록 D.7 — 특정 스팟과의 비교(hidden_id)가 아닐 때만 지역을 고를 수 있다. */}
+      {/* 부록 D.7 — 특정 스팟과의 비교(spot_id)가 아닐 때만 지역을 고를 수 있다. */}
       {/* 부록 D.8(2026-08-01, 대표 지시) — 지역을 바꾸기 쉽게 드롭다운 옆에 그 지역
           관광지 화면으로 나가는 버튼을 둔다. 비교만 보고 끝나지 않고 목록으로 이어지게. */}
-      {!hiddenId && (
+      {!pickedId && (
         <div className="board-header-row">
           <RegionDropdown
             options={SIDO_REGIONS}
@@ -260,8 +264,8 @@ export default function CompareContent() {
       {/* 모바일(<1024px): 상단 요약 + 지표별 행 스택. 좌우 대칭 표는 375px에서 깨지므로 세로 스택으로 대체. */}
       <div className="compare-rows">
         <div className="compare-column-heads" aria-hidden="true">
-          <span className="compare-column-heads__side compare-column-heads__side--hotspot">붐비는 핫플</span>
-          <span className="compare-column-heads__side compare-column-heads__side--hidden">숨은길</span>
+          <span className="compare-column-heads__side compare-column-heads__side--hotspot">{picked ? "내가 고른 곳" : "붐비는 핫플"}</span>
+          <span className="compare-column-heads__side compare-column-heads__side--hidden">{picked ? "더 한적한 대안" : "숨은길"}</span>
         </div>
         <div className="compare-row">
           <span className="compare-row__label">예상 혼잡도</span>
@@ -289,8 +293,8 @@ export default function CompareContent() {
 
       {/* 데스크톱(1024px↑): hotspot·hidden 2컬럼 대칭 카드로 전환(§D.7-2). */}
       <div className="compare-cards">
-        <CompareCard spot={hotspot} tagLabelMap={tagLabelMap} />
-        <CompareCard spot={hidden} tagLabelMap={tagLabelMap} />
+        <CompareCard spot={hotspot} tagLabelMap={tagLabelMap} picked={picked} />
+        <CompareCard spot={hidden} tagLabelMap={tagLabelMap} picked={picked} />
       </div>
     </section>
   );

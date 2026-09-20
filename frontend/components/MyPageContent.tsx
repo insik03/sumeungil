@@ -14,7 +14,7 @@ import {
 } from "../lib/api";
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 import { loadMySharedCourses } from "../lib/sharedCoursesStorage";
-import { loadSavedSpots } from "../lib/savedSpotsStorage";
+import { SAVED_SPOTS_CHANGED, loadSavedSpots } from "../lib/savedSpotsStorage";
 import { loadStamps, STAMP_MILESTONES } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import { syncSessionFromServer } from "../lib/authStorage";
@@ -83,7 +83,7 @@ export default function MyPageContent() {
       setLinkNote(`${name} 계정을 연결했어요. 그 계정의 저장 코스·취향이 이 계정으로 합쳐졌어요.`);
       void syncSessionFromServer().then((info) => setProviders(info?.providers ?? {}));
     } else if (outcome === "already") setLinkNote(`${name} 계정은 이미 이 계정에 연결돼 있어요.`);
-    else if (outcome === "conflict") setLinkNote(`이 계정에는 이미 다른 ${name} 계정이 연결돼 있어요.`);
+    else if (outcome === "conflict") setLinkNote("두 계정에 서로 다른 로그인 수단이 연결되어 자동으로 합칠 수 없어요.");
     else if (outcome === "not_logged_in") setLinkNote("로그인이 풀렸어요. 다시 로그인한 뒤 시도해주세요.");
     else setLinkNote("연결에 실패했어요. 잠시 후 다시 시도해주세요.");
   };
@@ -92,12 +92,21 @@ export default function MyPageContent() {
   const [nicknameSaving, setNicknameSaving] = useState(false);
   const [nicknameError, setNicknameError] = useState<string | null>(null);
 
-  // 즐겨찾기·방문 스탬프·공유한 코스는 로컬(sessionStorage/localStorage) — mount 후에만
-  // 읽는다(SavedContent.tsx와 동일한 null-first 하이드레이션 패턴, 서버/첫 클라이언트
-  // 렌더와 값이 갈리지 않게). 저장한 AI 코스만 서버 호출(fetchMyCourses)이 필요하다.
+  // 방문 스탬프·공유한 코스는 로컬(sessionStorage/localStorage) — mount 후에만 읽는다
+  // (SavedContent.tsx와 동일한 null-first 하이드레이션 패턴, 서버/첫 클라이언트 렌더와 값이
+  // 갈리지 않게). 2026-09-16 이후 **저장한 스팟은 계정 데이터**라 loadSavedSpots()는 서버에서
+  // 받아온 캐시를 읽는 것이고, 갱신은 아래 SAVED_SPOTS_CHANGED 리스너가 받는다.
+  // 저장한 AI 코스는 서버 호출(fetchMyCourses)이 필요하다.
   const [savedSpotCount, setSavedSpotCount] = useState<number | null>(null);
   const [stampCount, setStampCount] = useState<number | null>(null);
   const [courseCount, setCourseCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const refresh = () => setSavedSpotCount(loadSavedSpots().length);
+    refresh();
+    window.addEventListener(SAVED_SPOTS_CHANGED, refresh);
+    return () => window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
+  }, []);
 
   // §47.1(신규) — "여행 준비" 섹션 프로필 유무 판정. GET /api/v1/onboarding/me(이미 존재,
   // CourseContent.tsx의 fetchMyOnboardingProfile 재사용) 1회 호출. 새 API 0.
@@ -106,7 +115,7 @@ export default function MyPageContent() {
 
   useEffect(() => {
     if (!nickname) return;
-    setSavedSpotCount(loadSavedSpots().length);
+    // savedSpotCount 는 위 SAVED_SPOTS_CHANGED 이펙트가 맡는다(여기서 또 세지 않는다).
     setStampCount(loadStamps().length);
     const sharedCount = loadMySharedCourses().length;
     let cancelled = false;
@@ -143,7 +152,7 @@ export default function MyPageContent() {
     }
     if (deleteConfirmTimerRef.current) window.clearTimeout(deleteConfirmTimerRef.current);
     setDeleteConfirm(false);
-    void deleteAccount();
+    void deleteAccount().catch((error: Error) => window.alert(error.message));
   };
 
   const startEditNickname = () => {
@@ -384,8 +393,7 @@ export default function MyPageContent() {
               <span className="onboard-label">계정 삭제</span>
               <p className="onboard-result__sub" style={{ marginBottom: "var(--sp-4)" }}>
                 계정을 삭제하면 이메일·표시 이름·로그인 연동 정보와 온보딩 취향·저장한 AI 코스·좋아요·
-                고객문의가 <strong>즉시 삭제되고 되돌릴 수 없어요</strong>(별도 보관 기간 없이 바로
-                파기해요). 이미 작성한 리뷰·공유 코스는 게시물로 남으니 지우려면 먼저 직접 삭제해주세요.
+                고객문의가 <strong>운영 데이터베이스에서 삭제되고 되돌릴 수 없어요</strong>. 백업 처리에 관한 안내는 개인정보처리방침을 확인해주세요. 이미 작성한 리뷰·공유 코스는 게시물로 남으니 지우려면 먼저 직접 삭제해주세요.
               </p>
               <button type="button" className="btn btn--ghost-text" onClick={handleDeleteAccount}>
                 {deleteConfirm ? "정말 삭제할까요? 다시 누르면 삭제돼요" : "계정 삭제"}

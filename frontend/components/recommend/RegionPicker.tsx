@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError, RegionSearchItem, fetchRegionSearch } from "../../lib/api";
+import { useHotRegions } from "../../lib/useHotRegions";
 import { QUICK_REGIONS, QuickRegionChip } from "./constants";
 import ChipScrollRow from "../ChipScrollRow";
 
@@ -40,6 +41,13 @@ export default function RegionPicker({ selected, onSelect }: RegionPickerProps) 
   const [searchResults, setSearchResults] = useState<RegionSearchItem[]>([]);
   const [searchErrorMsg, setSearchErrorMsg] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 2026-09-20 대표 지시 — "자주 찾는 지역"을 고정 17개가 아니라 **지금 사람들이 많이 찾는 지역**으로.
+  // 순위 계산은 useHotRegions 가 맡는다(홈 Hero 와 같은 훅 — 두 화면의 순서가 갈리지 않게).
+  const hotRegions = useHotRegions();
+  const quickRegions: QuickRegionChip[] = hotRegions
+    ? hotRegions.map((h) => ({ name: h.shortName, sigunguCd: h.regionCode, label: h.basisLabel ?? h.shortName }))
+    : QUICK_REGIONS;
 
   // 검색창 타이핑 디바운스(200ms) → /regions/search 호출. Hero.tsx §A.3와 동일 패턴.
   // §30 — 칩은 더 이상 이 API를 사전조회하지 않으므로, 이 효과는 순수하게 자유 텍스트 검색만 맡는다.
@@ -183,9 +191,11 @@ export default function RegionPicker({ selected, onSelect }: RegionPickerProps) 
         </ul>
       )}
 
-      <span className="dest-search__quick-label spot-region-row__quick-label">자주 찾는 지역</span>
+      <span className="dest-search__quick-label spot-region-row__quick-label">
+        {hotRegions ? "지금 많이 찾는 지역 · 예상 방문 집중도 높은 순" : "자주 찾는 지역"}
+      </span>
       <ChipScrollRow>
-        {QUICK_REGIONS.map((r) => {
+        {quickRegions.map((r) => {
           const active = isChipActive(r);
           return (
             <button

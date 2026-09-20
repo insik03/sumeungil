@@ -2,16 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
+import { SAVED_SPOTS_CHANGED, SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
 import SavedSpotCard from "./saved/SavedSpotCard";
 import VisitStampsSection from "./saved/VisitStampsSection";
 import SharedCoursesSection from "./saved/SharedCoursesSection";
 import SavedAiCoursesSection from "./saved/SavedAiCoursesSection";
 
 /**
- * 부록 F 파트2(F.2-6-2) 저장 화면. 서버 호출 0(F.2-2) — localStorage만 읽는다.
+ * 부록 F 파트2(F.2-6-2) 저장 화면. 2026-09-16 이후 **저장한 스팟은 계정 데이터**라 이 화면은
+ * 서버(/api/v1/saved-spots)를 한 번 호출한다(F.2-2 의 "서버 호출 0"은 게스트 때 이야기였다).
  * 서버 렌더/첫 클라이언트 렌더는 항상 null(로딩 아님, 그냥 "아직 안 읽음")로 맞춰
- * 하이드레이션 경고를 막고, mount 후에만 localStorage 값을 반영한다(onboardingStorage 소비 패턴).
+ * 하이드레이션 경고를 막고, mount 후에만 값을 반영한다(onboardingStorage 소비 패턴).
  *
  * Phase 4(신규) — "내 방문 스탬프" 섹션(VisitStampsSection)을 이 화면 아래에 추가했다(additive,
  * 위 저장한 스팟 렌더 로직·마크업은 무변경). 하나의 화면에 두 섹션(각자 own <section>)을 쌓는
@@ -26,14 +27,19 @@ export default function SavedContent() {
   const [spots, setSpots] = useState<SavedSpot[] | null>(null);
 
   useEffect(() => {
-    setSpots(loadSavedSpots());
-    // 2026-09-16 — 계정 보관함(서버)이 정본. 캐시를 먼저 보여주고 서버 값으로 갱신한다.
+    const refresh = () => setSpots(loadSavedSpots());
+    refresh();
+    window.addEventListener(SAVED_SPOTS_CHANGED, refresh);
+    // 2026-09-16 — 계정 보관함(서버)이 정본. 로그인 상태에선 로컬 캐시를 두지 않으므로
+    // (savedSpotsStorage 모듈 주석 참고) 첫 렌더는 보통 빈 목록이고, 이 동기화가 채운다.
+    // 게스트는 loadSavedSpots() 가 이미 로컬 정본을 돌려준 뒤다.
     let alive = true;
-    void syncSavedSpotsFromServer().then((list) => {
-      if (alive) setSpots(list);
+    void syncSavedSpotsFromServer().then(() => {
+      if (alive) setSpots(loadSavedSpots());
     });
     return () => {
       alive = false;
+      window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
     };
   }, []);
 
@@ -54,7 +60,7 @@ export default function SavedContent() {
           내가 저장한 스팟
         </h1>
         <p className="saved-content__intro">
-          이 기기에만 저장돼요 — 다른 기기·브라우저에서는 보이지 않아요(F.2-2, 서버 저장 없음).
+          로그인한 계정에 저장되어 다른 기기에서도 볼 수 있어요. 예전에 비로그인으로 저장한 목록은 기기에 남아 있으며 계정으로 자동 이전되지 않아요.
         </p>
 
         {spots !== null && sorted.length === 0 && (
@@ -68,7 +74,7 @@ export default function SavedContent() {
         )}
 
         {sorted.length > 0 && (
-          <div className="spot-grid" role="list">
+          <div className="spot-grid spot-grid--equal" role="list">
             {sorted.map((spot) => (
               <SavedSpotCard key={spot.id} spot={spot} onRemove={() => handleRemove(spot.id)} />
             ))}

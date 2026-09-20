@@ -536,9 +536,11 @@ check("서로 다른 두 계정", ua["id"] != ub["id"])
 db.write(lambda c: c.execute("INSERT INTO saved_spots (user_id, spot_id, congestion, saved_at) VALUES (%s, 101, NULL, %s), (%s, 102, NULL, %s)", (ub["id"], NOW, ub["id"], NOW)))
 db.write(lambda c: c.execute("INSERT INTO saved_spots (user_id, spot_id, congestion, saved_at) VALUES (%s, 102, NULL, %s)", (ua["id"], NOW)))
 db.write(lambda c: c.execute("INSERT INTO ai_courses (user_id, region_code, mode, payload, created_at) VALUES (%s, '26350', 'ai', '{}', %s)", (ub["id"], NOW)))
+db.write(lambda c: c.execute("UPDATE users SET naver_sub = %s WHERE id = %s", ("link-n-1", ub["id"])))
 merged, outcome = db.write(lambda c: user_repo.link_provider(c, user_id=ua["id"], provider="kakao", provider_sub="link-k-1", email=None, email_verified=False, now_iso=NOW))
 check("outcome=linked", outcome == "linked", outcome)
 check("A 에 kakao_sub 붙음", merged.get("kakao_sub") == "link-k-1")
+check("기존 네이버 연결도 보존", merged.get("naver_sub") == "link-n-1")
 check("B 행 삭제", db.read(lambda c: user_repo.get_by_id(c, ub["id"])) is None)
 saved = db.read(lambda c: [r["spot_id"] for r in c.execute("SELECT spot_id FROM saved_spots WHERE user_id = %s ORDER BY spot_id", (ua["id"],)).fetchall()])
 check("저장 스팟 합침(중복 102 는 1건)", saved == [101, 102], str(saved))
@@ -549,7 +551,67 @@ check("같은 sub 재연결 → already", again == "already", again)
 _, conflict = db.write(lambda c: user_repo.link_provider(c, user_id=ua["id"], provider="kakao", provider_sub="link-k-2", email=None, email_verified=False, now_iso=NOW))
 check("다른 카카오 sub → conflict(덮어쓰지 않음)", conflict == "conflict" and db.read(lambda c: user_repo.get_by_id(c, ua["id"]))["kakao_sub"] == "link-k-1", conflict)
 _lp = user_repo.linked_providers(db.read(lambda c: user_repo.get_by_id(c, ua["id"])))
-check("/me providers", _lp.get("google") is True and _lp.get("kakao") is True and _lp.get("naver") is False, str(_lp))
+check("/me providers", _lp.get("google") is True and _lp.get("kakao") is True and _lp.get("naver") is True, str(_lp))
+
+uc = db.write(lambda c: user_repo.upsert_login(c, provider="google", provider_sub="conflict-g-1", email=None, email_verified=False, default_display_name="C", now_iso=NOW))
+ud = db.write(lambda c: user_repo.upsert_login(c, provider="kakao", provider_sub="conflict-k-1", email=None, email_verified=False, default_display_name="D", now_iso=NOW))
+db.write(lambda c: c.execute("UPDATE users SET google_sub = %s WHERE id = %s", ("conflict-g-2", ud["id"])))
+_, outcome = db.write(lambda c: user_repo.link_provider(c, user_id=uc["id"], provider="kakao", provider_sub="conflict-k-1", email=None, email_verified=False, now_iso=NOW))
+check("conflicting provider identities preserve both accounts", outcome == "conflict" and db.read(lambda c: user_repo.get_by_id(c, ud["id"])) is not None)
+
+# === 1e. 가입 보류(2026-09-20) — 약관 동의 전엔 계정·세션 없음, /auth/signup/complete 가 만든다 ===
+section("1e. 신규 사용자는 약관 동의(/signup/complete)해야 계정이 생긴다")
+pend = auth.issue_pending_signup({"provider": "google", "sub": "pending-g-1", "email": "pending@example.com", "email_verified": True, "name": "보류"})
+check("보류 토큰 검증", (auth.verify_pending_signup(pend) or {}).get("sub") == "pending-g-1")
+check("변조 토큰 거부", auth.verify_pending_signup(pend[:-4] + "AAAA") is None)
+_NOW = int(__import__("time").time())
+check("만료 전(4분) 통과", auth.verify_pending_signup(pend, now=_NOW + 4 * 60) is not None)
+check("만료 토큰 거부(5분 TTL)", auth.verify_pending_signup(pend, now=_NOW + 6 * 60) is None)
+check("동의 전 계정 없음", db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1")) is None)
+nc = TestClient(app)
+r = nc.post("/api/v1/auth/signup/complete", json={"display_name": "보류", "terms_version": "2026-09-14"})
+check("보류 쿠키 없이 완료 → 401", r.status_code == 401, str(r.status_code))
+pc = TestClient(app); pc.cookies.set("sumeungil_signup", pend)
+r = pc.post("/api/v1/auth/signup/complete", json={"display_name": "보류", "terms_version": "0000-00-00"})
+check("약관 버전 불일치 → 400", r.status_code == 400, str(r.status_code))
+check("불일치 시도 뒤에도 계정 없음", db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1")) is None)
+r = pc.post("/api/v1/auth/signup/complete", json={"display_name": " 보류이 ", "terms_version": "2026-09-14"})
+check("동의 + 이름 → 200 로그인", r.status_code == 200 and r.json().get("authenticated") is True, r.text[:160])
+row = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1"))
+check("이제 계정 생성·이메일 저장·약관 기록", row is not None and row.get("email") == "pending@example.com" and row.get("terms_version") == "2026-09-14")
+check("응답 terms_agreed=true", r.json().get("terms_agreed") is True)
+check("세션 쿠키 발급", auth.cookie_name in r.headers.get("set-cookie", ""))
+
+# === 1f. 가입 보류 경계 하드닝(2026-09-20 검수 반영) ===
+section("1f. 가입 보류 토큰 도메인 분리 · 취소 폐기 · 기존 계정 보호")
+
+# security-engineer F-2 — state 토큰과 가입 보류 토큰은 다른 키로 서명한다. 둘 다 같은
+# v2.<b64>.<b64sig> 포맷이라, 키가 같으면 URL 에 노출되는 state 값이 보류 쿠키로 승격될 수 있다.
+_state, _nonce = auth.issue_state(next_path="/")
+check("state 토큰은 보류 토큰으로 통하지 않는다", auth.verify_pending_signup(_state) is None)
+check("보류 토큰은 state 로 통하지 않는다", auth.verify_state(pend, cookie_nonce=_nonce) is None)
+
+# security-engineer F-1 — 취소하면 보류 쿠키를 즉시 폐기한다(공용 PC 에서 다음 사람이 이어받는 경로).
+cc = TestClient(app); cc.cookies.set("sumeungil_signup", pend)
+r = cc.post("/api/v1/auth/signup/cancel")
+check("가입 취소 → 204", r.status_code == 204, str(r.status_code))
+check("가입 취소가 보류 쿠키를 지운다", "sumeungil_signup=" in r.headers.get("set-cookie", ""), r.headers.get("set-cookie", ""))
+
+# security-engineer F-3 — 보류 쿠키가 **기존** 계정으로 수렴하면 표시 이름·동의 시각을 건드리지 않는다.
+db.write(lambda c: user_repo.upsert_login(c, provider="kakao", provider_sub="pending-k-2", email=None, email_verified=False, default_display_name="원래이름", now_iso=NOW))
+db.write(lambda c: user_repo.set_terms_agreed(c, user_id=user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2")["id"], version="2026-09-14", now_iso=NOW))
+_before = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2"))
+pend2 = auth.issue_pending_signup({"provider": "kakao", "sub": "pending-k-2", "email": None, "email_verified": False, "name": "탈취시도"})
+ec = TestClient(app); ec.cookies.set("sumeungil_signup", pend2)
+r = ec.post("/api/v1/auth/signup/complete", json={"display_name": "탈취시도", "terms_version": "2026-09-14"})
+_after = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2"))
+check("기존 계정 표시 이름 보존", _after["display_name"] == "원래이름", str(_after["display_name"]))
+check("기존 계정 동의 시각 보존", str(_after["terms_agreed_at"]) == str(_before["terms_agreed_at"]))
+check("응답 이름도 기존 계정 이름", r.json().get("name") == "원래이름", r.text[:160])
+
+# security-engineer F-4 — 계정을 만드는 쓰기 경로라 UGC 버킷(기본 default 아님)으로 묶인다.
+from app.middleware.rate_limit import BUCKET_UGC, resolve_bucket  # noqa: E402
+check("signup/complete 는 UGC 버킷", resolve_bucket("POST", "/api/v1/auth/signup/complete") == BUCKET_UGC)
 
 db.close()
 drop_schema(_BASE_DSN, _SCHEMA)

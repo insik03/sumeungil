@@ -144,8 +144,11 @@ def link_provider(
 
     - 그 provider sub 가 이미 이 계정에 있으면 "already".
     - 이 계정에 같은 provider 의 **다른** sub 가 이미 붙어 있으면 "conflict"(한 계정에 구글 둘 불가).
+    - 그 계정과 이 계정에 **서로 다른 provider sub 가 각각** 붙어 있으면 "conflict" — 병합이 한쪽의
+      로그인 수단을 조용히 버리게 되므로 자동으로 묶지 않는다(2026-09-20 보안감사, #163).
     - 그 sub 로 **다른 계정**이 있으면 그 계정의 데이터(_MERGE_TABLES, 온보딩 프로필)를 이 계정으로
-      옮기고 그 계정 행을 지운다(세션도 함께 죽는다). 없으면 sub 만 채운다.
+      옮기고 그 계정 행을 지운다(세션도 함께 죽는다). 그 계정에만 있던 provider sub 는 이 계정으로
+      승계한다. 없으면 sub 만 채운다.
     호출부는 트랜잭션(db.awrite) 안에서 부른다.
     """
     column = _PROVIDER_COLUMNS[provider]
@@ -159,6 +162,13 @@ def link_provider(
     other = get_by_provider_sub(conn, provider=provider, provider_sub=provider_sub)
     if other is not None and other["id"] != user_id:
         oid = other["id"]
+        # 병합이 상대 계정의 로그인 수단을 조용히 버리면 안 된다 — 서로 다른 sub 가 물려 있으면
+        # 사용자가 어느 쪽을 남길지 정해야 하는 문제라, 자동 병합 대신 conflict 로 돌려준다.
+        if any(me.get(col) and other.get(col) and me[col] != other[col]
+               for col in _PROVIDER_COLUMNS.values()):
+            return me, "conflict"
+        inherited = {col: other[col] for col in _PROVIDER_COLUMNS.values()
+                     if other.get(col) and not me.get(col)}
         for table, dedupe_col in _MERGE_TABLES:
             if dedupe_col:
                 conn.execute(
@@ -174,6 +184,8 @@ def link_provider(
             (user_id, oid, user_id),
         )
         conn.execute("DELETE FROM users WHERE id = %s", (oid,))  # 남은 행은 CASCADE
+        for col, sub in inherited.items():
+            conn.execute(f"UPDATE users SET {col} = %s WHERE id = %s", (sub, user_id))
     stored_email = email if email_verified else None
     conn.execute(
         f"UPDATE users SET {column} = %s, email = COALESCE(email, %s), last_login_at = %s WHERE id = %s",

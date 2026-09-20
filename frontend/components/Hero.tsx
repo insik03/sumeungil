@@ -10,6 +10,7 @@ import {
   fetchRegionSearch,
 } from "../lib/api";
 import { PROVINCE_REGIONS, SIDO_REGIONS, SidoRegion } from "./regions/constants";
+import { useHotRegions } from "../lib/useHotRegions";
 import ChipScrollRow from "./ChipScrollRow";
 
 /**
@@ -363,6 +364,19 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
   const isChipActive = (sido: SidoRegion) =>
     !!selectedRegion && selectedRegion.sigungu_cd === sido.regionCode;
 
+  // 2026-09-20 대표 지시 — 홈 "자주 찾는 지역"도 고정 17개가 아니라 **지금 예상 방문 집중도가
+  // 높은 지역** 순으로. /course 의 RegionPicker 와 **같은 훅**을 쓴다(두 화면의 순서가 갈리면
+  // "많이 찾는 곳"이라는 신호 자체를 못 믿게 된다).
+  //
+  // 칩 자체는 SIDO_REGIONS 를 **재정렬만** 한다 — 코드·대표 시군구 라벨·선택 동선(selectSido)이
+  // 전부 그 상수에 매여 있어서, 응답으로 칩을 새로 지어내면 그 검증된 값들을 잃는다.
+  const hotRegions = useHotRegions();
+  const quickSidos: SidoRegion[] = hotRegions
+    ? hotRegions
+        .map((h) => SIDO_REGIONS.find((s) => s.sidoCode === h.sidoCode))
+        .filter((s): s is SidoRegion => !!s)
+    : SIDO_REGIONS;
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const status = selectedRegion
@@ -499,9 +513,11 @@ export default function Hero({ selectedRegion, onSelectRegion, regionResolved = 
         )}
 
         <div className="dest-search__quick">
-          <span className="dest-search__quick-label">자주 찾는 지역</span>
+          <span className="dest-search__quick-label">
+            {hotRegions ? "지금 많이 찾는 지역 · 예상 방문 집중도 높은 순" : "자주 찾는 지역"}
+          </span>
           <ChipScrollRow>
-            {SIDO_REGIONS.map((sido) => {
+            {quickSidos.map((sido) => {
               const active = isChipActive(sido);
               return (
                 <button

@@ -29,7 +29,7 @@ import SpotSearchBox from "./course/SpotSearchBox";
 import ShareCourseButton from "./course/ShareCourseButton";
 import SaveCourseButton from "./course/SaveCourseButton";
 import { CATEGORY_META, DEFAULT_REGION, regionSelectionFromCode } from "./recommend/constants";
-import { OPINION_EXAMPLES } from "./course/opinionExamples";
+import { COURSE_CHOICES, composeCourseWish, type CourseChoice } from "./course/opinionExamples";
 import { AXIS_LABEL_FALLBACK, LOADING_EXPECTED_SECONDS, LOADING_MESSAGES, RESULT_AXIS_ORDER } from "./onboarding/constants";
 
 type Status = "loading" | "success" | "error";
@@ -91,9 +91,6 @@ function PrinterIcon() {
     </svg>
   );
 }
-
-/** 코스짜기 의견 입력의 서버 절단 기준(§47.3, 01-interface-contract.md §B.1과 동일 300자). */
-const OPINION_MAX_LENGTH = 300;
 
 /**
  * §47.3(신규, 03-design-spec.md) — 코스짜기 상단 의견 입력 로딩. `OnboardingLoading.tsx`(§B.5-3)와
@@ -501,7 +498,10 @@ export default function CourseContent() {
   // §47.3(신규) — AI 모드 상단 "어떤 여행을 원하세요?" 의견 입력. 컨시어지 축약판 — 신규 API
   // 없이 POST /onboarding/analyze(text)를 그대로 재사용하고, 성공하면 profile을 갱신해 아래
   // fetchCourse effect([profile, ...] 의존성)가 자동으로 다시 코스를 짜게 한다.
-  const [opinionText, setOpinionText] = useState("");
+  // 2026-09-20 대표 지시 — 자유서술 입력 대신 선택 칩(동행·실내/실외·활동). 선택을 한 문장으로 합쳐
+  // 기존 경로(analyzeOnboarding → profile + wish → Gemini 코스 선택기)에 그대로 태운다.
+  const [choices, setChoices] = useState<Record<string, string>>({});
+  const opinionText = composeCourseWish(choices);
   const [opinionStatus, setOpinionStatus] = useState<ArrangeStatus>("idle");
   const [opinionError, setOpinionError] = useState<ApiError | null>(null);
   const opinionAbortRef = useRef<AbortController | null>(null);
@@ -773,35 +773,40 @@ export default function CourseContent() {
                 재사용). 정식 온보딩(축 전체) 배너는 그대로 아래 두고, 이 입력은 "지금 한 줄만
                 말하고 바로 반영" 경로로 보완한다. */}
             <div className="onboard-card course-opinion">
-              <label className="onboard-label" htmlFor="courseOpinion">
-                어떤 여행을 원하세요? {hasProfile && "(선택)"}
-              </label>
-              <textarea
-                id="courseOpinion"
-                className="onboard-textarea course-opinion__textarea"
-                rows={2}
-                maxLength={OPINION_MAX_LENGTH}
-                placeholder="예: 아이랑 갈만한 비 오는 날 실내 명소 위주로"
-                value={opinionText}
-                onChange={(e) => setOpinionText(e.target.value)}
-                disabled={opinionStatus === "loading"}
-              />
+              <span className="onboard-label">어떤 여행을 원하세요? {hasProfile && "(선택)"}</span>
+              {/* 2026-09-20 대표 지시 — 직접 입력 없이 고르기만. 고른 조합을 한 문장으로 만들어 AI 에 넘긴다. */}
+              {COURSE_CHOICES.map((group: CourseChoice) => (
+                <div className="course-choice" key={group.key}>
+                  <span className="course-choice__label">{group.label}</span>
+                  <div className="chip-row" role="group" aria-label={group.label}>
+                    {group.options.map((opt) => {
+                      const on = choices[group.key] === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={`onboard-chip${on ? " onboard-chip--on" : ""}`}
+                          aria-pressed={on}
+                          disabled={opinionStatus === "loading"}
+                          onClick={() =>
+                            setChoices((prev) => {
+                              const next = { ...prev };
+                              if (on) delete next[group.key];
+                              else next[group.key] = opt.value;
+                              return next;
+                            })
+                          }
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
               <p className="onboard-hint">
-                개인정보는 적지 마세요. 이 문장은 AI 코스 추천을 위해 Google(해외) 서버로 전송됩니다.
+                {opinionText ? `AI 에 이렇게 전달돼요: "${opinionText}"` : "위에서 골라주세요. 고른 조합만 AI 코스 추천을 위해 Google(해외) 서버로 전송됩니다."}
               </p>
-              <div className="chip-row" role="group" aria-label="예시">
-                {OPINION_EXAMPLES.map((ex) => (
-                  <button
-                    key={ex}
-                    type="button"
-                    className="onboard-chip"
-                    onClick={() => setOpinionText(ex)}
-                    disabled={opinionStatus === "loading"}
-                  >
-                    {ex}
-                  </button>
-                ))}
-              </div>
               <div className="onboard-submit">
                 <button
                   type="button"
@@ -809,7 +814,7 @@ export default function CourseContent() {
                   disabled={!canSubmitOpinion}
                   onClick={handleSubmitOpinion}
                 >
-                  {opinionStatus === "loading" ? "코스 다시 짜는 중…" : "이 의견으로 코스 다시 짜기"}
+                  {opinionStatus === "loading" ? "코스 다시 짜는 중…" : "이 조건으로 코스 다시 짜기"}
                 </button>
               </div>
 

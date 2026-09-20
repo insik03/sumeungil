@@ -3,56 +3,53 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { animate, stagger } from "animejs";
-import {
-  ArrowLeftRight,
-  BookOpenText,
-  Compass,
-  Flower2,
-  Gauge,
-  Luggage,
-  MapPinned,
-  PartyPopper,
-  Route,
-  Stamp,
-  type LucideIcon,
-} from "lucide-react";
 import { withRegionCode } from "../lib/regionQuery";
 
 interface QuickMenuItem {
   key: string;
   label: string;
   href: string;
-  icon: LucideIcon;
   /** 홈에서 고른 지역을 실제로 소비하는 목적지에만 지역 쿼리를 이어준다. */
   regionAware?: boolean;
 }
 
 /**
- * 홈의 9개 핵심 기능을 서로 다른 실제 화면으로 연결한다.
- * 아이콘은 여행 안내소의 픽토그램처럼 목적지를 즉시 연상할 수 있는 상징으로 통일했다.
+ * 홈의 10개 핵심 기능을 서로 다른 실제 화면으로 연결한다.
+ * 아이콘 파일 이름은 key 와 1:1 이다(`public/quick-menu/<key>.gif`) — 항목을 추가하면
+ * 같은 이름의 GIF·정지 프레임 PNG 를 같이 넣어야 한다.
  */
 const QUICK_MENU_ITEMS: QuickMenuItem[] = [
-  { key: "board", label: "혼잡 현황", href: "/congestion", icon: Gauge },
-  { key: "compare", label: "붐비는 곳 대신", href: "/compare", icon: ArrowLeftRight, regionAware: true },
-  { key: "course", label: "AI 코스", href: "/course", icon: Route, regionAware: true },
-  {
-    key: "recommend",
-    label: "맞춤 추천",
-    href: "/recommend",
-    icon: Compass,
-    regionAware: true,
-  },
-  { key: "onboarding", label: "AI 취향분석", href: "/onboarding", icon: Luggage },
-  { key: "regions", label: "지역별 여행", href: "/regions", icon: MapPinned },
-  { key: "seasonal", label: "계절 여행", href: "/seasonal", icon: Flower2 },
-  { key: "festival", label: "축제", href: "/festivals", icon: PartyPopper },
-  { key: "stamp", label: "방문 스탬프", href: "/saved", icon: Stamp },
-  { key: "tips", label: "여행 팁", href: "/tips", icon: BookOpenText },
+  { key: "board", label: "혼잡 현황", href: "/congestion" },
+  { key: "compare", label: "붐비는 곳 대신", href: "/compare", regionAware: true },
+  { key: "course", label: "AI 코스", href: "/course", regionAware: true },
+  { key: "recommend", label: "맞춤 추천", href: "/recommend", regionAware: true },
+  { key: "onboarding", label: "AI 취향분석", href: "/onboarding" },
+  { key: "regions", label: "지역별 여행", href: "/regions" },
+  { key: "seasonal", label: "계절 여행", href: "/seasonal" },
+  { key: "festival", label: "축제", href: "/festivals" },
+  { key: "stamp", label: "방문 스탬프", href: "/saved" },
+  { key: "tips", label: "여행 팁", href: "/tips" },
 ];
 
-/** 같은 굵기와 비율을 유지하는 관광 안내형 퀵메뉴 아이콘. */
-function QuickMenuIcon({ icon: Icon }: { icon: LucideIcon }) {
-  return <Icon aria-hidden="true" focusable="false" strokeWidth={2.1} />;
+/**
+ * 2026-09-20 대표 지시 — lucide 선 아이콘에서 GIF 로 교체했다. 에셋이 둥근 타일 배경까지
+ * 품고 있어서 컨테이너(.quick-menu__icon)의 배경·테두리는 CSS 에서 걷어냈고, 이미지가 타일
+ * 자리를 그대로 채운다.
+ *
+ * GIF 는 2초 무한 반복이고 CSS·JS 로 재생을 멈출 수단이 없다. 모션 최소화 설정에서는
+ * <picture> 의 media 쿼리로 **정지 프레임 PNG** 를 대신 내보낸다(WCAG 2.2.2 "정지·중지·숨기기").
+ * 정지 프레임은 첫 프레임이 아니라 그림이 가장 많이 그려진 프레임을 골라 뽑았다 — 축제·여행팁은
+ * 첫 프레임이 거의 비어 있어서 그대로 쓰면 빈 타일이 된다.
+ *
+ * 라벨(.quick-menu__label)이 바로 옆에 같은 뜻으로 있으므로 이미지는 장식이다(alt="").
+ */
+function QuickMenuIcon({ itemKey }: { itemKey: string }) {
+  return (
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcSet={`/quick-menu/${itemKey}-still.png`} />
+      <img src={`/quick-menu/${itemKey}.gif`} alt="" aria-hidden="true" width={96} height={96} decoding="async" />
+    </picture>
+  );
 }
 
 interface ServiceQuickMenuProps {
@@ -100,7 +97,7 @@ export default function ServiceQuickMenu({ regionCode = null }: ServiceQuickMenu
               className="quick-menu__item"
             >
               <span className="quick-menu__icon">
-                <QuickMenuIcon icon={item.icon} />
+                <QuickMenuIcon itemKey={item.key} />
               </span>
               <span className="quick-menu__label">{item.label}</span>
             </Link>

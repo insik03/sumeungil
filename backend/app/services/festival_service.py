@@ -50,6 +50,7 @@ from ..cache.base import Cache
 from ..clients import stddata_festival_client, tourapi_festival_client
 from ..clients.stddata_festival_client import StdDataFestivalError
 from ..clients.tourapi_festival_client import TourApiFestivalError
+from ..regions.nationwide import BLOCK_BY_KEY
 from ..regions.seed import REGIONS
 from ..schemas.places import Festival, FestivalsResponse, RecommendRegion
 from ..services.festival_region_match import (
@@ -449,6 +450,7 @@ async def build_festivals_response(
     month: str | None = None,
     window_days: int | None = None,
     area_cd: str | None = None,
+    region_block: str | None = None,
 ) -> FestivalsResponse:
     """region_code 지역의 진행중/예정 축제를 조립. 원천 실패/데이터없음이면 festivals=[] + region.
 
@@ -456,6 +458,11 @@ async def build_festivals_response(
     `area_cd`(부록 Y, 2026-08-11)는 그 **중간 단계**다 — 시도 전체 축제. region_code 가 함께
     오면 무시된다(더 좁은 지정이 이긴다) → 기존 호출부 동작 불변. 원천 호출은 늘지 않는다
     (전국 스윕 캐시에 대한 메모리 필터일 뿐이다 — region_code 필터와 같은 자리).
+    `region_block`(2026-09-20)은 그보다 한 단계 더 넓다 — 9권역(nationwide.REGION_BLOCKS) 전체
+    축제. 광역시를 소속 도에 흡수한 정의라 한 권역이 여러 시도를 품으므로(경기·서울 = 11+41+28)
+    `area_cds` 를 전부 훑는다. 좁은 지정 우선 규칙은 동일하다: region_code > area_cd > region_block.
+    알 수 없는 key 는 API 레이어가 400 으로 막는다(조용히 전국으로 떨어뜨리지 않는다 — 사용자가
+    "경남 축제를 보고 있다"고 오인하는 걸 막는 이 엔드포인트의 기존 원칙).
     today 는 테스트/`as_of` 주입용(기본 실제 오늘) — 캐시된 전국 목록에 대한 메모리 필터로만 쓴다.
 
     기간 필터(둘 중 하나만 적용된다):
@@ -474,6 +481,7 @@ async def build_festivals_response(
     bounds = month_bounds(month) if month else None
     rc = (region_code or "").strip()
     ac = (area_cd or "").strip()
+    bk = (region_block or "").strip()
 
     region: RecommendRegion | None = None
     if rc:
@@ -489,6 +497,14 @@ async def build_festivals_response(
             e for e in entries
             if e.region_code and len(e.region_code) == 5 and e.region_code[:2] == ac
         ]
+    elif bk:
+        block = BLOCK_BY_KEY.get(bk)
+        if block is not None:
+            acs = set(block.area_cds or (block.area_cd,))
+            entries = [
+                e for e in entries
+                if e.region_code and len(e.region_code) == 5 and e.region_code[:2] in acs
+            ]
 
     as_of_s = as_of.isoformat()
     horizon = (as_of + timedelta(days=window)).isoformat()

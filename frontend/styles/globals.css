@@ -1308,10 +1308,10 @@ input:focus-visible,
 .quick-menu__item:hover .quick-menu__icon,
 .quick-menu__item:focus-visible .quick-menu__icon {
   transform: translateY(-2px);
-  background: var(--g-100);
-  border-color: rgba(47, 122, 84, 0.28);
-  box-shadow: 0 9px 20px rgba(21, 59, 42, 0.14);
 }
+/* 2026-09-20 — 퀵메뉴 아이콘을 GIF 로 교체했다. 에셋이 둥근 타일 배경을 이미 품고 있어서
+   여기서 배경·테두리·그림자를 다시 주면 타일이 겹쳐 보인다. 컨테이너는 크기와 hover 모션만
+   맡고, 그리는 건 전부 이미지가 한다(ServiceQuickMenu.tsx 주석 참고). */
 .quick-menu__icon {
   width: 46px;
   height: 46px;
@@ -1319,34 +1319,15 @@ input:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(47, 122, 84, 0.18);
   border-radius: 15px;
-  background: var(--g-50);
   color: var(--g-700);
-  box-shadow: 0 5px 14px rgba(21, 59, 42, 0.09);
-  transition:
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
-/* 여행 지도 위 장소 마커를 닮은 포인트. 10개 메뉴를 하나의 관광 사인 시스템으로 묶는다. */
-.quick-menu__icon::after {
-  content: "";
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 6px;
-  height: 6px;
-  border: 2px solid var(--white);
-  border-radius: 50%;
-  background: var(--g-500);
-  box-sizing: content-box;
-}
-.quick-menu__icon svg {
-  width: 22px;
-  height: 22px;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7));
+.quick-menu__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .quick-menu__label {
   font-size: 12px;
@@ -1385,10 +1366,7 @@ input:focus-visible,
     height: 56px;
     border-radius: 18px;
   }
-  .quick-menu__icon svg {
-    width: 26px;
-    height: 26px;
-  }
+
 }
 
 /* =========================================================================
@@ -4480,6 +4458,23 @@ input:focus-visible,
   font-weight: 600;
 }
 
+/* 저장 화면 그리드 — 혼잡 배지가 있는 카드만 길어져 카드 높이가 들쭉날쭉했다.
+   grid-auto-rows:1fr 로 모든 행을 같은 높이로 깔고(.spot-grid 는 열만 정의하므로 행은 전부
+   암시적 행이다), 그 안의 link/card 가 내용 높이가 아니라 행 높이를 채우게 한다.
+   래퍼(.spot-card-wrap)는 그리드 아이템이라 이미 stretch 다 — height:100% 를 주면 오히려
+   stretch 가 풀려 내용 높이로 줄어들므로 건드리지 않는다.
+   저장 시각 줄은 아래로 밀어 카드끼리 기준선을 맞춘다. /recommend 의 .spot-grid 는 무변경. */
+.spot-grid--equal {
+  grid-auto-rows: 1fr;
+}
+.spot-grid--equal .spot-card-link,
+.spot-grid--equal .spot-card {
+  height: 100%;
+}
+.spot-grid--equal .saved-spot-card__meta {
+  margin-top: auto;
+}
+
 /* 여행 팁(F.3-6) */
 .tips-intro {
   margin-top: var(--sp-2);
@@ -6535,9 +6530,19 @@ input:focus-visible,
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
-.board-marquee:hover .board-marquee__track,
-.board-marquee:focus-within .board-marquee__track {
-  animation-play-state: paused; /* 읽고 싶을 때 붙잡을 수 있게 */
+/* 2026-09-20 대표 지적 "클릭했다고 멈추지 않았으면" — 종전엔 :focus-within 이라 카드를 한 번
+   클릭하면 그 카드가 포커스를 쥔 채 남아 띠가 계속 멈춰 있었다(마우스를 치워도 안 풀린다).
+   :has(:focus-visible) 로 바꾸면 **키보드로 들어왔을 때만** 멈춘다 — 탭으로 이동한 카드가
+   흘러가 버리는 건 막아야 하므로(WCAG 2.4.7) 이 경로는 남긴다.
+   hover 도 (hover: hover) 로 감싼다. 터치 기기는 탭한 지점에 hover 가 눌어붙어 같은 증상이
+   나서, 진짜 포인터가 있는 기기에서만 "읽으려고 올렸다"로 해석한다. */
+@media (hover: hover) and (pointer: fine) {
+  .board-marquee:hover .board-marquee__track {
+    animation-play-state: paused;
+  }
+}
+.board-marquee:has(:focus-visible) .board-marquee__track {
+  animation-play-state: paused;
 }
 .board-marquee__track > * {
   flex: 0 0 auto;
@@ -7061,3 +7066,7 @@ input:focus-visible,
   .home-search-bar { padding-bottom: var(--sp-4); }
   .quick-menu { padding-top: var(--sp-4); }
 }
+
+/* 2026-09-20 — AI 코스짜기 선택 칩 그룹(동행·실내/실외·활동). */
+.course-choice { margin-top: var(--sp-3); }
+.course-choice__label { display: block; margin-bottom: var(--sp-1); font-size: var(--text-sm); font-weight: 700; color: var(--ink-muted); }

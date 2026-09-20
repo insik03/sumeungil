@@ -213,10 +213,10 @@ function buildPopupContent(spot: SpotCard): string {
 
   container.appendChild(badgeRow);
 
-  // 부록 D §D.7-1과 동일 규약: hidden_id·region_code는 응답값 그대로, 좌표는 싣지 않는다.
+  // 부록 D §D.7-1과 동일 규약: spot_id·region_code는 응답값 그대로, 좌표는 싣지 않는다.
   const link = document.createElement("a");
   link.className = "spot-map-popup__link";
-  link.href = `/compare?hidden_id=${encodeURIComponent(String(spot.id))}&region_code=${encodeURIComponent(spot.region_code)}`;
+  link.href = `/compare?spot_id=${encodeURIComponent(String(spot.id))}&region_code=${encodeURIComponent(spot.region_code)}`;
   link.textContent = "비교하기 →";
   container.appendChild(link);
 

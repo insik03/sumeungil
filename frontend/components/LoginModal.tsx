@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import LinkProviderButtons from "./LinkProviderButtons";
 import { API_BASE } from "../lib/api";
-import { deleteAccount, setLoggedInName } from "../lib/authStorage";
+import { setLoggedInName } from "../lib/authStorage";
 import { TERMS_VERSION } from "../lib/consent";
 
 interface LoginModalProps {
@@ -32,8 +31,8 @@ const NICKNAME_MAX = 20;
  * 로그인이 성공해도 그 이름을 바로 리뷰 표시 이름으로 쓰지 않는다. "로그인 목적으로 받은
  * 이름을 동의 없이 다른 목적(공개 게시물 작성자 표시)에 자동 전용하는 구조"라는 지적에
  * 따라, provider가 준 이름을 기본값으로 미리 채운 입력창을 한 번 더 보여주고 사용자가
- * 직접 확인/수정해야 로그인이 완료된다. 여기서 취소하면 로그인 자체를 취소로 본다
- * (서버 세션 쿠키도 지운다) — "인증은 됐는데 표시 이름은 미정"인 애매한 상태를 안 만든다.
+ * 직접 확인/수정해야 로그인이 완료된다. 2026-09-20 가입 순서 변경 이후 이 단계에는 계정도
+ * 세션도 아직 없으므로(가입 보류 쿠키뿐), 취소는 그 쿠키만 폐기하고 닫는다.
  *
  * 2026-08-18(대표 지시 "로그인할 때마다 닉네임 정하게 할 건 아니지?") — 이 확인 단계는
  * **최초 가입 때 한 번만** 보여준다(백엔드가 postMessage에 실어 보내는 `is_new` 플래그로
@@ -42,7 +41,7 @@ const NICKNAME_MAX = 20;
  * 충돌하지 않는다 — 동의는 최초 1회로 이미 성립했고, 값도 그때와 동일하다.
  */
 export default function LoginModal({ open, onClose, onLoggedIn, title, message }: LoginModalProps) {
-  const [step, setStep] = useState<"provider" | "nickname" | "link">("provider");
+  const [step, setStep] = useState<"provider" | "nickname">("provider");
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [nickname, setNickname] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,12 +54,8 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const startButtonRef = useRef<HTMLButtonElement>(null);
   const nicknameInputRef = useRef<HTMLInputElement>(null);
-  // 2026-08-18(QA M-3) — 아래 useEffect는 [open, onClose]에만 의존해 모달이 열릴 때 한 번만
-  // onKey를 등록한다. setStep("nickname")으로 단계가 바뀌어도 그 클로저 안의 step은 등록 당시
-  // 값("provider")에 그대로 고정된 채라, 닉네임 확인 단계에서 Esc를 눌러도 항상 "provider"로
-  // 취급돼 cancelAtNicknameStep(계정 삭제)이 아니라 그냥 onClose()만 호출되고 있었다 — 구글
-  // 인증은 됐는데 표시 이름은 확인 안 된 계정 행이 그대로 DB에 남는 경로였다. ref로 최신
-  // step을 따로 들고 있으면 이 클로저 문제 없이 항상 최신 단계를 본다.
+  // 아래 Esc 핸들러는 [open, onClose] 에만 의존해 모달이 열릴 때 한 번만 등록된다 — 그 클로저
+  // 안의 step 은 등록 당시 값("provider")에 고정되므로, 최신 단계는 ref 로 따로 들고 본다.
   const stepRef = useRef(step);
   useEffect(() => {
     stepRef.current = step;
@@ -74,13 +69,22 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     setNickname("");
     setSaving(false);
     setSaveError(null);
+    // 2026-09-20(qa-reviewer F-1, Blocker) — 이 모달은 LoginGateProvider 가 한 번만 마운트하고
+    // `if (!open) return null` 로 감추기만 해서 상태가 탭 수명 내내 남는다. agreed 를 같이
+    // 되돌리지 않으면 앞사람이 켜둔 체크가 그대로 남아, 다음 신규 사용자가 약관을 본 적도
+    // 없이 동의가 기록된다(agreed 가 가입 완료 버튼의 유일한 게이트다).
+    setAgreed(false);
     const t = window.setTimeout(() => startButtonRef.current?.focus(), 30);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // 2026-09-20 — 약관 동의 전엔 계정이 아직 없다(가입 보류). 다만 닉네임 단계에서 빠져나갈
+      // 땐 보류 쿠키를 서버에서 지워야 해서 cancelAtNicknameStep 과 같은 처리를 태운다.
+      // 이 클로저는 등록 시점 step("provider")에 고정되므로 ref 로 최신 단계를 본다.
       if (stepRef.current === "nickname") {
-        // cancelAtNicknameStep과 동일한 처리(아래 정의보다 먼저 쓰여야 해서 인라인) —
-        // "인증은 됐는데 표시 이름은 미정"인 애매한 상태를 안 남기려고 계정 자체를 지운다.
-        void deleteAccount();
+        void fetch(`${API_BASE}/api/v1/auth/signup/cancel`, {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => undefined);
       }
       onClose();
     };
@@ -128,19 +132,14 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
         if (data.is_new) {
           // 신규 가입일 때만 닉네임 확인 단계로 — provider 인증까지는 성공했지만
           // 아직 로그인 완료로 치지 않는다(§닉네임 확인 단계 주석 참고).
+          // 2026-09-20 대표 지시 — 순서는 "구글 로그인 → 약관 동의 팝업 → 가입 완료". 이 단계에서
+          // 약관·처리방침 동의와 표시 이름을 한 화면에서 받고, 동의해야 가입이 끝난다.
           setNickname(data.name.slice(0, NICKNAME_MAX));
           setStep("nickname");
         } else {
           // 2026-08-18(대표 지시) — 재로그인마다 매번 닉네임을 확인시키지 않는다. 이미
-          // DB에 저장된 이름을 그대로 신뢰하고 바로 로그인 완료로 처리한다.
-          // 2026-09-20 — 동의는 로그인 전에 받았으므로 기존 사용자도 여기서 현재 약관 버전을 기록한다
-          // (Header 의 ConsentModal 이 다시 뜨지 않게). 실패해도 로그인은 완료 — 다음 부팅 때 모달이 보완한다.
-          void fetch(`${API_BASE}/api/v1/auth/consent`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ terms_version: TERMS_VERSION }),
-          }).catch(() => undefined);
+          // DB에 저장된 이름을 그대로 신뢰하고 바로 로그인 완료로 처리한다. 약관이 개정돼 미동의면
+          // Header 의 ConsentModal 이 따로 묻는다.
           setLoggedInName(data.name);
           onLoggedIn(data.name);
           onClose();
@@ -176,8 +175,9 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/display-name`, {
-        method: "PATCH",
+      // 2026-09-20 — 신규 가입은 여기서 비로소 계정이 만들어진다(약관 동의 전엔 서버에 계정·세션 없음).
+      const res = await fetch(`${API_BASE}/api/v1/auth/signup/complete`, {
+        method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ display_name: trimmed, terms_version: TERMS_VERSION }),
@@ -185,7 +185,11 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         setSaveError(
-          typeof body?.detail === "string" ? body.detail : "표시 이름 저장에 실패했어요. 다시 시도해주세요."
+          typeof body?.error?.message === "string"
+            ? body.error.message
+            : typeof body?.detail === "string"
+              ? body.detail
+              : "가입을 완료하지 못했어요. 다시 시도해주세요."
         );
         return;
       }
@@ -197,20 +201,18 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     }
     setLoggedInName(trimmed);
     onLoggedIn(trimmed);
-    // 2026-09-18(대표 결정) — 신규 가입 직후 한 번만 "다른 방식으로 이미 가입했나요?"를 묻는다.
-    // 여기서 다른 provider 로 로그인하면 두 계정이 하나로 합쳐진다(LinkProviderButtons).
-    setStep("link");
+    onClose();
   };
 
-  const finishLink = () => onClose();
-
-  // 닉네임 단계에서 취소 — 구글 인증(서버 세션 쿠키)까지 됐지만 표시 이름은 안 정했으니
-  // 로그인 자체를 취소로 본다(애매한 반쯤 로그인 상태를 남기지 않는다). QA M-3(2026-08-17)
-  // 지적대로, 예전엔 logout()(쿠키만 삭제)이라 구글 원본 이름이 담긴 계정 행이 users
-  // 테이블에 그대로 남았다 — deleteAccount()로 그 행 자체를 지워야 "취소"가 말 그대로
-  // 취소가 된다.
+  // 2026-09-20 — 약관 동의 전엔 서버에 계정도 세션도 없다(가입 보류 쿠키뿐, 5분 뒤 만료).
+  // 다만 그 쿠키엔 provider 가 증명한 신원(이메일 포함)이 들어 있어, 공용 PC 에서 다음 사람이
+  // 남은 쿠키로 가입을 마쳐버릴 수 있다(security-engineer F-1). 취소 시 서버에 폐기를 맡긴다 —
+  // 실패해도 닫는 건 그대로다(만료가 마지막 방어선).
   const cancelAtNicknameStep = () => {
-    void deleteAccount();
+    void fetch(`${API_BASE}/api/v1/auth/signup/cancel`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => undefined);
     onClose();
   };
 
@@ -221,7 +223,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
       aria-modal="true"
       aria-labelledby="loginModalTitle"
       onClick={(e) => {
-        if (e.target === e.currentTarget) (step === "nickname" ? cancelAtNicknameStep : step === "link" ? finishLink : onClose)();
+        if (e.target === e.currentTarget) (step === "nickname" ? cancelAtNicknameStep : onClose)();
       }}
     >
       <div className="login-modal">
@@ -233,25 +235,10 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
             <p className="login-modal__sub">{message ?? "간편로그인으로 바로 시작해요."}</p>
             {/* 구글 브랜딩 가이드라인(Sign in with Google branding guidelines) 준수 — 흰 배경 +
                 공식 4색 G 로고 + 회색 테두리. 로고 색상·비율을 임의로 바꾸지 않는다. */}
-            {/* 2026-09-20 대표 지시 — 약관 동의를 로그인(구글/카카오) 버튼을 누르기 전에 받는다. 동의 전엔 버튼 비활성. */}
-            <label className="consent-check">
-              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-              <span>
-                <a href="/terms" target="_blank" rel="noopener noreferrer">
-                  이용약관
-                </a>
-                과{" "}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                  개인정보처리방침
-                </a>
-                을 확인했고 동의해요. (만 14세 이상)
-              </span>
-            </label>
             <button
               ref={startButtonRef}
               type="button"
               className="btn-google"
-              disabled={!agreed}
               onClick={() => startProviderLogin("google")}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -278,7 +265,6 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 텍스트/아이콘은 검정 계열 고정색, 임의 배색 금지. 2026-08-17 신설. */}
             <button
               type="button"
-              disabled={!agreed}
               className="btn-kakao"
               onClick={() => startProviderLogin("kakao")}
             >
@@ -295,7 +281,6 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               <button
                 type="button"
                 className="btn-naver"
-                disabled={!agreed}
                 onClick={() => startProviderLogin("naver")}
               >
                 <span className="btn-naver__mark" aria-hidden="true">N</span>
@@ -313,37 +298,18 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 취소
               </button>
             </div>
-            <p className="login-modal__note">로그인 제공자에게서 이메일·이름만 받아요.</p>
-          </>
-        ) : step === "link" ? (
-          <>
-            <h2 className="login-modal__title" id="loginModalTitle">
-              다른 방식으로 가입한 적 있나요?
-            </h2>
-            <p className="login-modal__sub">
-              예전에 다른 로그인으로 저장한 코스나 취향이 있다면, 그 방식으로 한 번 더 로그인하면 지금 계정에
-              합쳐져요. 없으면 그냥 시작하면 돼요.
+            <p className="login-modal__note">
+              로그인 제공자에게서 이메일·이름만 받아요. 처음 가입할 때 이용약관·개인정보처리방침 동의를 받은 뒤 가입이 완료돼요.
             </p>
-            <LinkProviderButtons
-              providers={{}}
-              onDone={(_p, outcome) => {
-                if (outcome === "linked" || outcome === "already") finishLink();
-              }}
-            />
-            <div className="login-modal__actions">
-              <button type="button" className="btn btn--mint" onClick={finishLink}>
-                아니요, 이대로 시작하기
-              </button>
-            </div>
           </>
         ) : (
           <>
             <h2 className="login-modal__title" id="loginModalTitle">
-              표시 이름 정하기
+              약관 동의하고 가입 완료
             </h2>
             <p className="login-modal__sub">
-              로그인은 완료됐어요. 리뷰 등에 공개로 보일 이름을 정해주세요 — 방금 쓴 이름을
-              그대로 써도 되고, 바꿔도 돼요.
+              로그인 인증은 됐어요. 이용약관·개인정보처리방침에 동의하고, 리뷰 등에 공개로 보일 표시 이름을
+              정하면 가입이 완료돼요.
             </p>
             <label className="login-modal__label" htmlFor="loginNickname">
               표시 이름
@@ -360,6 +326,19 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 if (e.key === "Enter") confirmNickname();
               }}
             />
+            <label className="consent-check">
+              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+              <span>
+                <a href="/terms" target="_blank" rel="noopener noreferrer">
+                  이용약관
+                </a>
+                과{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                  개인정보처리방침
+                </a>
+                을 확인했고 동의해요. (만 14세 이상)
+              </span>
+            </label>
             {saveError && (
               <p className="login-modal__note" role="alert">
                 {saveError}
@@ -377,10 +356,10 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               <button
                 type="button"
                 className="btn btn--mint"
-                disabled={nickname.trim().length === 0 || saving}
+                disabled={nickname.trim().length === 0 || saving || !agreed}
                 onClick={confirmNickname}
               >
-                {saving ? "저장 중…" : "시작하기"}
+                {saving ? "저장 중…" : "동의하고 가입 완료"}
               </button>
             </div>
           </>

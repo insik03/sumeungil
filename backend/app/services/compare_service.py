@@ -263,10 +263,17 @@ def _build_deltas(hotspot: CompareSpot, hidden: CompareSpot) -> CompareDeltas:
 # ---------- verdict.headline (D.4.1 템플릿 조립 — 수치·enum·개수만) ----------
 
 def build_verdict(
-    deltas: CompareDeltas, personalized: bool, hidden_level: str | None = None
+    deltas: CompareDeltas, personalized: bool, hidden_level: str | None = None, picked: bool = False
 ) -> CompareVerdict:
     pct = deltas.congestion_diff_pct
     matched = deltas.matched_count
+    # 2026-09-20 대표 지적 — 사용자가 고른 스팟(hotspot_source=local_store)에서 시작한 비교면
+    # 왼쪽은 "유명 핫플"이 아니라 "내가 고른 곳"이다. 문구도 그에 맞춘다(수치·개수만 조립, D.4.1 유지).
+    left = "고른 곳" if picked else "붐비는 유명 스팟"
+    generic = (
+        "고른 곳과 비슷한 성격의 더 한적한 곳을 찾았어요." if picked
+        else "유명 핫플 대신 붐비지 않는 숨은 곳을 찾았어요."
+    )
 
     # 혼잡도 델타가 '음수(숨은길 여유)'일 때만 "낮다"고 말한다(양수/ null → 폴백, 과장 금지)
     congestion_lower = pct is not None and pct < 0
@@ -288,23 +295,23 @@ def build_verdict(
     if congestion_lower and has_fit:
         template_id = "congestion_and_fit"
         headline = (
-            f"붐비는 유명 스팟 대신 혼잡도 {abs(pct)}% 낮은 한적한 곳이에요. "
+            f"{left} 대신 혼잡도 {abs(pct)}% 낮은 한적한 곳이에요. "
             f"맞춤 조건 {matched}개를 만족합니다."
         )
     elif congestion_lower and not has_fit:
         template_id = "congestion_only"
-        headline = f"붐비는 유명 스팟보다 혼잡도가 {abs(pct)}% 낮은 한적한 곳이에요."
+        headline = f"{left}보다 혼잡도가 {abs(pct)}% 낮은 한적한 곳이에요."
     elif not congestion_lower and has_fit:
         template_id = "fit_only"
         headline = f"한적한 숨은 곳으로, 맞춤 조건 {matched}개를 만족합니다."
     else:
         template_id = "hidden_gem_generic"
-        headline = "유명 핫플 대신 붐비지 않는 숨은 곳을 찾았어요."
+        headline = generic
 
     # 길이 상한 초과 시 generic 폴백
     if len(headline) > HEADLINE_MAX:
         template_id = "hidden_gem_generic"
-        headline = "유명 핫플 대신 붐비지 않는 숨은 곳을 찾았어요."
+        headline = generic
 
     return CompareVerdict(headline=headline, template_id=template_id)
 
@@ -422,6 +429,12 @@ async def build_compare_response(
     # --- HOTSPOT(핫플) 확정 — 위에서 못 잡았거나 자기비교가 된 경우 ---
     if hotspot is not None and hotspot.spot_id == hidden_spot.id:
         hotspot = None  # 자기비교 방지
+        # 2026-09-20(qa-reviewer F-3) — source 도 함께 되돌린다. 안 그러면 아래 auto 경로가
+        # board 에서 전혀 다른 핫플을 잡아왔는데도 picked(= local_store)가 True 로 남아,
+        # "내가 고른 곳" 라벨이 사용자가 고르지 않은 스팟에 붙고 실제로 고른 스팟이 오른쪽
+        # "AI 가 찾은 대안"으로 간다 — #169 가 없애려던 좌우 역전 그대로다.
+        hotspot_source = "m2_board"
+
     if hotspot is None and hotspot_id is not None:
         hs = store_by_id.get(hotspot_id)
         if hs is not None and hs.id != hidden_spot.id:
@@ -508,6 +521,7 @@ async def build_compare_response(
         deltas,
         personalized,
         hidden_level=hidden.congestion.level if hidden.congestion else None,
+        picked=hotspot_source == "local_store",
     )
 
     now: datetime = datetime.now(KST)

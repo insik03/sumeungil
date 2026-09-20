@@ -4,7 +4,7 @@ import GeminiMark from "../GeminiMark";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ApiError, SpotCard, SpotDetail, fetchSpotDetail } from "../../lib/api";
-import { isSpotSaved, toggleSavedSpot } from "../../lib/savedSpotsStorage";
+import { SAVED_SPOTS_CHANGED, isSpotSaved, toggleSavedSpot } from "../../lib/savedSpotsStorage";
 import { StampInput, isSpotStamped, toggleStamp } from "../../lib/stampStorage";
 import { CartSpotInput, MAX_CART_SIZE, isInCart, toggleCartSpot } from "../../lib/courseCartStorage";
 import { CATEGORY_META } from "../recommend/constants";
@@ -99,6 +99,13 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
 
     return () => controller.abort();
   }, [contentId, retryTick]);
+
+  useEffect(() => {
+    const refresh = () => setSaved(data ? isSpotSaved(data.id) : false);
+    refresh();
+    window.addEventListener(SAVED_SPOTS_CHANGED, refresh);
+    return () => window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
+  }, [data]);
 
   const retry = () => setRetryTick((t) => t + 1);
 
@@ -343,9 +350,9 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
         {isComparable && (
           <Link
             className="btn btn--coral btn--lg"
-            href={`/compare?hidden_id=${data.id}&region_code=${encodeURIComponent(data.region_code)}`}
+            href={`/compare?spot_id=${data.id}&region_code=${encodeURIComponent(data.region_code)}`}
           >
-            핫플과 비교하기
+            더 한적한 곳과 비교하기
           </Link>
         )}
         <button

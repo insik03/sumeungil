@@ -79,19 +79,19 @@ async def save_spot(
     spot = spot_repo.by_id(spot_id)
     if spot is None:
         return error_response(404, "SPOT_NOT_FOUND", "해당 스팟을 찾을 수 없습니다.")
-    count = await db.aread(lambda conn: saved_spot_repo.count_by_user(conn, user_id=identity.user_id))
-    if count >= saved_spot_repo.MAX_PER_USER:
-        return error_response(409, "SAVED_LIMIT", f"저장은 계정당 {saved_spot_repo.MAX_PER_USER}곳까지예요.")
     congestion_json = req.congestion.model_dump_json() if req.congestion else None
-    row = await db.awrite(
-        lambda conn: saved_spot_repo.upsert(
-            conn,
-            user_id=identity.user_id,
-            spot_id=spot_id,
-            congestion_json=congestion_json,
-            now_iso=to_iso_kst(now_kst()),
+    try:
+        row = await db.awrite(
+            lambda conn: saved_spot_repo.upsert(
+                conn,
+                user_id=identity.user_id,
+                spot_id=spot_id,
+                congestion_json=congestion_json,
+                now_iso=to_iso_kst(now_kst()),
+            )
         )
-    )
+    except saved_spot_repo.SavedSpotLimitError:
+        return error_response(409, "SAVED_LIMIT", f"저장은 계정당 {saved_spot_repo.MAX_PER_USER}곳까지예요.")
     return _to_item(spot, row)
 
 
