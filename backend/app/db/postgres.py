@@ -65,9 +65,12 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         target_type TEXT    NOT NULL CHECK (target_type IN ('spot', 'festival')),
         target_id   TEXT    NOT NULL,
         -- 2026-09-20: 후기 소유자는 **계정**이다(아래 schema_version 11 주석 참고).
+        -- FK 는 여기서 선언할 수 없다 — 이 문장은 users CREATE TABLE 보다 먼저 실행되므로
+        -- 인라인 REFERENCES 가 "relation users does not exist" 로 깨진다. 아래 v11 블록에서
+        -- users 가 생긴 뒤 ALTER 로 붙인다.
         -- device_id 는 남겨 둔다 — 쓰기 쿼터가 여전히 기기 단위이고, 같은 계정이 여러 기기에서
         -- 쓴 글을 운영이 구분해야 할 때 근거가 된다. 소유권 판정에는 쓰지 않는다.
-        user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL,
         device_id   TEXT    NOT NULL,
         nickname    TEXT    NOT NULL,
         rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
@@ -362,7 +365,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     #   4) 중복 방지 기준을 기기 → 계정으로 바꾼다. 구 인덱스를 남겨두면 같은 계정이 기기를
     #      바꿔 쓴 두 번째 후기를 막지 못하면서 기기 기준 제약만 걸리는 엉뚱한 상태가 된다.
     """
-    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users (id) ON DELETE CASCADE
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER
     """,
     """
     DELETE FROM reviews WHERE user_id IS NULL
@@ -377,8 +380,17 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_user_target
         ON reviews (user_id, target_type, target_id)
     """,
-    # 탈퇴·관리자 삭제의 역방향 조회용(위 unique 인덱스는 선두가 user_id 라 겸용 가능하지만,
-    # 목록 조회는 target 선두 인덱스를 쓰므로 여기선 별도 인덱스를 두지 않는다).
+    # 5) FK 는 여기서 붙인다 — users 가 이 시점엔 이미 만들어져 있다(위 CREATE TABLE 순서).
+    #    탈퇴하면 그 계정의 후기도 함께 지워진다(다른 계정 귀속 테이블과 같은 규칙).
+    #    Postgres 에 ADD CONSTRAINT IF NOT EXISTS 가 없어 duplicate_object 를 삼킨다.
+    """
+    DO $$
+    BEGIN
+        ALTER TABLE reviews ADD CONSTRAINT fk_reviews_user
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+    """,
 )
 
 
