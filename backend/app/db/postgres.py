@@ -80,10 +80,9 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         hidden      INTEGER NOT NULL DEFAULT 0
     )
     """,
-    """
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_user_target
-        ON reviews (user_id, target_type, target_id)
-    """,
+    # ux_reviews_user_target 는 여기서 만들지 않는다 — 이미 reviews 가 있는 DB(운영)에서는 user_id 가
+    # 아직 없어 "column user_id does not exist" 로 스키마 적용 전체가 실패한다(v0.6.3 배포 사고).
+    # schema_version 11 블록이 컬럼을 붙인 뒤에 만든다.
     """
     CREATE INDEX IF NOT EXISTS ix_reviews_target
         ON reviews (target_type, target_id, hidden)
