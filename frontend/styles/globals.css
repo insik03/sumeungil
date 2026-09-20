@@ -1308,10 +1308,10 @@ input:focus-visible,
 .quick-menu__item:hover .quick-menu__icon,
 .quick-menu__item:focus-visible .quick-menu__icon {
   transform: translateY(-2px);
-  background: var(--g-100);
-  border-color: rgba(47, 122, 84, 0.28);
-  box-shadow: 0 9px 20px rgba(21, 59, 42, 0.14);
 }
+/* 2026-09-20 — 퀵메뉴 아이콘을 GIF 로 교체했다. 에셋이 둥근 타일 배경을 이미 품고 있어서
+   여기서 배경·테두리·그림자를 다시 주면 타일이 겹쳐 보인다. 컨테이너는 크기와 hover 모션만
+   맡고, 그리는 건 전부 이미지가 한다(ServiceQuickMenu.tsx 주석 참고). */
 .quick-menu__icon {
   width: 46px;
   height: 46px;
@@ -1319,34 +1319,15 @@ input:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(47, 122, 84, 0.18);
   border-radius: 15px;
-  background: var(--g-50);
   color: var(--g-700);
-  box-shadow: 0 5px 14px rgba(21, 59, 42, 0.09);
-  transition:
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
-/* 여행 지도 위 장소 마커를 닮은 포인트. 10개 메뉴를 하나의 관광 사인 시스템으로 묶는다. */
-.quick-menu__icon::after {
-  content: "";
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 6px;
-  height: 6px;
-  border: 2px solid var(--white);
-  border-radius: 50%;
-  background: var(--g-500);
-  box-sizing: content-box;
-}
-.quick-menu__icon svg {
-  width: 22px;
-  height: 22px;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7));
+.quick-menu__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .quick-menu__label {
   font-size: 12px;
@@ -1385,10 +1366,7 @@ input:focus-visible,
     height: 56px;
     border-radius: 18px;
   }
-  .quick-menu__icon svg {
-    width: 26px;
-    height: 26px;
-  }
+
 }
 
 /* =========================================================================
