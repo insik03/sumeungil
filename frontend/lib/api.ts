@@ -1260,7 +1260,7 @@ export async function fetchFestivals(
   regionCode?: string,
   limit?: number,
   signal?: AbortSignal,
-  opts?: { month?: string; windowDays?: number; areaCd?: string }
+  opts?: { month?: string; windowDays?: number; areaCd?: string; regionBlock?: string }
 ): Promise<FestivalsResponse> {
   const qs = new URLSearchParams();
   if (regionCode) qs.set("region_code", regionCode);
@@ -1268,6 +1268,8 @@ export async function fetchFestivals(
   if (opts?.month) qs.set("month", opts.month);
   if (opts?.windowDays) qs.set("window_days", String(opts.windowDays));
   if (opts?.areaCd) qs.set("area_cd", opts.areaCd);
+  // 2026-09-20 — 9권역 필터. region_code 가 있으면 서버가 무시한다(더 좁은 지정이 이긴다).
+  if (opts?.regionBlock) qs.set("region_block", opts.regionBlock);
   const query = qs.toString();
 
   let res: Response;

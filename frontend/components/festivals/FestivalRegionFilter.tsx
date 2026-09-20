@@ -2,12 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError, RegionSearchItem, fetchRegionSearch } from "../../lib/api";
-import { QUICK_REGIONS, QuickRegionChip } from "../recommend/constants";
+import { REGION_BLOCKS, RegionBlock } from "../regions/blocks";
 import ChipScrollRow from "../ChipScrollRow";
 
+/**
+ * 선택된 지역. 2026-09-20 대표 지시로 "지역 바로가기"가 시도 17칩 → **9권역 칩**이 되면서
+ * 두 가지 모양을 갖는다. 서버 필터가 서로 다른 파라미터라 어느 쪽인지 구분해 들고 있어야 한다.
+ *   - 권역 칩: blockKey 로 `region_block` 을 보낸다(권역에 속한 시도 전체 축제).
+ *   - 검색 선택: sigunguCd 로 `region_code` 를 보낸다(그 시군구 축제만). 검색은 그대로 둔다 —
+ *     "여수 축제"처럼 좁게 보려는 동선을 권역으로 뭉개면 오히려 쓰기 어려워진다.
+ */
 export interface FestivalRegion {
-  sigunguCd: string;
+  /** 권역 칩으로 고른 경우 REGION_BLOCKS.key, 검색으로 고른 경우 null. */
+  blockKey: string | null;
+  /** 검색으로 고른 시군구 코드. 권역 칩이면 null. */
+  sigunguCd: string | null;
   label: string;
+  /** 다른 화면에 "마지막 선택 지역"으로 넘길 대표 시군구 코드(권역이면 대표 시군구). */
+  representativeCode: string;
 }
 
 interface FestivalRegionFilterProps {
@@ -31,12 +43,15 @@ const SEARCH_DEBOUNCE_MS = 200;
  * 파일 변경 위험) 패턴만 이식한 새 컴포넌트로 분리했다. 코드 값(sigungu_cd 등)은 RegionPicker와
  * 동일하게 /regions/search 응답에서만 가져온다 — 프론트가 지어내지 않는다.
  *
- * §30(03-design-spec.md, 2026-07-29) — QUICK_REGIONS(recommend/constants.ts)가 4개→17개(시도
- * 1곳씩)로 확장되면서 이 컴포넌트가 공유해 쓰던 칩도 자동으로 17개가 됐다. 예전 방식(칩마다
- * /regions/search 사전조회)을 그대로 뒀다면 17회 왕복이 되어 §30이 recommend 쪽에서 없앤 낭비가
- * 여기서 되살아난다 — 그래서 RegionPicker.tsx와 동일하게 이 컴포넌트도 사전조회를 없애고
- * QUICK_REGIONS가 이미 들고 있는 검증된 sigunguCd를 직접 선택한다(이 파일은 지시서의 명시적
- * 수정 대상은 아니지만, 공유 상수 변경의 직접 결과로 깨지는 걸 막기 위한 최소 동형 수정이다).
+ * 2026-09-20(대표 지시 "축제 지역 바로가기도 전국 N도로 묶어줘") — 시도 17칩을 **9권역 칩**으로
+ * 바꿨다. 권역 정의는 새로 만들지 않고 이미 있는 REGION_BLOCKS(components/regions/blocks.ts ↔
+ * backend app/regions/nationwide.py 1:1 미러)를 그대로 쓴다. 광역시를 소속 도에 흡수한 정의라
+ * 한 권역이 여러 시도를 품고(경기·서울 = 11+41+28), 서버는 그 시도 전체를 훑어 축제를 준다
+ * (`region_block` 파라미터). 칩마다 대표 시군구 1곳으로 좁히면 "전남·광주"를 눌렀는데 여수
+ * 축제만 나오는 문제가 생겨서, 시군구 코드가 아니라 권역 key 를 보내는 게 핵심이다.
+ *
+ * 검색 combobox 는 그대로 둔다 — "여수 축제"처럼 좁게 보려는 동선까지 권역으로 뭉개면 오히려
+ * 쓰기 어려워진다. 검색으로 고르면 종전대로 `region_code`(시군구)로 필터한다.
  */
 export default function FestivalRegionFilter({ selected, onSelect }: FestivalRegionFilterProps) {
   const [query, setQuery] = useState("");
@@ -88,14 +103,24 @@ export default function FestivalRegionFilter({ selected, onSelect }: FestivalReg
   const selectRegion = (item: RegionSearchItem, label: string) => {
     setQuery(label);
     setDropdownOpen(false);
-    onSelect({ sigunguCd: item.sigungu_cd, label: item.label });
+    onSelect({
+      blockKey: null,
+      sigunguCd: item.sigungu_cd,
+      label: item.label,
+      representativeCode: item.sigungu_cd,
+    });
   };
 
-  // §30 — 칩 선택 경로. QUICK_REGIONS의 검증된 sigunguCd를 그대로 onSelect에 넘긴다(검색 API 왕복 없음).
-  const selectQuickRegion = (r: QuickRegionChip) => {
-    setQuery(r.label);
+  // 권역 칩 — 검증된 key 를 그대로 넘긴다(검색 API 왕복 없음). 라벨은 blocks.ts 소유.
+  const selectBlock = (b: RegionBlock) => {
+    setQuery("");
     setDropdownOpen(false);
-    onSelect({ sigunguCd: r.sigunguCd, label: r.label });
+    onSelect({
+      blockKey: b.key,
+      sigunguCd: null,
+      label: b.label,
+      representativeCode: b.regionCode,
+    });
   };
 
   const selectNationwide = () => {
@@ -113,7 +138,7 @@ export default function FestivalRegionFilter({ selected, onSelect }: FestivalReg
     setSearchStatus("idle");
   };
 
-  const isChipActive = (r: QuickRegionChip) => !!selected && r.sigunguCd === selected.sigunguCd;
+  const isChipActive = (b: RegionBlock) => selected?.blockKey === b.key;
 
   return (
     <div className="spot-region-row">
@@ -211,24 +236,23 @@ export default function FestivalRegionFilter({ selected, onSelect }: FestivalReg
         >
           전국
         </button>
-        {QUICK_REGIONS.map((r) => {
-          const active = isChipActive(r);
+        {REGION_BLOCKS.map((b) => {
+          const active = isChipActive(b);
           return (
             <button
-              key={r.sigunguCd}
+              key={b.key}
               type="button"
               className={`chip chip--all${active ? " is-active" : ""}`}
               aria-pressed={active}
-              title={r.label}
-              onClick={() => selectQuickRegion(r)}
+              onClick={() => selectBlock(b)}
             >
-              {r.name}
+              {b.label}
             </button>
           );
         })}
       </ChipScrollRow>
       <p className="dest-search__status" aria-live="polite">
-        {selected ? `${selected.label} 축제만 보고 있어요` : "전국 축제를 보고 있어요"}
+        {selected ? `${selected.label} 축제를 보고 있어요` : "전국 축제를 보고 있어요"}
       </p>
     </div>
   );

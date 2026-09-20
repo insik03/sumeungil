@@ -41,11 +41,13 @@ export default function FestivalsContent() {
   const setSelectedRegion = (region: FestivalRegion | null) => {
     setSelectedRegionState(region);
     if (region) {
+      // 다른 화면은 시군구 단위로만 지역을 받으므로 권역이면 그 대표 시군구를 넘긴다
+      // (종전 시도 칩도 대표 시군구를 저장했으므로 동작 폭은 그대로다).
       saveLastRegion({
-        region_id: `sigungu-${region.sigunguCd}`,
+        region_id: `sigungu-${region.representativeCode}`,
         label: region.label,
-        area_cd: region.sigunguCd.slice(0, 2),
-        sigungu_cd: region.sigunguCd,
+        area_cd: region.representativeCode.slice(0, 2),
+        sigungu_cd: region.representativeCode,
       });
     }
   };
@@ -64,9 +66,11 @@ export default function FestivalsContent() {
     setStatus("loading");
     setError(null);
 
-    fetchFestivals(selectedRegion?.sigunguCd, FETCH_LIMIT, controller.signal, {
+    // 권역 칩이면 region_block(권역 전체), 검색으로 고른 시군구면 region_code(그 시군구만).
+    fetchFestivals(selectedRegion?.sigunguCd ?? undefined, FETCH_LIMIT, controller.signal, {
       month: month ?? undefined,
       windowDays: month ? MONTH_FILTER_WINDOW_DAYS : DEFAULT_WINDOW_DAYS,
+      regionBlock: selectedRegion?.blockKey ?? undefined,
     })
       .then((res) => {
         setData(res);
