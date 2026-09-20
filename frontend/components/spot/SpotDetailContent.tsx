@@ -350,9 +350,9 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
         {isComparable && (
           <Link
             className="btn btn--coral btn--lg"
-            href={`/compare?hidden_id=${data.id}&region_code=${encodeURIComponent(data.region_code)}`}
+            href={`/compare?spot_id=${data.id}&region_code=${encodeURIComponent(data.region_code)}`}
           >
-            핫플과 비교하기
+            더 한적한 곳과 비교하기
           </Link>
         )}
         <button

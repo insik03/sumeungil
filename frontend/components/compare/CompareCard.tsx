@@ -10,11 +10,17 @@ const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
 interface CompareCardProps {
   spot: CompareSpot;
   tagLabelMap: Record<string, string>;
+  /** 사용자가 고른 스팟에서 시작한 비교(hotspot_source=local_store) — 왼쪽은 핫플이 아니라 "내가 고른 곳". */
+  picked?: boolean;
 }
 
 const ROLE_LABEL: Record<CompareSpot["role"], string> = {
   hotspot: "붐비는 핫플",
   hidden: "AI가 찾은 숨은길",
+};
+const PICKED_ROLE_LABEL: Record<CompareSpot["role"], string> = {
+  hotspot: "내가 고른 곳",
+  hidden: "AI가 찾은 더 한적한 대안",
 };
 
 /**
@@ -22,11 +28,11 @@ const ROLE_LABEL: Record<CompareSpot["role"], string> = {
  * "대칭 비교"라는 화면 의도를 그대로 드러낸다. 값 렌더 로직은 CongestionValue/FitValue와
  * 공유해 모바일 지표행과 판정이 어긋나지 않는다.
  */
-export default function CompareCard({ spot, tagLabelMap }: CompareCardProps) {
+export default function CompareCard({ spot, tagLabelMap, picked = false }: CompareCardProps) {
   return (
     <article className={`compare-card compare-card--${spot.role}`}>
       <div className="compare-card__head">
-        <span className="compare-card__role">{ROLE_LABEL[spot.role]}</span>
+        <span className="compare-card__role">{(picked ? PICKED_ROLE_LABEL : ROLE_LABEL)[spot.role]}</span>
         {spot.is_hidden_gem && <span className="badge badge--hidden-gem">숨은 스팟</span>}
       </div>
       {/* 부록 D.8(2026-08-01, 대표 지시) — 비교하려면 사진이 있어야 한다.
