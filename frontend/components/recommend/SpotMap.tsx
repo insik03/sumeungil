@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SpotCard } from "../../lib/api";
+import { matchTier } from "../../lib/matchTier";
 import { CATEGORY_META } from "./constants";
 
 /**
@@ -180,7 +181,7 @@ function buildPopupContent(spot: SpotCard): string {
   const level = spot.congestion?.level ?? "unknown";
   const levelMeta = LEVEL_BADGE[level] ?? LEVEL_BADGE.unknown;
   const categoryLabel = CATEGORY_LABEL[spot.category] ?? spot.category;
-  const matchText = spot.match_score != null ? `매칭 ${Math.round(spot.match_score * 100)}%` : "취향 정보 없음";
+  const matchText = spot.match_score != null ? `매칭 ${matchTier(spot.match_score).label}` : "취향 정보 없음";
 
   const container = document.createElement("div");
   container.className = "spot-map-popup";

@@ -48,7 +48,10 @@ def get_region_repository() -> RegionRepository:
 def get_spot_repository() -> SpotRepository:
     # MVP-4: collector가 만든 spots_seed.json 기반 인메모리 리포지토리(프로세스 시작 시 1회 로드).
     # 상용 전환 시 여기서 DbSpotRepository/PostGIS 로 교체(엔드포인트 계약 불변).
-    return JsonSpotRepository()
+    # 소개글에서 뽑아 캐시한 파생 태그를 시드 태그에 더한다(배치가 채움, 없으면 시드만).
+    from .repositories.spot_tag_cache import SpotTagCache
+
+    return JsonSpotRepository(tag_cache=SpotTagCache(settings.summary_store_dir))
 
 
 @lru_cache(maxsize=1)

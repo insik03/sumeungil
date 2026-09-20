@@ -25,15 +25,23 @@ def _slice(vec: list[float]) -> list[float]:
     return vec[_SLICE_LO:_SLICE_HI]
 
 
-def cosine_spot_fit(user_vector: list[float], spot_vector: list[float]) -> float:
-    """mood+spot_pref 슬라이스의 코사인 유사도 [0.0, 1.0]. 한쪽이 0벡터면 0.0."""
+def cosine_spot_fit(
+    user_vector: list[float], spot_vector: list[float], weights: list[float] | None = None
+) -> float:
+    """mood+spot_pref 슬라이스의 코사인 유사도 [0.0, 1.0]. 한쪽이 0벡터면 0.0.
+
+    weights(36차원, 선택)를 주면 **희소한 태그가 맞을수록 더 높게** 친다(가중 코사인, IDF). 스팟 태그가
+    1~2개뿐이면 이진 코사인은 몇 가지 값에만 몰리는데("맛집" 545곳 = "산책로" 27곳과 같은 점수),
+    드문 태그를 더 쳐주면 실제 분포에서 점수가 갈린다. weights=None 이면 종전 이진 코사인과 같다.
+    """
     u = _slice(user_vector)
     s = _slice(spot_vector)
     if len(u) != len(s):
         return 0.0
-    dot = sum(a * b for a, b in zip(u, s))
-    nu = sqrt(sum(a * a for a in u))
-    ns = sqrt(sum(b * b for b in s))
+    w = _slice(weights) if weights is not None and len(weights) == len(user_vector) else [1.0] * len(u)
+    dot = sum(x * a * b for x, a, b in zip(w, u, s))
+    nu = sqrt(sum(x * a * a for x, a in zip(w, u)))
+    ns = sqrt(sum(x * b * b for x, b in zip(w, s)))
     if nu == 0.0 or ns == 0.0:
         return 0.0
     return dot / (nu * ns)
