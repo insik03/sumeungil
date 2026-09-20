@@ -176,7 +176,8 @@ export default function CongestionBoard({ areaCd, sigunguCd, marquee = false, su
             /* 옆으로 천천히 순환하는 띠(대표 지시). 목록을 두 번 이어 붙이고 -50% 까지
                움직이면 이음매 없이 무한 반복된다. 재생 시간은 카드 수에 비례시켜
                개수가 달라도 **흐르는 속도가 일정**하게 유지한다(카드당 3.2초).
-               마우스를 올리면 멈춘다(읽고 싶을 때 붙잡을 수 있게).
+               마우스를 올리면 멈춘다(읽고 싶을 때 붙잡을 수 있게). 클릭은 멈추지 않는다 —
+               키보드(:focus-visible)로 들어왔을 때만 멈춘다(2026-09-20 대표 지적, globals.css).
                prefers-reduced-motion 사용자에게는 애니메이션을 끄고 가로 스크롤로 준다. */
             <div className="board-marquee" role="list" aria-label="예상 혼잡도 순환 목록">
               <div
