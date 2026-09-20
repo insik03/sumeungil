@@ -14,6 +14,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deployment-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh -n deploy/backup/backup.sh && sh -n deploy/backup/retention.sh && sh -n deploy/security/host-guard.sh
+      - run: python3 deploy/backup/verify_retention.py
+      - run: docker compose -f deploy/docker-compose.yml config --no-env-resolution --no-interpolate --quiet
+      - run: docker build -t sumeungil-backup-ci deploy/backup
+      - name: BusyBox expiry smoke test (no production data)
+        run: |
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --entrypoint sh sumeungil-backup-ci -c '
+            mkdir /tmp/expiry-check
+            touch -t 202001010000 /tmp/expiry-check/sumeungil-old.dump
+            touch /tmp/expiry-check/sumeungil-new.dump
+            BACKUP_DIR=/tmp/expiry-check sh /usr/local/bin/retention.sh once
+            test ! -f /tmp/expiry-check/sumeungil-old.dump && test -f /tmp/expiry-check/sumeungil-new.dump
+          '
   frontend:
     runs-on: ubuntu-latest
     defaults:
