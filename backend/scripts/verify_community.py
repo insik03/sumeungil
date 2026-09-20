@@ -35,10 +35,34 @@ os.environ["DATABASE_URL"] = _ISOLATED_DSN
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.deps import get_community_write_limiter, get_database  # noqa: E402
+from app.deps import get_community_write_limiter, get_database, get_user_auth  # noqa: E402
 from app.main import app  # noqa: E402
+from app.repositories import user_repo  # noqa: E402
 
 client = TestClient(app)
+
+
+def login(sub: str, name: str) -> TestClient:
+    """세션 쿠키가 박힌 TestClient. 2026-09-20 부터 후기 쓰기는 로그인 필수라 필요하다."""
+    db = get_database()
+    auth = get_user_auth()
+    user = db.write(
+        lambda conn: user_repo.upsert_login(
+            conn,
+            provider="google",
+            provider_sub=sub,
+            email=f"{sub}@example.com",
+            email_verified=True,
+            default_display_name=name,
+            now_iso="2026-09-20T00:00:00+09:00",
+        )
+    )
+    token, _ = auth.issue_token(
+        user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user)
+    )
+    c = TestClient(app)
+    c.cookies.set(auth.cookie_name, token)
+    return c
 
 
 def reset_quota() -> None:
@@ -70,145 +94,178 @@ def section(title: str) -> None:
 
 
 # --------------------------------------------------------------------------
-section("1. 리뷰 생성 / 요약 / 중복")
+section("1. 리뷰 생성 / 요약 / 중복 — 소유자는 계정이다(2026-09-20)")
 
 A, B, C = dev("a"), dev("b"), dev("c")
+# 기기 헤더는 여전히 필요하다(쓰기 쿼터가 기기 단위). 다만 **소유권은 계정**이다.
+ca, cb, cc = login("rev-a", "여행자A"), login("rev-b", "여행자B"), login("rev-c", "여행자C")
 TARGET = {"target_type": "spot", "target_id": "126508"}
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자A", "rating": 5,
-                                         "comment": "조용하고 좋았어요"}, headers=A)
+r = ca.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자A", "rating": 5,
+                                     "comment": "조용하고 좋았어요"}, headers=A)
 check("POST /reviews 201", r.status_code == 201, str(r.status_code))
 body = r.json()
 review_a_id = body["review"]["id"]
 check("생성본 is_mine=true", body["review"]["is_mine"] is True)
-check("응답에 device_id 미노출", "device_id" not in r.text)
+check("응답에 device_id·user_id 미노출", "device_id" not in r.text and "user_id" not in r.text)
 check("summary.count=1, average=5.0",
       body["summary"]["count"] == 1 and body["summary"]["average"] == 5.0, str(body["summary"]))
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자A2", "rating": 3},
-                headers=A)
-check("같은 기기+대상 중복 → 409 REVIEW_EXISTS",
+r = ca.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자A2", "rating": 3}, headers=A)
+check("같은 계정+대상 중복 → 409 REVIEW_EXISTS",
       r.status_code == 409 and r.json()["error"]["code"] == "REVIEW_EXISTS", str(r.status_code))
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자B", "rating": 2,
-                                         "comment": "사람이 많았어요"}, headers=B)
-check("다른 기기는 같은 대상에 작성 가능 201", r.status_code == 201, str(r.status_code))
+# 핵심 회귀: 종전엔 기기를 바꾸면 같은 사람이 같은 대상에 또 쓸 수 있었다.
+r = ca.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자A3", "rating": 1}, headers=dev("a2"))
+check("같은 계정이 **다른 기기**로 써도 409(기기 바꿔 중복 작성 불가)",
+      r.status_code == 409 and r.json()["error"]["code"] == "REVIEW_EXISTS", str(r.status_code))
+
+r = cb.post("/api/v1/reviews", json={**TARGET, "nickname": "여행자B", "rating": 2,
+                                     "comment": "사람이 많았어요"}, headers=B)
+check("다른 계정은 같은 대상에 작성 가능 201", r.status_code == 201, str(r.status_code))
 review_b_id = r.json()["review"]["id"]
 
-r = client.get("/api/v1/reviews", params={**TARGET, "limit": 10}, headers=B)
+r = cb.get("/api/v1/reviews", params={**TARGET, "limit": 10})
 data = r.json()
 check("GET /reviews 200 + 2건", r.status_code == 200 and data["total"] == 2, str(data.get("total")))
 check("평균 3.5 / 분포 5:1,2:1",
       data["summary"]["average"] == 3.5 and data["summary"]["distribution"]["5"] == 1
       and data["summary"]["distribution"]["2"] == 1, str(data["summary"]))
 mine = {i["id"]: i["is_mine"] for i in data["items"]}
-check("is_mine 은 헤더 기기 것만 true",
+check("is_mine 은 로그인 계정 것만 true",
       mine.get(review_b_id) is True and mine.get(review_a_id) is False, str(mine))
-check("목록 응답에 device_id 미노출", "device_id" not in r.text)
+check("목록 응답에 device_id·user_id 미노출", "device_id" not in r.text and "user_id" not in r.text)
+
+# 핵심 회귀: 기기가 달라도 로그인만 하면 내 글이 내 글로 보인다(종전엔 저장공간 지우면 남의 글이 됐다).
+ca2 = login("rev-a", "여행자A")  # 같은 계정, 새 클라이언트(= 다른 기기)
+r = ca2.get("/api/v1/reviews", params={**TARGET, "limit": 10})
+mine2 = {i["id"]: i["is_mine"] for i in r.json()["items"]}
+check("기기가 달라도 같은 계정이면 is_mine=true", mine2.get(review_a_id) is True, str(mine2))
 
 r = client.get("/api/v1/reviews", params=TARGET)
-check("헤더 없이 조회 시 is_mine 전부 false",
-      all(not i["is_mine"] for i in r.json()["items"]))
+check("비로그인 조회는 200 + is_mine 전부 false",
+      r.status_code == 200 and all(not i["is_mine"] for i in r.json()["items"]), str(r.status_code))
 
 # --------------------------------------------------------------------------
-section("2. 소유권 (수정 / 삭제)")
+section("2. 로그인 필수 / 소유권 (수정 / 삭제)")
 
-r = client.patch(f"/api/v1/reviews/{review_a_id}", json={"rating": 1}, headers=B)
+# 2026-09-20 — 종전엔 이 게이트가 프론트에만 있어서 X-Device-Id 만 있으면 비로그인으로 쓸 수 있었다.
+r = client.post("/api/v1/reviews", json={**TARGET, "target_id": "9100", "nickname": "익명", "rating": 5},
+                headers=dev("anon"))
+check("비로그인 작성 → 401", r.status_code == 401, str(r.status_code))
+r = client.patch(f"/api/v1/reviews/{review_a_id}", json={"rating": 1}, headers=dev("anon"))
+check("비로그인 수정 → 401", r.status_code == 401, str(r.status_code))
+r = client.delete(f"/api/v1/reviews/{review_a_id}", headers=dev("anon"))
+check("비로그인 삭제 → 401", r.status_code == 401, str(r.status_code))
+r = client.post(f"/api/v1/reviews/{review_a_id}/report", json={"reason": "스팸이에요"}, headers=dev("anon"))
+check("비로그인 신고 → 401", r.status_code == 401, str(r.status_code))
+check("비로그인 작성 시도가 글을 남기지 않는다",
+      client.get("/api/v1/reviews", params={**TARGET, "target_id": "9100"}).json()["total"] == 0)
+
+r = cb.patch(f"/api/v1/reviews/{review_a_id}", json={"rating": 1}, headers=B)
 check("타인 수정 → 403 NOT_OWNER",
       r.status_code == 403 and r.json()["error"]["code"] == "NOT_OWNER", str(r.status_code))
 
-r = client.delete(f"/api/v1/reviews/{review_a_id}", headers=B)
+r = cb.delete(f"/api/v1/reviews/{review_a_id}", headers=B)
 check("타인 삭제 → 403 NOT_OWNER", r.status_code == 403, str(r.status_code))
 
-r = client.patch(f"/api/v1/reviews/{review_a_id}", json={"rating": 4, "comment": "다시 가고 싶어요"},
-                 headers=A)
-check("본인 수정 200 + 반영", r.status_code == 200 and r.json()["rating"] == 4, str(r.status_code))
-check("수정 응답 device_id 미노출", "device_id" not in r.text)
+# 기기를 바꿔도 내 글은 내가 고친다(계정 소유의 핵심 이득).
+r = ca2.patch(f"/api/v1/reviews/{review_a_id}", json={"rating": 4, "comment": "다시 가고 싶어요"},
+              headers=dev("a3"))
+check("본인 수정 200 + 반영(다른 기기에서도)",
+      r.status_code == 200 and r.json()["rating"] == 4, str(r.status_code))
+check("수정 응답 device_id·user_id 미노출", "device_id" not in r.text and "user_id" not in r.text)
 
-r = client.patch(f"/api/v1/reviews/{review_a_id}", json={"comment": None}, headers=A)
+r = ca.patch(f"/api/v1/reviews/{review_a_id}", json={"comment": None}, headers=A)
 check("comment:null → 한줄평 삭제", r.status_code == 200 and r.json()["comment"] is None)
 
-r = client.patch(f"/api/v1/reviews/{review_a_id}", json={}, headers=A)
+r = ca.patch(f"/api/v1/reviews/{review_a_id}", json={}, headers=A)
 check("빈 PATCH → 400 NOTHING_TO_UPDATE",
       r.status_code == 400 and r.json()["error"]["code"] == "NOTHING_TO_UPDATE", str(r.status_code))
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "익명", "rating": 5})
+r = ca.post("/api/v1/reviews", json={**TARGET, "target_id": "9101", "nickname": "익명", "rating": 5})
 check("device_id 헤더 없음 → 400 DEVICE_ID_REQUIRED",
       r.status_code == 400 and r.json()["error"]["code"] == "DEVICE_ID_REQUIRED", str(r.status_code))
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "익명", "rating": 5},
-                headers={"X-Device-Id": "short"})  # 8자 미만
+r = ca.post("/api/v1/reviews", json={**TARGET, "target_id": "9101", "nickname": "익명", "rating": 5},
+            headers={"X-Device-Id": "short"})  # 8자 미만
 check("형식 틀린 device_id → 400 INVALID_DEVICE_ID",
       r.status_code == 400 and r.json()["error"]["code"] == "INVALID_DEVICE_ID", str(r.status_code))
 
 # --------------------------------------------------------------------------
 section("3. 입력 검증 / 정제")
 
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": "9001", "nickname": "x" * 21, "rating": 5}, headers=C)
+# 범위·형식 검증은 pydantic 이 본문에서 먼저 거르므로 계정과 무관하게 그대로다.
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": "9001", "nickname": "x" * 21, "rating": 5}, headers=C)
 check("닉네임 21자 → 422", r.status_code == 422, str(r.status_code))
 
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": "9001", "nickname": "정상", "rating": 5,
-                      "comment": "가" * 301}, headers=C)
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": "9001", "nickname": "정상", "rating": 5,
+                  "comment": "가" * 301}, headers=C)
 check("한줄평 301자 → 422", r.status_code == 422, str(r.status_code))
 
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": "9001", "nickname": "정상", "rating": 6}, headers=C)
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": "9001", "nickname": "정상", "rating": 6}, headers=C)
 check("rating 6 → 422", r.status_code == 422, str(r.status_code))
 
-r = client.post("/api/v1/reviews",
-                json={"target_type": "hotel", "target_id": "1", "nickname": "정상", "rating": 3},
-                headers=C)
+r = cc.post("/api/v1/reviews",
+            json={"target_type": "hotel", "target_id": "1", "nickname": "정상", "rating": 3},
+            headers=C)
 check("target_type 정의 밖 → 422", r.status_code == 422, str(r.status_code))
 
+# 2026-09-20 — 로그인이 필수가 되면서 **닉네임은 항상 계정 표시 이름**이다. 본문의 nickname 은
+# 계약(부록 R) 유지를 위해 계속 받지만 서버가 통째로 무시한다 → 닉네임으로 뭘 주입하든 안 통한다.
 DIRTY = dev("dirty")
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": "9002",
-                      "nickname": "<b>해​커</b>",
-                      "rating": 4,
-                      "comment": "<script>alert(1)</script>줄바꿈제어﻿문자 &lt;img src=x onerror=1&gt;"},
-                headers=DIRTY)
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": "9002",
+                  "nickname": "<b>해​커</b>",
+                  "rating": 4,
+                  "comment": "<script>alert(1)</script>줄바꿈제어﻿문자 &lt;img src=x onerror=1&gt;"},
+            headers=DIRTY)
 item = r.json()["review"]
-check("HTML 태그 제거(닉네임)", r.status_code == 201 and "<" not in item["nickname"], item["nickname"])
+check("클라이언트 닉네임 무시 → 계정 표시 이름이 나간다",
+      r.status_code == 201 and item["nickname"] == "여행자C", item["nickname"])
 check("script 태그 제거(한줄평)", "<script>" not in item["comment"] and "alert(1)" in item["comment"],
       item["comment"])
 check("엔티티 인코딩 태그도 제거", "<img" not in item["comment"], item["comment"])
 check("제어문자/제로폭 제거",
-      "" not in item["comment"] and "﻿" not in item["comment"]
-      and "​" not in item["nickname"])
+      "" not in item["comment"] and "﻿" not in item["comment"])
 
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": "9003", "nickname": "  <b></b>  ", "rating": 4},
-                headers=dev("empty"))
-check("정제 후 빈 닉네임 → 400 INVALID_NICKNAME",
-      r.status_code == 400 and r.json()["error"]["code"] == "INVALID_NICKNAME", str(r.status_code))
+# 표시 이름 자체의 정제는 가입 경로(clean_user_text)가 책임진다 — verify_auth.py 참고.
+# 여기서는 "본문 닉네임이 빈 값이어도 계정 이름 덕에 성공한다"만 확인한다(종전 400 경로는 도달 불가).
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": "9003", "nickname": "  <b></b>  ", "rating": 4},
+            headers=dev("empty"))
+check("본문 닉네임이 비어도 201(계정 이름 사용)",
+      r.status_code == 201 and r.json()["review"]["nickname"] == "여행자C", str(r.status_code))
 
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": "abc;DROP TABLE reviews", "nickname": "정상",
-                      "rating": 4}, headers=dev("sqli"))
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": "abc;DROP TABLE reviews", "nickname": "정상",
+                  "rating": 4}, headers=dev("sqli"))
 check("target_id 문자셋 위반 → 400/422", r.status_code in (400, 422), str(r.status_code))
 r = client.get("/api/v1/reviews", params=TARGET)
 check("테이블 정상(인젝션 미발생)", r.status_code == 200 and r.json()["total"] == 2)
 
-r = client.post("/api/v1/reviews",
-                json={**TARGET, "target_id": 126509, "nickname": "숫자id", "rating": 5},
-                headers=dev("numid"))
+r = cc.post("/api/v1/reviews",
+            json={**TARGET, "target_id": 126509, "nickname": "숫자id", "rating": 5},
+            headers=dev("numid"))
 check("target_id 를 숫자로 보내도 수용(문자열 정규화)", r.status_code == 201, str(r.status_code))
 
 # --------------------------------------------------------------------------
 section("4. 신고 3건 → 자동 숨김")
 
-r = client.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "욕설"}, headers=A)
+# 2026-09-20 — 신고도 로그인 필수. 중복 방지 기준(기기 + IP 가명 지문)은 F-03 그대로다.
+r = ca.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "욕설"}, headers=A)
 check("신고 1 → 202 accepted", r.status_code == 202 and r.json()["hidden"] is False, r.text)
-r = client.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "욕설 또"}, headers=A)
+r = ca.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "욕설 또"}, headers=A)
 check("같은 기기 중복 신고는 카운트 안 됨(202, hidden=false)",
       r.status_code == 202 and r.json()["hidden"] is False, r.text)
 
-r = client.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "광고"}, headers=C)
+r = cc.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "광고"}, headers=C)
 check("신고 2(다른 기기) → 아직 노출", r.status_code == 202 and r.json()["hidden"] is False, r.text)
 
-r = client.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "스팸"}, headers=dev("d"))
+r = login("rev-d", "여행자D").post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "스팸"}, headers=dev("d"))
 check("신고 3(고유 3명) → 자동 hidden=true", r.status_code == 202 and r.json()["hidden"] is True,
       r.text)
 
@@ -217,19 +274,21 @@ ids = [i["id"] for i in r.json()["items"]]
 check("숨김 리뷰는 목록에서 제외", review_b_id not in ids, str(ids))
 check("숨김 리뷰는 요약 집계에서도 제외", r.json()["summary"]["count"] == 1, str(r.json()["summary"]))
 
-r = client.post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "추가"}, headers=dev("e"))
+r = login("rev-e", "여행자E").post(f"/api/v1/reviews/{review_b_id}/report", json={"reason": "추가"}, headers=dev("e"))
 check("이미 숨겨진 리뷰 신고 → 404", r.status_code == 404, str(r.status_code))
 
-r = client.post("/api/v1/reviews/99999999/report", json={"reason": "없음"}, headers=dev("f"))
+r = login("rev-f", "여행자F").post("/api/v1/reviews/99999999/report", json={"reason": "없음"}, headers=dev("f"))
 check("없는 리뷰 신고 → 404", r.status_code == 404, str(r.status_code))
 
 # --------------------------------------------------------------------------
 section("5. 일괄 요약 (N+1 방지)")
 
+# 대상이 서로 달라 한 계정으로도 3건을 쓸 수 있다(중복 제약은 계정+대상 조합이다).
+cbulk = login("rev-bulk", "요약러")
 for i, tid in enumerate(["7001", "7002", "7003"]):
-    client.post("/api/v1/reviews",
-                json={"target_type": "spot", "target_id": tid, "nickname": f"u{i}", "rating": i + 3},
-                headers=dev(f"bulk{i}"))
+    cbulk.post("/api/v1/reviews",
+               json={"target_type": "spot", "target_id": tid, "nickname": f"u{i}", "rating": i + 3},
+               headers=dev(f"bulk{i}"))
 
 db = get_database()
 # 2026-08-17 PostgreSQL 전환 — sqlite3.Connection.set_trace_callback(SQLite 전용)을
@@ -264,12 +323,14 @@ check("N+1 없음 — SELECT 정확히 1회", len(selects) == 1, f"selects={len(
 # --------------------------------------------------------------------------
 section("6. 쓰기 쿼터 (device_id 분당 3건)")
 
+# 쿼터는 계정 전환 뒤에도 **기기 단위**다(로그인해도 한 기기에서 분당 3건).
 SPAM = dev("spam")
+cspam = login("rev-spam", "도배러")
 codes = []
 for i in range(4):
-    rr = client.post("/api/v1/reviews",
-                     json={"target_type": "spot", "target_id": f"81{i}", "nickname": "도배",
-                           "rating": 5}, headers=SPAM)
+    rr = cspam.post("/api/v1/reviews",
+                    json={"target_type": "spot", "target_id": f"81{i}", "nickname": "도배",
+                          "rating": 5}, headers=SPAM)
     codes.append(rr.status_code)
 check("4번째 쓰기부터 429 RATE_LIMITED", codes[:3] == [201, 201, 201] and codes[3] == 429,
       str(codes))

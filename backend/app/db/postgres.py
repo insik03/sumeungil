@@ -44,7 +44,7 @@ logger = logging.getLogger("sumeungil.db.postgres")
 
 T = TypeVar("T")
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # --- 스키마 (기동 시 CREATE TABLE IF NOT EXISTS 로 멱등 적용) ----------------------
 #
@@ -64,6 +64,10 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         target_type TEXT    NOT NULL CHECK (target_type IN ('spot', 'festival')),
         target_id   TEXT    NOT NULL,
+        -- 2026-09-20: 후기 소유자는 **계정**이다(아래 schema_version 11 주석 참고).
+        -- device_id 는 남겨 둔다 — 쓰기 쿼터가 여전히 기기 단위이고, 같은 계정이 여러 기기에서
+        -- 쓴 글을 운영이 구분해야 할 때 근거가 된다. 소유권 판정에는 쓰지 않는다.
+        user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
         device_id   TEXT    NOT NULL,
         nickname    TEXT    NOT NULL,
         rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
@@ -74,8 +78,8 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     """
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_device_target
-        ON reviews (device_id, target_type, target_id)
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_user_target
+        ON reviews (user_id, target_type, target_id)
     """,
     """
     CREATE INDEX IF NOT EXISTS ix_reviews_target
@@ -343,6 +347,38 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     CREATE INDEX IF NOT EXISTS ix_course_likes_user
         ON course_likes (user_id)
     """,
+    # --- schema_version 11 (2026-09-20): 후기를 기기 소유 → **계정 소유**로 ------------------
+    #
+    # 종전엔 reviews 에 user_id 가 없고 소유권(수정·삭제·is_mine)을 device_id 로 판정했다.
+    # 그래서 (a) 브라우저 저장공간을 지우면 내 글을 내가 못 고치고, (b) API 자체는 로그인을
+    # 요구하지 않아 X-Device-Id 헤더만 있으면 닉네임을 직접 지정해 비로그인으로 후기를 남길 수
+    # 있었다. 대표 결정(2026-09-20) "데모가 아닌 실제로" — 계정 소유로 전환한다.
+    #
+    # 아래 4줄은 순서가 중요하고 멱등이다:
+    #   1) user_id 를 nullable 로 먼저 붙인다(기존 행이 있어도 통과).
+    #   2) 데모 기간에 쌓인 기기 소유 후기를 전량 삭제한다(대표 결정 "전부 삭제").
+    #      두 번째 기동부터는 NULL 행이 없어 0건을 지운다 — 멱등.
+    #   3) 그 뒤에야 NOT NULL 을 걸 수 있다(2 를 건너뛰면 여기서 실패한다).
+    #   4) 중복 방지 기준을 기기 → 계정으로 바꾼다. 구 인덱스를 남겨두면 같은 계정이 기기를
+    #      바꿔 쓴 두 번째 후기를 막지 못하면서 기기 기준 제약만 걸리는 엉뚱한 상태가 된다.
+    """
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users (id) ON DELETE CASCADE
+    """,
+    """
+    DELETE FROM reviews WHERE user_id IS NULL
+    """,
+    """
+    ALTER TABLE reviews ALTER COLUMN user_id SET NOT NULL
+    """,
+    """
+    DROP INDEX IF EXISTS ux_reviews_device_target
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_user_target
+        ON reviews (user_id, target_type, target_id)
+    """,
+    # 탈퇴·관리자 삭제의 역방향 조회용(위 unique 인덱스는 선두가 user_id 라 겸용 가능하지만,
+    # 목록 조회는 target 선두 인덱스를 쓰므로 여기선 별도 인덱스를 두지 않는다).
 )
 
 
