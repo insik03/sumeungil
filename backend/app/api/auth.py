@@ -59,7 +59,12 @@ from ..config import settings
 from ..deps import get_database, get_user_auth
 from ..repositories import user_repo
 from .auth_deps import require_login
-from ..schemas.auth import ConsentRequest, UpdateDisplayNameRequest, UserSessionResponse
+from ..schemas.auth import (
+    ConsentRequest,
+    SignupCompleteRequest,
+    UpdateDisplayNameRequest,
+    UserSessionResponse,
+)
 
 # 약관·개인정보처리방침 동의 버전 (2026-09-14). 프론트 lib/consent.ts 와 같은 값. 실질 변경 시 둘 다 올린다.
 TERMS_VERSION = "2026-09-14"
@@ -71,6 +76,7 @@ from ..schemas.community import NICKNAME_MAX
 from ..security.user_auth import UserAuth, UserIdentity
 from ..util.time import now_kst, to_iso_kst
 from ..util.user_text import clean_user_text, is_impersonating_staff
+from .community_common import error_response
 
 logger = logging.getLogger("sumeungil.api.auth")
 
@@ -81,6 +87,8 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 # 구글·카카오가 공유한다(한 번에 한 팝업만 여는 UX 전제 — LoginModal.tsx 참고).
 STATE_COOKIE_NAME = "sumeungil_oauth_state"
 STATE_COOKIE_PATH = "/api/v1/auth"
+# 2026-09-20 — 가입 보류 쿠키(약관 동의 전). 세션 쿠키가 아니다 — 이것만으로는 아무 API 도 못 쓴다.
+SIGNUP_COOKIE_NAME = "sumeungil_signup"
 
 # 팝업이 postMessage로 보내는 결과 봉투의 source 값. 2026-08-17 카카오 추가 전에는
 # "sumeungil-google-login"으로 구글 전용이었는데, 프론트(LoginModal.tsx)가 provider를
@@ -279,6 +287,45 @@ async def _complete_oauth_login(
         _clear_state_cookie(response)
         return response  # 세션 쿠키는 그대로(현재 계정 유지)
 
+    # 2026-09-20 대표 지시 — "약관 동의 안 하면 가입이 안 돼야". 신규 사용자(같은 provider sub 도,
+    # 검증된 같은 이메일 계정도 없음)는 여기서 계정·세션을 만들지 않는다. provider 가 증명한 신원을
+    # 15분짜리 서명 쿠키로 맡기고, /auth/signup/complete 가 동의+표시 이름을 받은 뒤에야 만든다.
+    try:
+        def _find_existing(conn):
+            found = user_repo.get_by_provider_sub(conn, provider=provider, provider_sub=provider_sub)
+            if found is None and email and email_verified:
+                found = user_repo.get_by_email(conn, email)
+            return found
+
+        existing = await db.aread(_find_existing)
+    except Exception:  # noqa: BLE001
+        logger.exception("%s 로그인 계정 조회 실패", provider)
+        response = _popup_close_html(ok=False, next_path=next_path)
+        _clear_state_cookie(response)
+        return response
+    if existing is None:
+        pending = auth.issue_pending_signup(
+            {
+                "provider": provider,
+                "sub": provider_sub,
+                "email": email,
+                "email_verified": bool(email_verified),
+                "name": display_name,
+            }
+        )
+        response = _popup_close_html(ok=True, name=display_name, is_new=True, next_path=next_path)
+        _clear_state_cookie(response)
+        response.set_cookie(
+            key=SIGNUP_COOKIE_NAME,
+            value=pending,
+            max_age=15 * 60,
+            httponly=True,
+            secure=auth.cookie_secure,
+            samesite="lax",
+            path=STATE_COOKIE_PATH,
+        )
+        return response
+
     try:
         user = await db.awrite(
             lambda conn: user_repo.upsert_login(
@@ -306,10 +353,8 @@ async def _complete_oauth_login(
     # 채워지고(user_repo.py INSERT 참고), 재로그인부터는 last_login_at만 갱신되어 반드시
     # created_at보다 뒤가 된다 — 사람이 브라우저 팝업+버튼 클릭을 1초 안에 두 번 왕복할 수
     # 없으므로 초 단위 비교로 충분하다.
-    is_new = user["created_at"] == user["last_login_at"]
-    response = _popup_close_html(
-        ok=True, name=user["display_name"], is_new=is_new, next_path=next_path
-    )
+    # 신규는 위에서 가입 보류로 빠졌으므로 여기는 항상 기존 사용자(재로그인 또는 이메일 통합).
+    response = _popup_close_html(ok=True, name=user["display_name"], is_new=False, next_path=next_path)
     _clear_state_cookie(response)
     _set_session_cookie(response, auth, token)
     return response
@@ -567,6 +612,52 @@ async def delete_account(request: Request):
         samesite="lax",
     )
     return response
+
+
+@router.post("/signup/complete", response_model=UserSessionResponse)
+async def signup_complete(request: Request, body: SignupCompleteRequest, response: Response):
+    """약관 동의 + 표시 이름 → 이때 비로소 계정을 만들고 세션을 발급한다(2026-09-20).
+    가입 보류 쿠키(콜백이 신규 사용자에게만 심음)가 없거나 만료·변조면 401 — 다시 로그인부터."""
+    auth = get_user_auth()
+    pending = auth.verify_pending_signup(request.cookies.get(SIGNUP_COOKIE_NAME)) if auth.enabled else None
+    if not pending:
+        return error_response(401, "SIGNUP_EXPIRED", "가입 정보가 만료됐어요. 다시 로그인해 주세요.")
+    if body.terms_version != TERMS_VERSION:
+        return error_response(400, "TERMS_VERSION_MISMATCH", "약관 버전이 바뀌었어요. 화면을 새로고침해 주세요.")
+    cleaned = clean_user_text(body.display_name, max_chars=NICKNAME_MAX)
+    if not cleaned:
+        return error_response(400, "INVALID_NAME", "표시 이름을 입력해주세요.")
+    if is_impersonating_staff(cleaned):
+        return error_response(400, "NAME_RESERVED", "운영자로 오인될 수 있는 이름은 쓸 수 없어요.")
+    provider = pending.get("provider")
+    if provider not in ("google", "kakao", "naver") or not pending.get("sub"):
+        return error_response(401, "SIGNUP_EXPIRED", "가입 정보가 올바르지 않아요. 다시 로그인해 주세요.")
+    now_iso = to_iso_kst(now_kst())
+    db = get_database()
+
+    def _tx(conn):
+        user = user_repo.upsert_login(
+            conn,
+            provider=provider,  # type: ignore[arg-type]
+            provider_sub=str(pending["sub"]),
+            email=pending.get("email"),
+            email_verified=bool(pending.get("email_verified")),
+            default_display_name=cleaned,
+            now_iso=now_iso,
+        )
+        user = user_repo.update_display_name(conn, user_id=user["id"], display_name=cleaned) or user
+        return user_repo.set_terms_agreed(conn, user_id=user["id"], version=TERMS_VERSION, now_iso=now_iso) or user
+
+    user = await db.awrite(_tx)
+    token, _ = auth.issue_token(user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user))
+    _set_session_cookie(response, auth, token)
+    response.delete_cookie(SIGNUP_COOKIE_NAME, path=STATE_COOKIE_PATH)
+    return UserSessionResponse(
+        authenticated=True,
+        name=user["display_name"],
+        terms_agreed=_terms_agreed(user),
+        providers=user_repo.linked_providers(user),
+    )
 
 
 @router.patch("/display-name", response_model=UserSessionResponse)

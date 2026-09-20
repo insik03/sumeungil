@@ -48,6 +48,7 @@ import base64
 import binascii
 import hashlib
 import hmac
+import json
 import re
 import secrets
 import time
@@ -60,6 +61,8 @@ _KEY_LABEL = b"sumeungil.user.session.v1"
 _STATE_LABEL = b"sumeungil.user.oauth-state.v1"
 STATE_TTL_SEC = 10 * 60  # 로그인 시작~구글 리디렉션 왕복이 10분을 넘으면 재시도하게 한다.
 STATE_NONCE_BYTES = 16
+# 2026-09-20 — 약관 동의 전 '가입 보류' 토큰 수명. OAuth 인증은 됐지만 계정·세션은 아직 없는 상태를 15분만 유지한다.
+SIGNUP_TTL_SEC = 15 * 60
 
 EMAIL_MAX_LEN = 254
 
@@ -192,6 +195,42 @@ class UserAuth:
         body = f"{SCHEME_VERSION}.{_b64e(payload)}"
         sig = hmac.new(self._state_key, body.encode("ascii"), hashlib.sha256).digest()
         return f"{body}.{_b64e(sig)}", nonce
+
+    # --- 가입 보류 토큰(2026-09-20, 대표 지시 "약관 동의 안 하면 가입이 안 돼야") ------------
+    # OAuth 콜백에서 **신규** 사용자는 계정도 세션도 만들지 않고, provider 가 증명한 신원만 서명해
+    # HttpOnly 쿠키로 브라우저에 맡긴다. 약관 동의 + 표시 이름을 보내는 /auth/signup/complete 가 이
+    # 토큰을 검증한 뒤에야 계정을 만들고 세션을 발급한다. 동의 없이 창을 닫으면 아무것도 남지 않는다.
+
+    def issue_pending_signup(self, payload: dict, now: int | None = None) -> str:
+        issued = int(time.time()) if now is None else int(now)
+        data = dict(payload)
+        data["exp"] = issued + SIGNUP_TTL_SEC
+        raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        body = f"{SCHEME_VERSION}.{_b64e(raw)}"
+        sig = hmac.new(self._state_key, body.encode("ascii"), hashlib.sha256).digest()
+        return f"{body}.{_b64e(sig)}"
+
+    def verify_pending_signup(self, token: str | None, now: int | None = None) -> dict | None:
+        if not token:
+            return None
+        parts = token.split(".")
+        if len(parts) != 3 or parts[0] != SCHEME_VERSION:
+            return None
+        body = f"{parts[0]}.{parts[1]}"
+        try:
+            expected = hmac.new(self._state_key, body.encode("ascii"), hashlib.sha256).digest()
+            if not hmac.compare_digest(expected, _b64d(parts[2])):
+                return None
+            data = json.loads(_b64d(parts[1]).decode("utf-8"))
+        except (ValueError, TypeError, UnicodeDecodeError, binascii.Error):
+            return None
+        if not isinstance(data, dict):
+            return None
+        current = int(time.time()) if now is None else int(now)
+        if int(data.get("exp", 0)) <= current:
+            return None
+        data.pop("exp", None)
+        return data
 
     def verify_state(
         self, state: str | None, *, cookie_nonce: str | None, now: int | None = None
