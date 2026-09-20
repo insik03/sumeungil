@@ -1,4 +1,5 @@
 import { SpotCard as SpotCardType } from "../../lib/api";
+import { matchTier } from "../../lib/matchTier";
 import { CATEGORY_META, SIGNAL_LABEL } from "./constants";
 import RatingBadge from "../RatingBadge";
 
@@ -108,9 +109,9 @@ export default function RecommendSpotCard({ spot, tagLabelMap, rating, reviewCou
         <div className="spot-card__score">
           <span className="spot-card__score-label">매칭도</span>
           <div className="spot-card__score-bar">
-            <div style={{ width: `${Math.round(spot.match_score * 100)}%` }} />
+            <div style={{ width: `${matchTier(spot.match_score).fill}%` }} />
           </div>
-          <span className="spot-card__score-value">{Math.round(spot.match_score * 100)}%</span>
+          <span className="spot-card__score-value">{matchTier(spot.match_score).label}</span>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import { CompareSpot } from "../../lib/api";
+import { matchTier } from "../../lib/matchTier";
 import { SIGNAL_LABEL } from "../recommend/constants";
 
 interface FitValueProps {
@@ -16,16 +17,16 @@ export default function FitValue({ spot, tagLabelMap }: FitValueProps) {
     return <span className="compare-value compare-value--empty">취향 정보 없음</span>;
   }
 
-  const pct = Math.round(spot.match_score * 100);
+  const tier = matchTier(spot.match_score);
   const matchedTagLabels = spot.match_reasons?.matched_tags.map((v) => tagLabelMap[v] ?? v) ?? [];
   const signalLabels = spot.match_reasons?.signals.map((s) => SIGNAL_LABEL[s] ?? s) ?? [];
 
   return (
     <div className="compare-value">
       <div className="compare-value__fit-bar">
-        <div style={{ width: `${pct}%` }} />
+        <div style={{ width: `${tier.fill}%` }} />
       </div>
-      <span className="compare-value__fit-pct">{pct}% 적합</span>
+      <span className="compare-value__fit-pct">{tier.label}</span>
       {(matchedTagLabels.length > 0 || signalLabels.length > 0) && (
         <div className="compare-value__reason-tags">
           {signalLabels.map((label, i) => (

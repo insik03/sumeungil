@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # .dockerignore 가 .env·.venv·__pycache__·백업 시드(20MB+)를 제외한다.
 COPY app ./app
 # 운영 컨테이너에서 실행하는 관광지/축제 요약 배치. 같은 /app/data 볼륨에 결과를 저장한다.
-COPY scripts/build_spot_summaries.py scripts/build_festival_summaries.py ./scripts/
+COPY scripts/build_spot_summaries.py scripts/build_festival_summaries.py scripts/build_spot_tags.py ./scripts/
 
 # 비루트 실행 — 컨테이너 탈출 시 피해면 축소. 코드는 읽기 전용으로만 쓰므로 소유권 변경 불필요.
 RUN useradd --create-home --uid 10001 appuser
