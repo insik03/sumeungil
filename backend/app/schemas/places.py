@@ -97,6 +97,23 @@ class VisitTip(BaseModel):
     days: int = 14  # 판단에 쓴 조회 윈도우(일)
 
 
+class LiveWeather(BaseModel):
+    """그 **장소 좌표 기준** 지금 날씨(2026-09-20). 기상청 초단기실황(관측) + 초단기예보(하늘상태).
+
+    종전 FestivalWeather 는 관광코스 날씨(D18)라 해상도가 시도였고 강수확률 하나뿐이었다.
+    이건 5km 격자라 "이 장소에 지금 비가 오는지"를 그 장소 기준으로 답한다.
+    원천 실패·미확보면 이 필드 자체가 null 이다 — 날씨를 지어내지 않는다.
+    """
+
+    condition: str                 # "맑음" / "구름많음" / "흐림" / "비" / "눈" …
+    precipitation: bool            # 지금 비·눈이 오는가
+    temperature_c: float | None = None
+    humidity_pct: int | None = None
+    rain_1h_mm: float | None = None
+    observed_at: str               # "YYYY-MM-DD HH:00" (KST) — 언제 기준인지 밝힌다
+    source: str = "기상청 초단기실황"
+
+
 class SpotDetail(BaseModel):
     id: int
     name: str
@@ -121,6 +138,8 @@ class SpotDetail(BaseModel):
     images: list[SpotImage] = Field(default_factory=list)
     recommended_for: list[str] = Field(default_factory=list)  # 스팟 태그 기반 한국어 문구(서버 조립)
     visit_tip: VisitTip | None = None          # ★ 부록 M: 한적한 날/붐비는 날. 매칭 없으면 null
+    # 2026-09-20 additive — 이 스팟 좌표 기준 "지금 날씨". 원천 실패·미확보면 null.
+    live_weather: LiveWeather | None = None
     source: str = "tourapi_local_store"
 
 
@@ -275,6 +294,10 @@ class FestivalDetailResponse(BaseModel):
     images: list[SpotImage] = Field(default_factory=list)  # 표준데이터 출신(id>=900M)은 항상 []
     timing: FestivalTiming
     weather: FestivalWeather
+    # 2026-09-20 additive — 축제 지역 좌표 기준 "지금 날씨". 위 weather(D18 강수확률, 시도 해상도,
+    # 축제 기간이 예보 범위에 걸릴 때만)와는 **다른 원천·다른 질문**이라 필드를 따로 둔다.
+    # 원천 실패·좌표 미확보면 null.
+    live_weather: LiveWeather | None = None
 
 
 class RecommendMeta(BaseModel):

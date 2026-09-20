@@ -14,6 +14,7 @@ import { PlaceholderGlyph, placeholderTone } from "../FeaturedSpots";
 import { useLoginGate } from "../LoginGateProvider";
 import ReviewSection from "../reviews/ReviewSection";
 
+import LiveWeatherLine from "../weather/LiveWeatherLine";
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
   CATEGORY_META.map((c) => [c.value, c.label])
 );
@@ -269,6 +270,8 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
           {data.name}
         </h1>
         {data.address && <p className="spot-card__address">{data.address}</p>}
+        {/* 2026-09-20 — 이 스팟 좌표 기준 지금 날씨(기상청 초단기실황). 서버가 못 받으면 아무것도 안 그린다. */}
+        <LiveWeatherLine weather={data.live_weather} />
 
         <div className="spot-card__badges spot-detail__badges">
           {levelMeta ? (
