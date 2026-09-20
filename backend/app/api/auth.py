@@ -76,6 +76,7 @@ from ..schemas.community import NICKNAME_MAX
 from ..security.user_auth import UserAuth, UserIdentity
 from ..util.time import now_kst, to_iso_kst
 from ..util.user_text import clean_user_text, is_impersonating_staff
+from .community_common import error_response
 
 logger = logging.getLogger("sumeungil.api.auth")
 
