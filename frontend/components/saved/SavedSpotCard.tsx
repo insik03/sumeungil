@@ -92,8 +92,8 @@ export default function SavedSpotCard({ spot, onRemove }: SavedSpotCardProps) {
     <div className="spot-card-wrap" role="listitem">
       <Link
         className="spot-card-link"
-        aria-label={`${spot.name} 상세 비교 보기`}
-        href={`/compare?hidden_id=${spot.id}&region_code=${encodeURIComponent(spot.region_code)}`}
+        aria-label={`${spot.name} 상세 보기`}
+        href={`/spot/${spot.id}?region_code=${encodeURIComponent(spot.region_code)}`}
       >
         <article className="spot-card spot-card--with-cart-toggle">
           <div className="spot-card__head">
