@@ -374,16 +374,38 @@ def phase_b() -> int:
 
     section("B4. 리뷰 운영 (숨김/복구/삭제 + 공개 API 반영)")
 
+    # 2026-09-20 — 후기는 계정 소유라 쓰기에 로그인이 필요하다(기기 헤더는 쿼터용으로 유지).
+    from app.deps import get_user_auth as _get_user_auth
+    from app.repositories import user_repo as _user_repo
+
+    _uauth = _get_user_auth()
+
+    def _review_client(sub: str, name: str) -> TestClient:
+        u = get_database().write(
+            lambda conn: _user_repo.upsert_login(
+                conn, provider="google", provider_sub=sub, email=f"{sub}@example.com",
+                email_verified=True, default_display_name=name,
+                now_iso="2026-09-20T00:00:00+09:00",
+            )
+        )
+        tok, _ = _uauth.issue_token(
+            user_id=u["id"], email=u["email"], epoch=_user_repo.session_epoch_of(u)
+        )
+        c = TestClient(app)
+        c.cookies.set(_uauth.cookie_name, tok)
+        return c
+
     dev_a = {"X-Device-Id": f"dev-a-{uuid.uuid4().hex[:12]}"}
     dev_b = {"X-Device-Id": f"dev-b-{uuid.uuid4().hex[:12]}"}
+    ca, cb = _review_client("adm-rev-a", "여행자A"), _review_client("adm-rev-b", "여행자B")
     target = {"target_type": "spot", "target_id": "126508"}
-    rid_a = client.post("/api/v1/reviews", json={**target, "nickname": "여행자A", "rating": 5,
-                                                 "comment": "조용하고 좋았어요"},
-                        headers=dev_a).json()["review"]["id"]
-    rid_b = client.post("/api/v1/reviews", json={**target, "nickname": "여행자B", "rating": 1,
-                                                 "comment": "광고글입니다"},
-                        headers=dev_b).json()["review"]["id"]
-    client.post(f"/api/v1/reviews/{rid_b}/report", json={"reason": "광고"}, headers=dev_a)
+    rid_a = ca.post("/api/v1/reviews", json={**target, "nickname": "여행자A", "rating": 5,
+                                             "comment": "조용하고 좋았어요"},
+                    headers=dev_a).json()["review"]["id"]
+    rid_b = cb.post("/api/v1/reviews", json={**target, "nickname": "여행자B", "rating": 1,
+                                             "comment": "광고글입니다"},
+                    headers=dev_b).json()["review"]["id"]
+    ca.post(f"/api/v1/reviews/{rid_b}/report", json={"reason": "광고"}, headers=dev_a)
 
     r = client.get("/api/v1/admin/reviews", params={"status": "all", "sort": "recent"})
     check("GET /admin/reviews 200", r.status_code == 200, str(r.status_code))
@@ -596,9 +618,14 @@ def phase_b() -> int:
     r = client.get("/api/v1/reviews", params=target)
     check("공개 리뷰 목록 정상 + device_id 미노출",
           r.status_code == 200 and "device_id" not in r.text)
-    r = client.post("/api/v1/reviews", json={**target, "nickname": "여행자C", "rating": 4},
-                    headers={"X-Device-Id": f"dev-c-{uuid.uuid4().hex[:12]}"})
-    check("공개 리뷰 작성 여전히 201", r.status_code == 201, str(r.status_code))
+    r = _review_client("adm-rev-c", "여행자C").post(
+        "/api/v1/reviews", json={**target, "nickname": "여행자C", "rating": 4},
+        headers={"X-Device-Id": f"dev-c-{uuid.uuid4().hex[:12]}"})
+    check("로그인 리뷰 작성 여전히 201", r.status_code == 201, str(r.status_code))
+    r = client.post("/api/v1/reviews", json={**target, "target_id": "126599", "nickname": "익명",
+                                             "rating": 4},
+                    headers={"X-Device-Id": f"dev-anon-{uuid.uuid4().hex[:12]}"})
+    check("비로그인 리뷰 작성 → 401", r.status_code == 401, str(r.status_code))
 
     root.removeHandler(handler)
     return summary("phase B")

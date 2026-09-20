@@ -1,9 +1,9 @@
 """리뷰(별점+한줄평) 업무 로직 — 부록 R.
 
 ## 이 파일이 지키는 3가지
-1. **소유권**: 수정·삭제는 `device_id` 가 일치할 때만. 판정은 조회와 **같은 트랜잭션 안**에서
+1. **소유권**: 수정·삭제는 `user_id`(로그인 계정)가 일치할 때만. 판정은 조회와 **같은 트랜잭션 안**에서
    한다(읽고 나서 따로 쓰면 그 사이에 삭제/변경이 끼어들 수 있다).
-2. **비노출**: `device_id` 는 어떤 응답에도 나가지 않는다. 서버가 `is_mine` 만 계산해 준다.
+2. **비노출**: `user_id`·`device_id` 는 어떤 응답에도 나가지 않는다. 서버가 `is_mine` 만 계산해 준다.
 3. **LLM 미주입**: 이 모듈이 만들어내는 어떤 문자열도 LLM 프롬프트로 흘러가지 않는다.
    (요약/컨시어지/코스 AI 는 이 모듈을 import 하지 않는다 — 그 불변식이 인젝션 방어선이다.)
 
@@ -54,9 +54,12 @@ def _summary_from_hist(hist: dict[int, int]) -> ReviewSummary:
     return ReviewSummary(average=round(total / count, 2), count=count, distribution=distribution)
 
 
-def _to_item(row: dict[str, Any], device_id: str | None) -> ReviewItem:
-    """DB row → 응답 모델. **여기서 device_id 를 떨어뜨린다**(응답 비노출 지점)."""
-    is_mine = bool(device_id) and row.get("device_id") == device_id
+def _to_item(row: dict[str, Any], viewer_user_id: int | None) -> ReviewItem:
+    """DB row → 응답 모델. **여기서 user_id 를 떨어뜨린다**(응답 비노출 지점).
+
+    2026-09-20 — is_mine 판정이 기기에서 **계정**으로 바뀌었다. 로그인만 하면 어느 기기에서든
+    내 글이 내 글로 보인다(종전엔 브라우저 저장공간을 지우면 내 글을 못 고쳤다)."""
+    is_mine = viewer_user_id is not None and row.get("user_id") == viewer_user_id
     return ReviewItem(
         id=int(row["id"]),
         nickname=row["nickname"],
@@ -110,7 +113,7 @@ async def list_reviews(
     target_id: str,
     limit: int,
     offset: int,
-    device_id: str | None,
+    viewer_user_id: int | None,
 ) -> ReviewListResponse:
     target_id = _require_target_id(target_id)
     limit = _clamp(limit, 1, review_repo.MAX_LIMIT)
@@ -125,7 +128,7 @@ async def list_reviews(
             offset=offset,
             # QA M-3: 본인이 쓴 글은 숨김이어도 목록에 포함된다(자력 복구 경로).
             # 타인에게는 종전 그대로 보이지 않는다.
-            viewer_device_id=device_id,
+            viewer_user_id=viewer_user_id,
         )
         hist = review_repo.rating_histogram(conn, target_type=target_type, target_id=target_id)
         return rows, hist
@@ -137,7 +140,7 @@ async def list_reviews(
     summary = _summary_from_hist(hist)
     return ReviewListResponse(
         summary=summary,
-        items=[_to_item(r, device_id) for r in rows],
+        items=[_to_item(r, viewer_user_id) for r in rows],
         total=summary.count,
     )
 
@@ -172,7 +175,7 @@ async def summary_map(
 
 
 async def create_review(
-    db: Database, *, req: ReviewCreateRequest, device_id: str
+    db: Database, *, req: ReviewCreateRequest, user_id: int, device_id: str
 ) -> ReviewCreateResponse:
     target_id = _require_target_id(req.target_id)
     nickname = _clean_nickname(req.nickname)
@@ -182,8 +185,8 @@ async def create_review(
     def _tx(conn: psycopg.Connection):
         # 사전 조회 + 유니크 인덱스 **이중 방어**. 사전 조회는 친절한 409 를 위해서,
         # 유니크 인덱스는 동시 요청 두 건이 동시에 통과하는 경우를 막기 위해서다.
-        existing = review_repo.find_by_device_target(
-            conn, device_id=device_id, target_type=req.target_type, target_id=target_id
+        existing = review_repo.find_by_user_target(
+            conn, user_id=user_id, target_type=req.target_type, target_id=target_id
         )
         if existing:
             # QA M-3: 기존 글이 숨김 상태인지를 detail 로 알려준다 — 프론트가 "가려진 상태이니
@@ -193,6 +196,7 @@ async def create_review(
             conn,
             target_type=req.target_type,
             target_id=target_id,
+            user_id=user_id,
             device_id=device_id,
             nickname=nickname,
             rating=req.rating,
@@ -213,8 +217,8 @@ async def create_review(
         # 409 자체는 그대로 나가야 하므로 실패 시 false 로 둔다).
         try:
             def _read(conn: psycopg.Connection):
-                return review_repo.find_by_device_target(
-                    conn, device_id=device_id, target_type=req.target_type, target_id=target_id
+                return review_repo.find_by_user_target(
+                    conn, user_id=user_id, target_type=req.target_type, target_id=target_id
                 )
 
             existing = await db.aread(_read)
@@ -229,12 +233,12 @@ async def create_review(
     )
     assert row is not None  # 방금 INSERT 한 행 — 같은 트랜잭션에서 반드시 읽힌다
     return ReviewCreateResponse(
-        review=_to_item(row, device_id), summary=_summary_from_hist(hist)
+        review=_to_item(row, user_id), summary=_summary_from_hist(hist)
     )
 
 
 async def update_review(
-    db: Database, *, review_id: int, req: ReviewUpdateRequest, device_id: str
+    db: Database, *, review_id: int, req: ReviewUpdateRequest, user_id: int
 ) -> ReviewItem:
     fields = req.model_fields_set
     if not fields:
@@ -250,7 +254,7 @@ async def update_review(
         row = review_repo.get_review(conn, review_id)
         if row is None:
             raise errors.not_found("후기를 찾을 수 없습니다.")
-        if row["device_id"] != device_id:
+        if row["user_id"] != user_id:
             raise errors.not_owner()
         review_repo.update_review(
             conn,
@@ -265,15 +269,15 @@ async def update_review(
 
     row = await db.awrite(_tx)
     assert row is not None
-    return _to_item(row, device_id)
+    return _to_item(row, user_id)
 
 
-async def delete_review(db: Database, *, review_id: int, device_id: str) -> None:
+async def delete_review(db: Database, *, review_id: int, user_id: int) -> None:
     def _tx(conn: psycopg.Connection) -> None:
         row = review_repo.get_review(conn, review_id)
         if row is None:
             raise errors.not_found("후기를 찾을 수 없습니다.")
-        if row["device_id"] != device_id:
+        if row["user_id"] != user_id:
             raise errors.not_owner()
         review_repo.delete_review(conn, review_id=review_id)
 

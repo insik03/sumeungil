@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import psycopg
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from ..config import settings
@@ -51,6 +51,12 @@ def to_response(exc: BaseException, *, context: str) -> JSONResponse:
     if isinstance(exc, CommunityError):
         # 업무 규칙 위반은 정상 흐름이다 — 스택트레이스를 남기지 않는다(로그 노이즈 방지).
         return error_response(exc.status, exc.code, exc.message, exc.detail)
+    if isinstance(exc, HTTPException):
+        # 2026-09-20 — 후기 쓰기가 require_login(auth_deps) 을 타면서 HTTPException(401) 이
+        # 이 블록까지 올라온다. 종전엔 분기가 없어 **401 이 500 으로 바뀌었다** — 로그인하라는
+        # 신호를 프론트가 못 받고 "서버 오류"로 보였다. 커뮤니티 공통 에러 봉투로 옮겨 담는다.
+        code = "UNAUTHORIZED" if exc.status_code == 401 else "FORBIDDEN" if exc.status_code == 403 else "ERROR"
+        return error_response(exc.status_code, code, str(exc.detail or "로그인이 필요합니다."))
     if isinstance(exc, psycopg.Error):
         # 디스크 가득참·권한·파일 손상 등. 사용자에게는 "잠시 후" 로만 알린다.
         logger.exception("%s 저장소 오류", context)
