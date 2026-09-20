@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
+import { SAVED_SPOTS_CHANGED, SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
 import SavedSpotCard from "./saved/SavedSpotCard";
 import VisitStampsSection from "./saved/VisitStampsSection";
 import SharedCoursesSection from "./saved/SharedCoursesSection";
@@ -26,14 +26,17 @@ export default function SavedContent() {
   const [spots, setSpots] = useState<SavedSpot[] | null>(null);
 
   useEffect(() => {
-    setSpots(loadSavedSpots());
+    const refresh = () => setSpots(loadSavedSpots());
+    refresh();
+    window.addEventListener(SAVED_SPOTS_CHANGED, refresh);
     // 2026-09-16 — 계정 보관함(서버)이 정본. 캐시를 먼저 보여주고 서버 값으로 갱신한다.
     let alive = true;
-    void syncSavedSpotsFromServer().then((list) => {
-      if (alive) setSpots(list);
+    void syncSavedSpotsFromServer().then(() => {
+      if (alive) setSpots(loadSavedSpots());
     });
     return () => {
       alive = false;
+      window.removeEventListener(SAVED_SPOTS_CHANGED, refresh);
     };
   }, []);
 
@@ -54,7 +57,7 @@ export default function SavedContent() {
           내가 저장한 스팟
         </h1>
         <p className="saved-content__intro">
-          이 기기에만 저장돼요 — 다른 기기·브라우저에서는 보이지 않아요(F.2-2, 서버 저장 없음).
+          로그인한 계정에 저장되어 다른 기기에서도 볼 수 있어요. 예전에 비로그인으로 저장한 목록은 기기에 남아 있으며 계정으로 자동 이전되지 않아요.
         </p>
 
         {spots !== null && sorted.length === 0 && (

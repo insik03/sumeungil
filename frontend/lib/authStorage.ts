@@ -52,7 +52,7 @@ export function setLoggedInName(name: string): void {
 }
 
 /** 로그아웃. 로컬 표시 캐시를 즉시 지우고(체감 즉시 반영), 서버 세션 쿠키도 지운다
- *  (실패해도 로컬 상태는 이미 지워졌으니 화면은 정상 — fire-and-forget). */
+ *  서버 세션 종료에 실패하면 완료로 오인하지 않도록 알린다. */
 export function logout(): void {
   if (!isBrowser()) return;
   // 2026-09-05 리뷰 P1 — 온보딩 결과(자유서술 원문 포함)는 이 계정의 것이라 같이 지운다. 안 지우면
@@ -62,14 +62,16 @@ export function logout(): void {
     window.localStorage.removeItem(NICKNAME_KEY);
     // 2026-09-16 — 저장한 스팟은 이제 계정 데이터(서버 정본)라 로컬 캐시도 같이 지운다. 키 문자열은
     // savedSpotsStorage.ts 의 SAVED_SPOTS_STORAGE_KEY 와 같다(그 모듈이 이 파일을 import 하므로 순환 방지).
-    window.localStorage.removeItem("sumeungil:saved-spots:v1");
+    // Legacy guest saves are independent of the signed-in account.
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   } catch {
     /* noop */
   }
-  fetch(`${API_BASE}/api/v1/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {
-    // 네트워크 실패해도 로컬은 이미 로그아웃 상태 — 쿠키는 만료되면 어차피 무효화된다.
-  });
+  fetch(`${API_BASE}/api/v1/auth/logout`, { method: "POST", credentials: "include" })
+    .then((response) => { if (!response.ok) throw new Error("logout failed"); })
+    .catch(() => {
+      window.alert("서버 로그아웃을 완료하지 못했습니다. 연결을 복구한 뒤 새로고침하고 다시 로그아웃해주세요.");
+    });
 }
 
 /** 서버 세션 진실과 localStorage 캐시를 맞춘다(QA M-2, 2026-08-17).
@@ -94,6 +96,7 @@ export async function syncSessionFromServer(): Promise<SessionInfo | null> {
       // 서버는 비로그인인데 로컬엔 이름이 남아있다 — 세션 만료 등. 조용히 로컬만 정리
       // (서버 쿠키는 이미 없으니 /logout 호출은 불필요). 온보딩 결과도 같이(리뷰 P1).
       clearOnboardingResult();
+      // Legacy guest saves are independent of the signed-in account.
       window.localStorage.removeItem(NICKNAME_KEY);
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
     }
@@ -111,20 +114,14 @@ export async function syncSessionFromServer(): Promise<SessionInfo | null> {
  *  서버 삭제가 실제로 끝난 뒤에 취소를 완료로 쳐야 한다. */
 export async function deleteAccount(): Promise<void> {
   if (!isBrowser()) return;
-  clearOnboardingResult(); // 리뷰 P1 — 탈퇴한 계정의 자유서술이 다음 계정에 섞이지 않게
+  const response = await fetch(`${API_BASE}/api/v1/auth/me`, { method: "DELETE", credentials: "include" });
+  if (!response.ok) throw new Error("계정을 삭제하지 못했습니다. 로그인 상태와 연결을 확인하고 다시 시도해주세요.");
   try {
+    clearOnboardingResult();
     window.localStorage.removeItem(NICKNAME_KEY);
-    // 2026-09-16 — 저장한 스팟은 이제 계정 데이터(서버 정본)라 로컬 캐시도 같이 지운다. 키 문자열은
-    // savedSpotsStorage.ts 의 SAVED_SPOTS_STORAGE_KEY 와 같다(그 모듈이 이 파일을 import 하므로 순환 방지).
-    window.localStorage.removeItem("sumeungil:saved-spots:v1");
+  } catch {
+    // The server deletion succeeded even if browser storage is unavailable.
+  } finally {
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
-  } catch {
-    /* noop */
-  }
-  try {
-    await fetch(`${API_BASE}/api/v1/auth/me`, { method: "DELETE", credentials: "include" });
-  } catch {
-    // 네트워크 실패 — 로컬은 이미 로그아웃처럼 보이지만 서버 계정 행은 남을 수 있다.
-    // 위험하지 않다: 다음 로그인 때 upsert_login이 같은 google_sub 행을 재사용할 뿐이다.
   }
 }

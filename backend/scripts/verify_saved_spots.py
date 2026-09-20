@@ -106,6 +106,15 @@ try:
     check("재저장 시 스냅샷 갱신(None)", next(i for i in items if i["id"] == s1.id)["congestion"] is None)
     check("saved_at 갱신(같거나 이후)", r.json()["saved_at"] >= first_saved_at)
 
+    from app.repositories import saved_spot_repo
+    previous_limit = saved_spot_repo.MAX_PER_USER
+    saved_spot_repo.MAX_PER_USER = 1
+    try:
+        check("상한 도달 후 기존 스팟 갱신 허용", me.put(f"/api/v1/saved-spots/{s1.id}", json={}).status_code == 200)
+        check("상한 도달 후 신규 스팟 거부", me.put(f"/api/v1/saved-spots/{s2.id}", json={}).status_code == 409)
+    finally:
+        saved_spot_repo.MAX_PER_USER = previous_limit
+
     print("\n[d] 순서")
     time.sleep(1.1)  # saved_at 이 초 단위라 순서 판정이 흔들리지 않게
     me.put(f"/api/v1/saved-spots/{s2.id}", json={})

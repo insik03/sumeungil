@@ -15,6 +15,9 @@ import psycopg
 
 MAX_PER_USER = 500
 
+class SavedSpotLimitError(ValueError):
+    pass
+
 
 def list_by_user(conn: psycopg.Connection, *, user_id: int) -> list[dict[str, Any]]:
     rows = conn.execute(
@@ -39,6 +42,11 @@ def upsert(
     now_iso: str,
 ) -> dict[str, Any]:
     """같은 스팟을 다시 저장하면 저장 시각·스냅샷만 갱신한다(중복 행 없음)."""
+    # Serialize capacity checks per account within the write transaction.
+    conn.execute("SELECT id FROM users WHERE id = %s FOR UPDATE", (user_id,))
+    exists = conn.execute("SELECT 1 FROM saved_spots WHERE user_id = %s AND spot_id = %s", (user_id, spot_id)).fetchone()
+    if not exists and count_by_user(conn, user_id=user_id) >= MAX_PER_USER:
+        raise SavedSpotLimitError()
     cur = conn.execute(
         """
         INSERT INTO saved_spots (user_id, spot_id, congestion, saved_at)

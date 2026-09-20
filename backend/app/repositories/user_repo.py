@@ -159,6 +159,13 @@ def link_provider(
     other = get_by_provider_sub(conn, provider=provider, provider_sub=provider_sub)
     if other is not None and other["id"] != user_id:
         oid = other["id"]
+        # A merge must never silently discard another connected login method.
+        # Conflicting identities need an explicit account-resolution flow.
+        if any(me.get(col) and other.get(col) and me[col] != other[col]
+               for col in _PROVIDER_COLUMNS.values()):
+            return me, "conflict"
+        inherited = {col: other[col] for col in _PROVIDER_COLUMNS.values()
+                     if other.get(col) and not me.get(col)}
         for table, dedupe_col in _MERGE_TABLES:
             if dedupe_col:
                 conn.execute(
@@ -174,6 +181,8 @@ def link_provider(
             (user_id, oid, user_id),
         )
         conn.execute("DELETE FROM users WHERE id = %s", (oid,))  # 남은 행은 CASCADE
+        for col, sub in inherited.items():
+            conn.execute(f"UPDATE users SET {col} = %s WHERE id = %s", (sub, user_id))
     stored_email = email if email_verified else None
     conn.execute(
         f"UPDATE users SET {column} = %s, email = COALESCE(email, %s), last_login_at = %s WHERE id = %s",

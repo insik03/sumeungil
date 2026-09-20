@@ -42,11 +42,15 @@ def _host_of(uri: object) -> str:
 def record(report: dict) -> str | None:
     """보고 1건 → 집계 키("directive @ host"). 형식이 아니면 None."""
     global _total
+    if not isinstance(report, dict):
+        return None
     body = report.get("csp-report") if isinstance(report.get("csp-report"), dict) else report
     if not isinstance(body, dict):
         return None
     directive = body.get("effective-directive") or body.get("violated-directive") or body.get("effectiveDirective")
     if not isinstance(directive, str) or not directive:
+        return None
+    if not directive.strip():
         return None
     key = f"{directive.split()[0][:40]} @ {_host_of(body.get('blocked-uri') or body.get('blockedURL'))}"
     _total += 1
@@ -67,7 +71,11 @@ def reset() -> None:
 
 @router.post("/api/v1/csp-report", status_code=204)
 async def csp_report(request: Request) -> Response:
-    raw = await request.body()
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > MAX_BODY_BYTES:
+            return Response(status_code=204)
+        raw.extend(chunk)
     if raw and len(raw) <= MAX_BODY_BYTES:
         try:
             data = json.loads(raw)

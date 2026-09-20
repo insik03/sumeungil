@@ -80,7 +80,8 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
       if (stepRef.current === "nickname") {
         // cancelAtNicknameStep과 동일한 처리(아래 정의보다 먼저 쓰여야 해서 인라인) —
         // "인증은 됐는데 표시 이름은 미정"인 애매한 상태를 안 남기려고 계정 자체를 지운다.
-        void deleteAccount();
+        void deleteAccount().then(onClose).catch((error: Error) => setSaveError(error.message));
+        return;
       }
       onClose();
     };
@@ -210,8 +211,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   // 테이블에 그대로 남았다 — deleteAccount()로 그 행 자체를 지워야 "취소"가 말 그대로
   // 취소가 된다.
   const cancelAtNicknameStep = () => {
-    void deleteAccount();
-    onClose();
+    void deleteAccount().then(onClose).catch((error: Error) => setSaveError(error.message));
   };
 
   return (

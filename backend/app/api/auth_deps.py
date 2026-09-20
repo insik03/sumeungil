@@ -65,7 +65,7 @@ async def optional_identity(request: Request) -> UserIdentity | None:
         user = await db.aread(lambda conn: user_repo.get_by_id(conn, identity.user_id))
     except Exception:  # noqa: BLE001 — 저장소 장애로 공개 조회가 막히면 안 된다(비로그인 취급)
         return None
-    return identity if user is not None else None
+    return identity if user is not None and user_repo.session_epoch_of(user) == identity.epoch else None
 
 
 __all__ = ("optional_identity", "require_login")
