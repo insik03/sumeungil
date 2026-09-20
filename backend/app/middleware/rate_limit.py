@@ -93,6 +93,10 @@ UGC_MINE_PATH = "/api/v1/courses/mine"  # POST /mine · DELETE /mine/{id}
 # device_id 우회는 없지만, 같은 계정이 문의를 도배하는 것까지 막으려면 review/share와
 # 동일하게 IP 기준 UGC 버킷으로 묶는 게 맞다.
 UGC_INQUIRY_PATH = "/api/v1/inquiries"
+# 2026-09-20(security-engineer F-4) — 가입 완료는 **계정 행을 만드는 쓰기**인데 분류가 없어
+# default(120/분)로 새고 있었다. 유효한 가입 보류 쿠키가 있어야 통과하므로 대량 계정 생성은
+# 애초에 막히지만, 토큰 하나로 분당 120회 쓰기 트랜잭션을 돌릴 수 있었다. UGC 급으로 묶는다.
+SIGNUP_COMPLETE_PATH = "/api/v1/auth/signup/complete"
 UGC_METHODS: frozenset[str] = frozenset({"POST", "PATCH", "DELETE"})
 # 부록 T(2026-08-01): 관리자 로그인 — 비밀번호 추측 시도를 묶는다. **로그인 경로만** 이 버킷이다.
 # 관리자 목록 조회까지 5/분으로 묶으면 정상 운영이 불가능하므로 나머지는 default 로 둔다.
@@ -138,6 +142,7 @@ def resolve_bucket(method: str, path: str) -> str | None:
         or normalized == UGC_MINE_PATH
         or normalized.startswith(UGC_MINE_PATH + "/")
         or normalized == UGC_INQUIRY_PATH
+        or normalized == SIGNUP_COMPLETE_PATH
     ):
         return BUCKET_UGC
     if upper == "POST":

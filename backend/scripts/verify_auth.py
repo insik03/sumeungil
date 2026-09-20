@@ -564,7 +564,9 @@ section("1e. 신규 사용자는 약관 동의(/signup/complete)해야 계정이
 pend = auth.issue_pending_signup({"provider": "google", "sub": "pending-g-1", "email": "pending@example.com", "email_verified": True, "name": "보류"})
 check("보류 토큰 검증", (auth.verify_pending_signup(pend) or {}).get("sub") == "pending-g-1")
 check("변조 토큰 거부", auth.verify_pending_signup(pend[:-4] + "AAAA") is None)
-check("만료 토큰 거부", auth.verify_pending_signup(pend, now=int(__import__("time").time()) + 16 * 60) is None)
+_NOW = int(__import__("time").time())
+check("만료 전(4분) 통과", auth.verify_pending_signup(pend, now=_NOW + 4 * 60) is not None)
+check("만료 토큰 거부(5분 TTL)", auth.verify_pending_signup(pend, now=_NOW + 6 * 60) is None)
 check("동의 전 계정 없음", db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1")) is None)
 nc = TestClient(app)
 r = nc.post("/api/v1/auth/signup/complete", json={"display_name": "보류", "terms_version": "2026-09-14"})
@@ -579,6 +581,37 @@ row = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", prov
 check("이제 계정 생성·이메일 저장·약관 기록", row is not None and row.get("email") == "pending@example.com" and row.get("terms_version") == "2026-09-14")
 check("응답 terms_agreed=true", r.json().get("terms_agreed") is True)
 check("세션 쿠키 발급", auth.cookie_name in r.headers.get("set-cookie", ""))
+
+# === 1f. 가입 보류 경계 하드닝(2026-09-20 검수 반영) ===
+section("1f. 가입 보류 토큰 도메인 분리 · 취소 폐기 · 기존 계정 보호")
+
+# security-engineer F-2 — state 토큰과 가입 보류 토큰은 다른 키로 서명한다. 둘 다 같은
+# v2.<b64>.<b64sig> 포맷이라, 키가 같으면 URL 에 노출되는 state 값이 보류 쿠키로 승격될 수 있다.
+_state, _nonce = auth.issue_state(next_path="/")
+check("state 토큰은 보류 토큰으로 통하지 않는다", auth.verify_pending_signup(_state) is None)
+check("보류 토큰은 state 로 통하지 않는다", auth.verify_state(pend, cookie_nonce=_nonce) is None)
+
+# security-engineer F-1 — 취소하면 보류 쿠키를 즉시 폐기한다(공용 PC 에서 다음 사람이 이어받는 경로).
+cc = TestClient(app); cc.cookies.set("sumeungil_signup", pend)
+r = cc.post("/api/v1/auth/signup/cancel")
+check("가입 취소 → 204", r.status_code == 204, str(r.status_code))
+check("가입 취소가 보류 쿠키를 지운다", "sumeungil_signup=" in r.headers.get("set-cookie", ""), r.headers.get("set-cookie", ""))
+
+# security-engineer F-3 — 보류 쿠키가 **기존** 계정으로 수렴하면 표시 이름·동의 시각을 건드리지 않는다.
+db.write(lambda c: user_repo.upsert_login(c, provider="kakao", provider_sub="pending-k-2", email=None, email_verified=False, default_display_name="원래이름", now_iso=NOW))
+db.write(lambda c: user_repo.set_terms_agreed(c, user_id=user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2")["id"], version="2026-09-14", now_iso=NOW))
+_before = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2"))
+pend2 = auth.issue_pending_signup({"provider": "kakao", "sub": "pending-k-2", "email": None, "email_verified": False, "name": "탈취시도"})
+ec = TestClient(app); ec.cookies.set("sumeungil_signup", pend2)
+r = ec.post("/api/v1/auth/signup/complete", json={"display_name": "탈취시도", "terms_version": "2026-09-14"})
+_after = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2"))
+check("기존 계정 표시 이름 보존", _after["display_name"] == "원래이름", str(_after["display_name"]))
+check("기존 계정 동의 시각 보존", str(_after["terms_agreed_at"]) == str(_before["terms_agreed_at"]))
+check("응답 이름도 기존 계정 이름", r.json().get("name") == "원래이름", r.text[:160])
+
+# security-engineer F-4 — 계정을 만드는 쓰기 경로라 UGC 버킷(기본 default 아님)으로 묶인다.
+from app.middleware.rate_limit import BUCKET_UGC, resolve_bucket  # noqa: E402
+check("signup/complete 는 UGC 버킷", resolve_bucket("POST", "/api/v1/auth/signup/complete") == BUCKET_UGC)
 
 db.close()
 drop_schema(_BASE_DSN, _SCHEMA)

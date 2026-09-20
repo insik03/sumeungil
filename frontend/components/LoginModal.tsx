@@ -31,8 +31,8 @@ const NICKNAME_MAX = 20;
  * 로그인이 성공해도 그 이름을 바로 리뷰 표시 이름으로 쓰지 않는다. "로그인 목적으로 받은
  * 이름을 동의 없이 다른 목적(공개 게시물 작성자 표시)에 자동 전용하는 구조"라는 지적에
  * 따라, provider가 준 이름을 기본값으로 미리 채운 입력창을 한 번 더 보여주고 사용자가
- * 직접 확인/수정해야 로그인이 완료된다. 여기서 취소하면 로그인 자체를 취소로 본다
- * (서버 세션 쿠키도 지운다) — "인증은 됐는데 표시 이름은 미정"인 애매한 상태를 안 만든다.
+ * 직접 확인/수정해야 로그인이 완료된다. 2026-09-20 가입 순서 변경 이후 이 단계에는 계정도
+ * 세션도 아직 없으므로(가입 보류 쿠키뿐), 취소는 그 쿠키만 폐기하고 닫는다.
  *
  * 2026-08-18(대표 지시 "로그인할 때마다 닉네임 정하게 할 건 아니지?") — 이 확인 단계는
  * **최초 가입 때 한 번만** 보여준다(백엔드가 postMessage에 실어 보내는 `is_new` 플래그로
@@ -54,6 +54,13 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const startButtonRef = useRef<HTMLButtonElement>(null);
   const nicknameInputRef = useRef<HTMLInputElement>(null);
+  // 아래 Esc 핸들러는 [open, onClose] 에만 의존해 모달이 열릴 때 한 번만 등록된다 — 그 클로저
+  // 안의 step 은 등록 당시 값("provider")에 고정되므로, 최신 단계는 ref 로 따로 들고 본다.
+  const stepRef = useRef(step);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -62,10 +69,23 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     setNickname("");
     setSaving(false);
     setSaveError(null);
+    // 2026-09-20(qa-reviewer F-1, Blocker) — 이 모달은 LoginGateProvider 가 한 번만 마운트하고
+    // `if (!open) return null` 로 감추기만 해서 상태가 탭 수명 내내 남는다. agreed 를 같이
+    // 되돌리지 않으면 앞사람이 켜둔 체크가 그대로 남아, 다음 신규 사용자가 약관을 본 적도
+    // 없이 동의가 기록된다(agreed 가 가입 완료 버튼의 유일한 게이트다).
+    setAgreed(false);
     const t = window.setTimeout(() => startButtonRef.current?.focus(), 30);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      // 2026-09-20 — 약관 동의 전엔 계정이 아직 없으므로(가입 보류) 그냥 닫는다.
+      // 2026-09-20 — 약관 동의 전엔 계정이 아직 없다(가입 보류). 다만 닉네임 단계에서 빠져나갈
+      // 땐 보류 쿠키를 서버에서 지워야 해서 cancelAtNicknameStep 과 같은 처리를 태운다.
+      // 이 클로저는 등록 시점 step("provider")에 고정되므로 ref 로 최신 단계를 본다.
+      if (stepRef.current === "nickname") {
+        void fetch(`${API_BASE}/api/v1/auth/signup/cancel`, {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => undefined);
+      }
       onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -184,8 +204,15 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
     onClose();
   };
 
-  // 2026-09-20 — 약관 동의 전엔 서버에 계정도 세션도 없다(가입 보류 쿠키뿐, 15분 뒤 만료). 취소는 그냥 닫는다.
+  // 2026-09-20 — 약관 동의 전엔 서버에 계정도 세션도 없다(가입 보류 쿠키뿐, 5분 뒤 만료).
+  // 다만 그 쿠키엔 provider 가 증명한 신원(이메일 포함)이 들어 있어, 공용 PC 에서 다음 사람이
+  // 남은 쿠키로 가입을 마쳐버릴 수 있다(security-engineer F-1). 취소 시 서버에 폐기를 맡긴다 —
+  // 실패해도 닫는 건 그대로다(만료가 마지막 방어선).
   const cancelAtNicknameStep = () => {
+    void fetch(`${API_BASE}/api/v1/auth/signup/cancel`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => undefined);
     onClose();
   };
 
@@ -254,7 +281,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               <button
                 type="button"
                 className="btn-naver"
-                  onClick={() => startProviderLogin("naver")}
+                onClick={() => startProviderLogin("naver")}
               >
                 <span className="btn-naver__mark" aria-hidden="true">N</span>
                 <span>네이버로 로그인</span>

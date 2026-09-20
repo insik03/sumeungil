@@ -92,8 +92,6 @@ function PrinterIcon() {
   );
 }
 
-/** 코스짜기 의견 입력의 서버 절단 기준(§47.3, 01-interface-contract.md §B.1과 동일 300자). */
-
 /**
  * §47.3(신규, 03-design-spec.md) — 코스짜기 상단 의견 입력 로딩. `OnboardingLoading.tsx`(§B.5-3)와
  * 동일한 실측 문구·경과 초 표기(20~30초)를 재사용하되, 이미 `.onboard-card` 위젯 안에 얹히는

@@ -60,9 +60,9 @@ export function logout(): void {
   clearOnboardingResult();
   try {
     window.localStorage.removeItem(NICKNAME_KEY);
-    // 2026-09-16 — 저장한 스팟은 이제 계정 데이터(서버 정본)라 로컬 캐시도 같이 지운다. 키 문자열은
-    // savedSpotsStorage.ts 의 SAVED_SPOTS_STORAGE_KEY 와 같다(그 모듈이 이 파일을 import 하므로 순환 방지).
-    // Legacy guest saves are independent of the signed-in account.
+    // 2026-09-16 — 저장한 스팟은 계정 데이터(서버 정본)라 여기서 지우지 않는다. 비로그인 시절
+    // 로컬에 남은 목록은 계정과 무관하게 보존한다. 로그인 계정의 목록 정리는 savedSpotsStorage 의
+    // AUTH_CHANGED_EVENT 리스너 몫이라, 아래 dispatch 한 번으로 화면까지 함께 갱신된다.
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   } catch {
     /* noop */
@@ -96,7 +96,6 @@ export async function syncSessionFromServer(): Promise<SessionInfo | null> {
       // 서버는 비로그인인데 로컬엔 이름이 남아있다 — 세션 만료 등. 조용히 로컬만 정리
       // (서버 쿠키는 이미 없으니 /logout 호출은 불필요). 온보딩 결과도 같이(리뷰 P1).
       clearOnboardingResult();
-      // Legacy guest saves are independent of the signed-in account.
       window.localStorage.removeItem(NICKNAME_KEY);
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
     }
@@ -120,7 +119,7 @@ export async function deleteAccount(): Promise<void> {
     clearOnboardingResult();
     window.localStorage.removeItem(NICKNAME_KEY);
   } catch {
-    // The server deletion succeeded even if browser storage is unavailable.
+    // 브라우저 저장소를 못 써도 서버 삭제는 이미 성공한 상태다 — 여기서 실패로 되돌리지 않는다.
   } finally {
     window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   }

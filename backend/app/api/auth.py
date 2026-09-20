@@ -220,6 +220,16 @@ def _clear_state_cookie(response: Response) -> None:
     response.delete_cookie(key=STATE_COOKIE_NAME, path=STATE_COOKIE_PATH)
 
 
+def _clear_signup_cookie(response: Response) -> None:
+    """가입 보류 쿠키를 지운다(2026-09-20 security-engineer F-1).
+
+    이 쿠키는 provider 가 증명한 신원(이메일 포함)을 담고 있어, 가입이 끝났거나 더는
+    진행하지 않기로 한 순간 바로 없애야 한다. 붙이는 곳은 네 갈래다 — 가입 완료,
+    가입 취소, 로그아웃/탈퇴, 그리고 **다음 로그인 콜백**(이전 시도의 잔여 신원이
+    다음 사용자에게 넘어가지 않게 한다. 공용 PC 시나리오가 정확히 이것이다)."""
+    response.delete_cookie(key=SIGNUP_COOKIE_NAME, path=STATE_COOKIE_PATH)
+
+
 def _sanitize_display_name(raw_name: str, email: str | None) -> str:
     """로그인 제공자가 돌려준 이름을 표시 이름으로 쓰기 전 정제한다(구글·카카오 공용,
     2026-08-17 보안검토 C-2) — 리뷰 nickname과 동일한 파이프라인(clean_user_text:
@@ -255,7 +265,7 @@ async def _complete_oauth_login(
             identity = await require_login(request)
         except HTTPException:
             identity = None
-        except Exception:  # DB unavailable: finish the OAuth popup cleanly.
+        except Exception:  # DB 장애 — 팝업을 무한 로딩으로 두지 않고 linked=error 로 닫는다.
             logger.exception("계정 연결 세션 확인 실패")
             response = _popup_close_html(ok=False, next_path="/mypage", linked="error")
             _clear_state_cookie(response)
@@ -285,11 +295,12 @@ async def _complete_oauth_login(
             ok=outcome != "conflict", name=linked_user["display_name"], next_path="/mypage", linked=outcome
         )
         _clear_state_cookie(response)
+        _clear_signup_cookie(response)
         return response  # 세션 쿠키는 그대로(현재 계정 유지)
 
     # 2026-09-20 대표 지시 — "약관 동의 안 하면 가입이 안 돼야". 신규 사용자(같은 provider sub 도,
     # 검증된 같은 이메일 계정도 없음)는 여기서 계정·세션을 만들지 않는다. provider 가 증명한 신원을
-    # 15분짜리 서명 쿠키로 맡기고, /auth/signup/complete 가 동의+표시 이름을 받은 뒤에야 만든다.
+    # 5분짜리 서명 쿠키로 맡기고, /auth/signup/complete 가 동의+표시 이름을 받은 뒤에야 만든다.
     try:
         def _find_existing(conn):
             found = user_repo.get_by_provider_sub(conn, provider=provider, provider_sub=provider_sub)
@@ -348,14 +359,10 @@ async def _complete_oauth_login(
     # 팝업엔 provider 원본 이름이 아니라 **DB의 현재 display_name**을 돌려준다 — 재로그인한
     # 사용자라면 이전에 직접 정한 이름이 그대로 뜬다(매번 원본 이름으로 되돌아가지 않음).
     #
-    # is_new 판정 — upsert_login이 신규/기존 여부를 별도 플래그로 돌려주지 않아, created_at
-    # == last_login_at(초 단위)로 판정한다. 신규 생성 시 두 값이 같은 now_iso로 함께
-    # 채워지고(user_repo.py INSERT 참고), 재로그인부터는 last_login_at만 갱신되어 반드시
-    # created_at보다 뒤가 된다 — 사람이 브라우저 팝업+버튼 클릭을 1초 안에 두 번 왕복할 수
-    # 없으므로 초 단위 비교로 충분하다.
     # 신규는 위에서 가입 보류로 빠졌으므로 여기는 항상 기존 사용자(재로그인 또는 이메일 통합).
     response = _popup_close_html(ok=True, name=user["display_name"], is_new=False, next_path=next_path)
     _clear_state_cookie(response)
+    _clear_signup_cookie(response)
     _set_session_cookie(response, auth, token)
     return response
 
@@ -553,6 +560,7 @@ async def logout(request: Request):
         secure=auth.cookie_secure,
         samesite="lax",
     )
+    _clear_signup_cookie(response)
     return response
 
 
@@ -611,6 +619,7 @@ async def delete_account(request: Request):
         secure=_auth.cookie_secure,
         samesite="lax",
     )
+    _clear_signup_cookie(response)
     return response
 
 
@@ -636,28 +645,60 @@ async def signup_complete(request: Request, body: SignupCompleteRequest, respons
     db = get_database()
 
     def _tx(conn):
+        # 2026-09-20(security-engineer F-3) — 콜백에서 "신규"로 판정한 뒤 여기까지 오는 사이에
+        # 같은 신원의 계정이 이미 만들어졌을 수 있다(보류 쿠키 재사용·동시 로그인). upsert_login
+        # 은 그 경우 **기존 행**을 돌려주므로, 그대로 update_display_name 을 태우면 남의 계정
+        # 표시 이름(리뷰에 노출되는 값)을 보류 쿠키 소지자가 정한 값으로 덮어쓴다. 기존 계정이면
+        # 이름도 동의 시각도 건드리지 않고 세션만 발급한다 — upsert_login 이 모듈 docstring 에서
+        # 약속한 "재로그인은 display_name 을 건드리지 않는다"를 호출부가 깨지 않게 한다.
+        existed = user_repo.get_by_provider_sub(
+            conn, provider=provider, provider_sub=str(pending["sub"])  # type: ignore[arg-type]
+        )
+        if existed is None and pending.get("email") and pending.get("email_verified"):
+            existed = user_repo.get_by_email(conn, str(pending["email"]))
         user = user_repo.upsert_login(
             conn,
             provider=provider,  # type: ignore[arg-type]
             provider_sub=str(pending["sub"]),
             email=pending.get("email"),
             email_verified=bool(pending.get("email_verified")),
-            default_display_name=cleaned,
+            default_display_name=cleaned,  # 신규일 때만 쓰인다(기존 행은 이름 유지)
             now_iso=now_iso,
         )
-        user = user_repo.update_display_name(conn, user_id=user["id"], display_name=cleaned) or user
-        return user_repo.set_terms_agreed(conn, user_id=user["id"], version=TERMS_VERSION, now_iso=now_iso) or user
+        if existed is None or not _terms_agreed(user):
+            # 신규 가입이거나, 기존 계정인데 이번 버전 동의가 아직 없는 경우만 기록한다.
+            user = user_repo.set_terms_agreed(
+                conn, user_id=user["id"], version=TERMS_VERSION, now_iso=now_iso
+            ) or user
+        return user
 
-    user = await db.awrite(_tx)
+    try:
+        user = await db.awrite(_tx)
+    except Exception:  # noqa: BLE001 — 이 파일의 다른 DB 호출과 같은 취급(500 노출 금지)
+        logger.exception("가입 완료 처리 실패")
+        return error_response(503, "SIGNUP_FAILED", "가입을 마치지 못했어요. 잠시 후 다시 시도해 주세요.")
     token, _ = auth.issue_token(user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user))
     _set_session_cookie(response, auth, token)
-    response.delete_cookie(SIGNUP_COOKIE_NAME, path=STATE_COOKIE_PATH)
+    _clear_signup_cookie(response)
     return UserSessionResponse(
         authenticated=True,
         name=user["display_name"],
         terms_agreed=_terms_agreed(user),
         providers=user_repo.linked_providers(user),
     )
+
+
+@router.post("/signup/cancel", status_code=204)
+async def signup_cancel() -> Response:
+    """가입을 중도에 그만둘 때 보류 쿠키를 즉시 폐기한다(2026-09-20 security-engineer F-1).
+
+    동의 화면에서 취소·닫기를 누르면 프론트(LoginModal.tsx)가 이걸 부른다. 안 부르고 그냥
+    떠나도 SIGNUP_TTL_SEC(5분) 뒤엔 만료되지만, 공용 PC 에서 다음 사람이 그 사이에 모달을
+    열면 **이전 사용자 신원으로 가입이 완료**될 수 있어 명시적으로 지우는 경로를 둔다.
+    인증이 필요 없다 — 지우는 동작뿐이라 남의 쿠키엔 손댈 수 없다."""
+    response = Response(status_code=204)
+    _clear_signup_cookie(response)
+    return response
 
 
 @router.patch("/display-name", response_model=UserSessionResponse)

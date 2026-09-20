@@ -36,7 +36,7 @@ function formatCongestionDelta(pct: number | null, diff: number | null): { text:
 
 /**
  * 비교 화면(MVP-5, 01-interface-contract.md 부록 D) 오케스트레이터.
- * - 진입: 추천 화면의 스팟 탭에서 hidden_id·region_code를 쿼리로 받는다(§D.7-1). hotspot는 항상 auto(backend 소유).
+ * - 진입: 추천 화면의 스팟 탭에서 spot_id·region_code를 쿼리로 받는다(§D.7-1). 그 스팟이 곧 hotspot_id 다(§169).
  * - profile은 RecommendContent와 동일하게 sessionStorage를 그대로 재전송한다(조작·재계산 금지).
  * - 404 COMPARE_UNAVAILABLE은 에러가 아니라 "이 지역은 비교 준비 중"으로 부드럽게 처리한다(§D.5).
  */
@@ -52,7 +52,7 @@ export default function CompareContent() {
   // 부록 D.7(2026-08-01) — /compare 를 **독립 목적지**로 쓸 수 있게 지역 선택을 붙인다.
   // 종전엔 스팟 상세에서 hidden_id 와 함께 들어오는 경유 화면이라 지역이 쿼리로만 정해졌고,
   // 쿼리 없이 들어오면 항상 기본 지역(부산 해운대) 고정이었다. GNB 진입점을 새로 다는 이상
-  // 사용자가 지역을 바꿀 수 있어야 한다. hidden_id 로 들어온 경우(특정 스팟과의 비교)는
+  // 사용자가 지역을 바꿀 수 있어야 한다. spot_id 로 들어온 경우(특정 스팟과의 비교)는
   // 그 스팟의 지역이 곧 맥락이므로 선택기를 띄우지 않는다.
   const [pickedRegion, setPickedRegion] = useState<string | null>(null);
   const regionCode = queryRegion || pickedRegion || DEFAULT_REGION.sigunguCd;
@@ -210,11 +210,10 @@ export default function CompareContent() {
         {region.region_name ?? "이 지역"} 비교 리포트
       </h1>
 
-      {/* 부록 D.7 — 특정 스팟과의 비교(hidden_id)가 아닐 때만 지역을 고를 수 있다. */}
+      {/* 부록 D.7 — 특정 스팟과의 비교(spot_id)가 아닐 때만 지역을 고를 수 있다. */}
       {/* 부록 D.8(2026-08-01, 대표 지시) — 지역을 바꾸기 쉽게 드롭다운 옆에 그 지역
           관광지 화면으로 나가는 버튼을 둔다. 비교만 보고 끝나지 않고 목록으로 이어지게. */}
       {!pickedId && (
-
         <div className="board-header-row">
           <RegionDropdown
             options={SIDO_REGIONS}

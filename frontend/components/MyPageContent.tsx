@@ -92,9 +92,11 @@ export default function MyPageContent() {
   const [nicknameSaving, setNicknameSaving] = useState(false);
   const [nicknameError, setNicknameError] = useState<string | null>(null);
 
-  // 즐겨찾기·방문 스탬프·공유한 코스는 로컬(sessionStorage/localStorage) — mount 후에만
-  // 읽는다(SavedContent.tsx와 동일한 null-first 하이드레이션 패턴, 서버/첫 클라이언트
-  // 렌더와 값이 갈리지 않게). 저장한 AI 코스만 서버 호출(fetchMyCourses)이 필요하다.
+  // 방문 스탬프·공유한 코스는 로컬(sessionStorage/localStorage) — mount 후에만 읽는다
+  // (SavedContent.tsx와 동일한 null-first 하이드레이션 패턴, 서버/첫 클라이언트 렌더와 값이
+  // 갈리지 않게). 2026-09-16 이후 **저장한 스팟은 계정 데이터**라 loadSavedSpots()는 서버에서
+  // 받아온 캐시를 읽는 것이고, 갱신은 아래 SAVED_SPOTS_CHANGED 리스너가 받는다.
+  // 저장한 AI 코스는 서버 호출(fetchMyCourses)이 필요하다.
   const [savedSpotCount, setSavedSpotCount] = useState<number | null>(null);
   const [stampCount, setStampCount] = useState<number | null>(null);
   const [courseCount, setCourseCount] = useState<number | null>(null);
@@ -113,7 +115,7 @@ export default function MyPageContent() {
 
   useEffect(() => {
     if (!nickname) return;
-    setSavedSpotCount(loadSavedSpots().length);
+    // savedSpotCount 는 위 SAVED_SPOTS_CHANGED 이펙트가 맡는다(여기서 또 세지 않는다).
     setStampCount(loadStamps().length);
     const sharedCount = loadMySharedCourses().length;
     let cancelled = false;
