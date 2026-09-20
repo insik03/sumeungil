@@ -286,6 +286,7 @@ check(
     str(r.json()),
 )
 
+# 2026-09-20 — 후기가 계정 소유가 되면서 익명 작성 경로 자체가 없어졌다.
 anon7 = TestClient(app)
 r = anon7.post(
     "/api/v1/reviews",
@@ -293,9 +294,9 @@ r = anon7.post(
     json={"target_type": "spot", "target_id": "m1-target-anon", "nickname": "익명닉네임", "rating": 4, "comment": "t"},
 )
 check(
-    "비로그인 POST /reviews → 기존처럼 클라이언트 nickname 그대로 허용(익명 리뷰 유지)",
-    r.status_code == 201 and r.json()["review"]["nickname"] == "익명닉네임",
-    str(r.json()),
+    "비로그인 POST /reviews → 401 (익명 리뷰 경로 폐지)",
+    r.status_code == 401,
+    str(r.status_code),
 )
 
 r = c7.post(
