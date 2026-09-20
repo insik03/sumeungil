@@ -7,7 +7,7 @@
 # Expires 는 RFC 9116 필수 필드다. 지나면 "관리되지 않는 문서"로 간주되므로
 # 매년 갱신한다. 갱신 담당: deploy/DEPLOY.md 의 운영 점검 절차 참고.
 
-Contact: mailto:dbdlstlr25@naver.com
+Contact: mailto:sumeungil@googlegroups.com
 Contact: https://sumeungil.co.kr/mypage
 Expires: 2027-08-18T00:00:00.000Z
 Preferred-Languages: ko, en
