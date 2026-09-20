@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ApiError, SpotCard, SpotDetail, fetchSpotDetail } from "../../lib/api";
 import { SAVED_SPOTS_CHANGED, isSpotSaved, toggleSavedSpot } from "../../lib/savedSpotsStorage";
+import { STAMPS_ENABLED } from "../../lib/features";
 import { STAMPS_CHANGED, isSpotStamped, stampHere, syncStampsFromServer } from "../../lib/stampStorage";
 import { CartSpotInput, MAX_CART_SIZE, isInCart, toggleCartSpot } from "../../lib/courseCartStorage";
 import { CATEGORY_META } from "../recommend/constants";
@@ -377,36 +378,40 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
         >
           {saved ? "저장됨" : "저장"}
         </button>
-        {/* 방문 스탬프 — 브라우저 위치로 현장을 인증해 계정에 저장한다(2026-09-20). 저장 버튼과 같은
-            흰 배경 레시피에 색만 mint 로 구분한다. */}
-        <button
-          type="button"
-          className={`btn btn--white btn--lg${stamped ? " is-stamped" : ""}`}
-          aria-pressed={stamped}
-          disabled={stamping}
-          onClick={handleStamp}
-        >
-          {stamped ? (
-            <>
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              방문함
-            </>
-          ) : (
-            stamping ? "위치 확인 중…" : "여기서 방문 스탬프 찍기"
-          )}
-        </button>
+        {STAMPS_ENABLED && (
+          <>
+          {/* 방문 스탬프 — 브라우저 위치로 현장을 인증해 계정에 저장한다(2026-09-20). 저장 버튼과 같은
+              흰 배경 레시피에 색만 mint 로 구분한다. */}
+          <button
+            type="button"
+            className={`btn btn--white btn--lg${stamped ? " is-stamped" : ""}`}
+            aria-pressed={stamped}
+            disabled={stamping}
+            onClick={handleStamp}
+          >
+            {stamped ? (
+              <>
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                방문함
+              </>
+            ) : (
+              stamping ? "위치 확인 중…" : "여기서 방문 스탬프 찍기"
+            )}
+          </button>
+          </>
+        )}
         {/* §25(신규) — 코스 담기. AI가 짜주는 코스 대신 직접 고른 스팟들로 순서를 짜고 싶을 때 쓴다
             (/course "내가 고른 코스" 모드). 저장·스탬프와 같은 흰 배경 토글 레시피, 색은 브랜드
             포인트(g-500)로 "코스 계획에 담긴 상태"를 나타낸다. */}
@@ -438,7 +443,7 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
           )}
         </button>
       </div>
-      {stampError && (
+      {STAMPS_ENABLED && stampError && (
         <p className="spot-detail__cart-notice" role="alert">
           {stampError}
         </p>
