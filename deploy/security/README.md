@@ -64,3 +64,40 @@ it renders only synthetic credentials and requires no running Docker daemon.
 Recreate the two containers to apply; preserve the database and backup volumes.
 Database recreation briefly interrupts DB connections: check readiness and the
 backend afterward. Keep a copy of the previous Compose file for rollback.
+
+
+## Runtime database separation and read audit
+
+After building the backend image, run `python3 deploy/security/provision-runtime.py`
+once on the host. It migrates with the retained database owner, creates app CRUD
+and backup read-only roles, prepares mode-600 `.backend.env` and preserves the old
+`.env` as `.env.before-runtime-role`. It refuses to overwrite cutover files or
+rotate existing roles automatically. Then validate Compose and recreate backend
+and postgres-backup only. Keep the previous backend image for rollback.
+
+The runtime env excludes POSTGRES_*, AWS_* and BACKUP_* owner credentials. It uses
+Compose env_file `format: raw` so dollar signs and password hashes survive exactly
+(Compose >=2.30; https://docs.docker.com/reference/compose-file/services/#format).
+Future app secret changes must update `.backend.env`, not just the owner `.env`.
+For future releases: build backend, run `python3 deploy/security/migrate-runtime.py`,
+then recreate backend. That migration reapplies grants to new tables without
+rotating roles. DATABASE_AUTO_MIGRATE=false fails closed on a schema mismatch.
+
+users/inquiries list queries write minimal target IDs, selected operator label,
+IP HMAC and time in the same transaction before returning data. App role cannot
+read/update/delete/truncate privacy_access_events. A shared admin password still
+cannot prove the selected label's human identity; this is not individual MFA.
+The DB owner can inspect audit events and remains trusted. Audit retention and
+independent archival need an explicit operator policy; this release does not
+silently delete historical audit evidence.
+
+## Independent backup monitor
+
+`python3 deploy/security/backup-monitor.py --dry-run` checks container liveness,
+local backup and expiry markers, plus offsite marker if configured. It never
+sends or saves notification state. The timer checks every five minutes; actual
+notifications require the existing Slack incoming webhook, acknowledge HTTP 200
+and body `ok`, notify on failure/recovery, and remind hourly while failed.
+No message bodies, user data or credentials are included. Enable the supplied
+systemd timer only after authorization for the intended receiving channel.
+Use `--test-notification` for the separately authorized one-time message.

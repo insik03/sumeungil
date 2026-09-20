@@ -73,8 +73,8 @@ print(json.dumps({'url':'postgresql://'+APP_ROLE+':'+quote(v['app_password'],saf
     filtered.update(DATABASE_URL=url, DATABASE_AUTO_MIGRATE="false")
     def line(key, value):
         return key + "='" + value.replace("\\", "\\\\").replace("'", "\\'") + "'\n"
-    atomic_write(runtimepath, "".join(line(k,v) for k,v in sorted(filtered.items())))
-    updates = {"BACKEND_ENV_FILE": ".backend.env", "BACKUP_DB_USER": "sumeungil_backup", "BACKUP_DB_PASSWORD": payload["backup_password"]}
+    atomic_write(runtimepath, "".join(k + "=" + v + "\n" for k,v in sorted(filtered.items())))
+    updates = {"BACKEND_ENV_FILE": ".backend.env", "BACKEND_ENV_FORMAT": "raw", "BACKUP_DB_USER": "sumeungil_backup", "BACKUP_DB_PASSWORD": payload["backup_password"]}
     retained = [l for l in old.splitlines() if l.split("=",1)[0] not in updates]
     atomic_write(envpath, "\n".join(retained) + "\n" + "".join(line(k,v) for k,v in updates.items()))
     print("PREPARED: migrated schema; restricted app/backup roles; private runtime env; admin recovery env preserved")
