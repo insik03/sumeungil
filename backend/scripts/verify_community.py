@@ -225,7 +225,7 @@ r = cc.post("/api/v1/reviews",
             json={**TARGET, "target_id": "9002",
                   "nickname": "<b>해​커</b>",
                   "rating": 4,
-                  "comment": "<script>alert(1)</script>줄바꿈제어﻿문자 &lt;img src=x onerror=1&gt;"},
+                  "comment": "<script>alert(1)</script>\x0b줄바꿈제어\ufeff문자 &lt;img src=x onerror=1&gt;"},
             headers=DIRTY)
 item = r.json()["review"]
 check("클라이언트 닉네임 무시 → 계정 표시 이름이 나간다",
@@ -233,8 +233,10 @@ check("클라이언트 닉네임 무시 → 계정 표시 이름이 나간다",
 check("script 태그 제거(한줄평)", "<script>" not in item["comment"] and "alert(1)" in item["comment"],
       item["comment"])
 check("엔티티 인코딩 태그도 제거", "<img" not in item["comment"], item["comment"])
+# 제어문자·제로폭은 **이스케이프로** 쓴다. 소스에 리터럴로 박아 두면 편집·복붙 과정에서
+# 소리 없이 사라지고, 그러면 `"" not in ...` 이 되어 검사가 항상 실패한다(실제로 겪었다).
 check("제어문자/제로폭 제거",
-      "" not in item["comment"] and "﻿" not in item["comment"])
+      "\x0b" not in item["comment"] and "\ufeff" not in item["comment"], repr(item["comment"]))
 
 # 표시 이름 자체의 정제는 가입 경로(clean_user_text)가 책임진다 — verify_auth.py 참고.
 # 여기서는 "본문 닉네임이 빈 값이어도 계정 이름 덕에 성공한다"만 확인한다(종전 400 경로는 도달 불가).
