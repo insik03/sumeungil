@@ -67,7 +67,7 @@ from ..schemas.auth import (
 )
 
 # 약관·개인정보처리방침 동의 버전 (2026-09-14). 프론트 lib/consent.ts 와 같은 값. 실질 변경 시 둘 다 올린다.
-TERMS_VERSION = "2026-09-14"
+TERMS_VERSION = "2026-09-20"
 
 
 def _terms_agreed(user: dict | None) -> bool:

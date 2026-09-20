@@ -10,6 +10,9 @@ export type SchemaStatus = "loading" | "success" | "unavailable" | "error";
 interface OnboardingFormProps {
   text: string;
   onTextChange: (value: string) => void;
+  /** 자유 서술 사용 동의(체크). true 여야 입력 칸이 열린다. */
+  consent: boolean;
+  onConsentChange: (checked: boolean) => void;
   schemaStatus: SchemaStatus;
   axes: TagSchemaAxis[];
   selected: Record<string, Set<string>>;
@@ -27,6 +30,8 @@ interface OnboardingFormProps {
 export default function OnboardingForm({
   text,
   onTextChange,
+  consent,
+  onConsentChange,
   schemaStatus,
   axes,
   selected,
@@ -39,24 +44,35 @@ export default function OnboardingForm({
   return (
     <section className="onboard-section" aria-label="여행 취향 입력">
       <div className="onboard-card">
-        <label className="onboard-label" htmlFor="onboardText">
-          어떤 여행을 꿈꾸시나요? 자유롭게 적어주세요
-        </label>
-        <textarea
-          id="onboardText"
-          className="onboard-textarea"
-          placeholder="예: 6세 아이랑 반려견이 함께 걷기 편하고 주차 넉넉한 곳"
-          value={text}
-          maxLength={TEXT_MAX_LENGTH}
-          onChange={(e) => onTextChange(e.target.value)}
-        />
-        <div className="onboard-textarea__count" aria-live="off">
-          {text.length}/{TEXT_MAX_LENGTH}
-        </div>
+        <span className="onboard-label">어떤 여행을 꿈꾸시나요?</span>
         <p className="onboard-hint">
-          전화번호·이메일 등 개인정보는 적지 마세요. 입력한 문장은 AI 분석을 위해 Google(해외) 서버로
-          전송됩니다. <Link href="/privacy">자세히</Link>
+          아래 키워드만 골라도 돼요. 내 상황을 직접 적고 싶다면(예: 휠체어 이용, 아이 동반) 자유 서술을 켜 주세요.
         </p>
+        {/* 2026-09-20 — 자유 서술은 선택. 동의해야 입력 칸이 열린다(동의 없이는 문장이 저장·전송되지 않는다). */}
+        <label className="consent-check">
+          <input type="checkbox" checked={consent} onChange={(e) => onConsentChange(e.target.checked)} />
+          <span>
+            <strong>[선택] 자유 서술로 직접 적기.</strong> 취향 분석은 서비스 서버에서만 처리되고, AI 코스 생성을
+            요청하면 입력한 문장이 <strong>Google LLC(미국 등 해외)의 Gemini로 전송</strong>되는 것에 동의합니다.
+            이름·연락처·주소는 적지 마세요. <Link href="/privacy">자세히</Link>
+          </span>
+        </label>
+        {consent && (
+          <>
+            <textarea
+              id="onboardText"
+              className="onboard-textarea"
+              aria-label="자유 서술"
+              placeholder="예: 6세 아이랑 반려견이 함께 걷기 편하고 주차 넉넉한 곳"
+              value={text}
+              maxLength={TEXT_MAX_LENGTH}
+              onChange={(e) => onTextChange(e.target.value)}
+            />
+            <div className="onboard-textarea__count" aria-live="off">
+              {text.length}/{TEXT_MAX_LENGTH}
+            </div>
+          </>
+        )}
 
         {schemaStatus === "loading" &&
           Array.from({ length: CHIP_SKELETON_AXES }).map((_, i) => (
@@ -104,8 +120,8 @@ export default function OnboardingForm({
           <div className="onboard-axis">
             <p className="onboard-notice">
               {schemaStatus === "unavailable"
-                ? "빠른 키워드 선택 기능을 준비 중이에요. 위 자유 서술만으로도 분석할 수 있어요."
-                : "키워드 목록을 불러오지 못했어요. 자유 서술만으로 진행하거나 다시 시도해주세요."}
+                ? "빠른 키워드 선택 기능을 준비 중이에요. 자유 서술(선택 동의)로도 분석할 수 있어요."
+                : "키워드 목록을 불러오지 못했어요. 자유 서술(선택 동의)로 진행하거나 다시 시도해주세요."}
             </p>
             {schemaStatus === "error" && (
               <button type="button" className="btn btn--ghost-text" onClick={onRetrySchema}>
@@ -124,6 +140,11 @@ export default function OnboardingForm({
           >
             취향 분석하기
           </button>
+          {!canSubmit && !validationMessage && (
+            <p className="onboard-hint">
+              키워드를 고르거나, 자유 서술에 동의하고 내용을 적으면 분석할 수 있어요.
+            </p>
+          )}
           {validationMessage && <p className="onboard-validation" role="alert">{validationMessage}</p>}
         </div>
       </div>

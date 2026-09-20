@@ -30,3 +30,6 @@ deploy/backups/
 
 # Generated source/AI cache; persisted by Docker volume, not Git.
 backend/data/ai-summaries/
+
+# nginx 접속·오류 로그(log-retention 이 90일 뒤 삭제) — 개인정보(IP)가 있어 커밋하지 않는다
+deploy/logs/nginx/

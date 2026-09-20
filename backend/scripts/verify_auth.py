@@ -54,6 +54,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.deps import get_database, get_user_auth  # noqa: E402
 from app.main import app  # noqa: E402
+from app.api.auth import TERMS_VERSION  # noqa: E402
 from app.repositories import user_repo  # noqa: E402
 from app.security.user_auth import UserAuth  # noqa: E402
 
@@ -173,7 +174,7 @@ section("1c. 로그아웃하면 기존 토큰 전부 무효 · 표시 이름 단
 c1c, u1c = make_login("sub-epoch", "epoch@example.com", "에폭")
 r = c1c.get("/api/v1/auth/me")
 check("로그인 직후 /me authenticated + terms_agreed=false", r.json().get("authenticated") is True and r.json().get("terms_agreed") is False, str(r.json()))
-r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭", "terms_version": "2026-09-14"})
+r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭", "terms_version": TERMS_VERSION})
 check("표시 이름 + 약관 버전 → terms_agreed=true", r.status_code == 200 and r.json().get("terms_agreed") is True, str(r.json()))
 r = c1c.patch("/api/v1/auth/display-name", json={"display_name": "에폭2"})
 check("버전 없이 이름만 바꿔도 동의 유지", r.json().get("terms_agreed") is True)
@@ -195,7 +196,14 @@ check("v1 스킴 토큰은 거부", auth.verify_token(v1_like) is None)
 fresh, u_fresh = make_login("sub-epoch", "epoch@example.com", "에폭")
 r = fresh.post("/api/v1/auth/consent", json={"terms_version": "0000-00-00"})
 check("consent: 다른 버전 → 400", r.status_code == 400, str(r.status_code))
+# Existing members must explicitly accept the revision; old consent stays old until then.
+db.write(lambda c: user_repo.set_terms_agreed(c, user_id=u_fresh["id"], version="2026-09-14", now_iso="2026-09-14T00:00:00+09:00"))
+r = fresh.get("/api/v1/auth/me")
+check("구버전 회원은 재동의 필요", r.json().get("terms_agreed") is False, str(r.json()))
 r = fresh.post("/api/v1/auth/consent", json={"terms_version": "2026-09-14"})
+check("이전 버전 동의 요청은 거부", r.status_code == 400, str(r.status_code))
+check("거부 후 동의 버전 보존", db.read(lambda c: user_repo.get_by_id(c, u_fresh["id"]))["terms_version"] == "2026-09-14")
+r = fresh.post("/api/v1/auth/consent", json={"terms_version": TERMS_VERSION})
 check("consent: 현재 버전 → terms_agreed=true", r.status_code == 200 and r.json().get("terms_agreed") is True, str(r.json()))
 
 
@@ -570,16 +578,16 @@ check("만료 전(4분) 통과", auth.verify_pending_signup(pend, now=_NOW + 4 *
 check("만료 토큰 거부(5분 TTL)", auth.verify_pending_signup(pend, now=_NOW + 6 * 60) is None)
 check("동의 전 계정 없음", db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1")) is None)
 nc = TestClient(app)
-r = nc.post("/api/v1/auth/signup/complete", json={"display_name": "보류", "terms_version": "2026-09-14"})
+r = nc.post("/api/v1/auth/signup/complete", json={"display_name": "보류", "terms_version": TERMS_VERSION})
 check("보류 쿠키 없이 완료 → 401", r.status_code == 401, str(r.status_code))
 pc = TestClient(app); pc.cookies.set("sumeungil_signup", pend)
 r = pc.post("/api/v1/auth/signup/complete", json={"display_name": "보류", "terms_version": "0000-00-00"})
 check("약관 버전 불일치 → 400", r.status_code == 400, str(r.status_code))
 check("불일치 시도 뒤에도 계정 없음", db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1")) is None)
-r = pc.post("/api/v1/auth/signup/complete", json={"display_name": " 보류이 ", "terms_version": "2026-09-14"})
+r = pc.post("/api/v1/auth/signup/complete", json={"display_name": " 보류이 ", "terms_version": TERMS_VERSION})
 check("동의 + 이름 → 200 로그인", r.status_code == 200 and r.json().get("authenticated") is True, r.text[:160])
 row = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="google", provider_sub="pending-g-1"))
-check("이제 계정 생성·이메일 저장·약관 기록", row is not None and row.get("email") == "pending@example.com" and row.get("terms_version") == "2026-09-14")
+check("이제 계정 생성·이메일 저장·약관 기록", row is not None and row.get("email") == "pending@example.com" and row.get("terms_version") == TERMS_VERSION)
 check("응답 terms_agreed=true", r.json().get("terms_agreed") is True)
 check("세션 쿠키 발급", auth.cookie_name in r.headers.get("set-cookie", ""))
 
@@ -600,11 +608,11 @@ check("가입 취소가 보류 쿠키를 지운다", "sumeungil_signup=" in r.he
 
 # security-engineer F-3 — 보류 쿠키가 **기존** 계정으로 수렴하면 표시 이름·동의 시각을 건드리지 않는다.
 db.write(lambda c: user_repo.upsert_login(c, provider="kakao", provider_sub="pending-k-2", email=None, email_verified=False, default_display_name="원래이름", now_iso=NOW))
-db.write(lambda c: user_repo.set_terms_agreed(c, user_id=user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2")["id"], version="2026-09-14", now_iso=NOW))
+db.write(lambda c: user_repo.set_terms_agreed(c, user_id=user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2")["id"], version=TERMS_VERSION, now_iso=NOW))
 _before = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2"))
 pend2 = auth.issue_pending_signup({"provider": "kakao", "sub": "pending-k-2", "email": None, "email_verified": False, "name": "탈취시도"})
 ec = TestClient(app); ec.cookies.set("sumeungil_signup", pend2)
-r = ec.post("/api/v1/auth/signup/complete", json={"display_name": "탈취시도", "terms_version": "2026-09-14"})
+r = ec.post("/api/v1/auth/signup/complete", json={"display_name": "탈취시도", "terms_version": TERMS_VERSION})
 _after = db.read(lambda c: user_repo.get_by_provider_sub(c, provider="kakao", provider_sub="pending-k-2"))
 check("기존 계정 표시 이름 보존", _after["display_name"] == "원래이름", str(_after["display_name"]))
 check("기존 계정 동의 시각 보존", str(_after["terms_agreed_at"]) == str(_before["terms_agreed_at"]))

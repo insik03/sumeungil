@@ -24,10 +24,19 @@
 #     레이트 리밋을 무력화할 수 있다(rate_limit.py 신뢰 경계 주석 참고).
 #   디버깅이 필요하면 `docker compose exec` 로 컨테이너 안에서 curl 한다.
 
+# 컨테이너 로그(json-file) 용량 상한 — 상한이 없으면 디스크가 다 찰 때까지 쌓인다(2026-09-20).
+# nginx 접속·오류 로그는 개인정보(IP)가 있어 시간 기준(90일)으로 따로 지운다: log-retention 서비스.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   nginx:
     image: nginx:1.27-alpine
     container_name: sumeungil-nginx
+    logging: *default-logging
     restart: unless-stopped
     ports:
       - "80:80"
@@ -42,6 +51,8 @@ services:
       - ./certbot/conf:/etc/letsencrypt:ro
       # /prom/ Basic Auth 비밀번호 파일(2026-08-18). 커밋 안 함 — DEPLOY.md 참고.
       - ./prom.htpasswd:/etc/nginx/prom.htpasswd:ro
+      # 접속·오류 로그를 파일로 남겨 log-retention 이 90일 뒤 지운다(개인정보처리방침 안내와 일치).
+      - ./logs/nginx:/var/log/nginx
     depends_on:
       - frontend
       - backend
@@ -66,6 +77,7 @@ services:
         # 이 문제가 없다). CourseMap.tsx(AI 코스짜기 경로선)는 그대로 Tmap 유지.
         NEXT_PUBLIC_NAVER_MAP_CLIENT_ID: ${NEXT_PUBLIC_NAVER_MAP_CLIENT_ID}
     container_name: sumeungil-frontend
+    logging: *default-logging
     restart: unless-stopped
     expose:
       - "3000"
@@ -77,6 +89,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: sumeungil-backend
+    logging: *default-logging
     restart: unless-stopped
     environment:
       SUMMARY_STORE_DIR: /app/data/ai-summaries
@@ -101,6 +114,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: sumeungil-postgres
+    logging: *default-logging
     restart: unless-stopped
     # .env(POSTGRES_DB/USER/PASSWORD)에서 읽는다 — backend의 DATABASE_URL과 값이 일치해야 한다.
     env_file:
@@ -128,6 +142,7 @@ services:
       context: ./backup
       dockerfile: Dockerfile
     container_name: sumeungil-postgres-backup
+    logging: *default-logging
     restart: unless-stopped
     env_file:
       - .env
@@ -150,6 +165,7 @@ services:
     # 재배포마다 무엇이 올라올지 모르는 태그라 장애 원인을 되짚을 수 없다).
     image: prom/prometheus:v3.0.1
     container_name: sumeungil-prometheus
+    logging: *default-logging
     restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -178,6 +194,7 @@ services:
     # 올릴 때는 https://hub.docker.com/r/ollama/ollama/tags 에서 태그를 확인하고 여기만 고친다.
     image: ollama/ollama:0.32.14
     container_name: sumeungil-ollama
+    logging: *default-logging
     mem_limit: 6g
     cpus: 1.5
     pids_limit: 256
@@ -208,6 +225,22 @@ services:
   # Let's Encrypt 인증서는 90일짜리다. 사람이 기억해서 갱신하면 반드시 놓친다.
   # 12시간마다 renew 를 돌린다 — 만료 30일 전이 아니면 certbot 이 아무것도 안 한다.
   # 최초 발급만 `docker compose run --rm certbot certonly ...` 로 한 번 수동 실행한다.
+  # nginx 접속·오류 로그 순환 + 보관기간 경과분 삭제. 개인정보처리방침의 "접속·오류 로그 90일 보관 후 자동 삭제"
+  # 를 실제로 지키는 장치다. 보관일은 LOG_RETENTION_DAYS(.env, 기본 90)로 바꾸되 처방도 같이 고칠 것.
+  log-retention:
+    image: alpine:3.20
+    container_name: sumeungil-log-retention
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}
+    volumes:
+      - ./logs/nginx:/logs
+      - ./logs/retention.sh:/retention.sh:ro
+    entrypoint: ["sh", "/retention.sh"]
+    networks:
+      - sumeungil
+
   certbot:
     # 2026-08-18(외부 보안감사 2차) — ollama 와 같은 이유로 고정. 이 컨테이너는 인증서
     # 개인키가 있는 볼륨을 마운트하므로 "어떤 이미지가 도는지 모름" 상태를 더더욱 두면 안 된다.
@@ -215,6 +248,7 @@ services:
     #   sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4 (amd64+arm+arm64)
     image: certbot/certbot:v5.7.0
     container_name: sumeungil-certbot
+    logging: *default-logging
     restart: unless-stopped
     volumes:
       - ./certbot/www:/var/www/certbot

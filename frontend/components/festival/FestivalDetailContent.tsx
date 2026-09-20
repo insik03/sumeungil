@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ApiError, FestivalDetailResponse, FestivalTiming, fetchFestivalDetail } from "../../lib/api";
 import { withRegionCode } from "../../lib/regionQuery";
+import BackLink from "../BackLink";
 import { FestivalGlyph, computeBadge, formatPeriod } from "../FestivalBanner";
 import PhotoCarousel from "../PhotoCarousel";
 import ReviewSection from "../reviews/ReviewSection";
@@ -66,9 +67,9 @@ export default function FestivalDetailContent({ festivalId }: FestivalDetailCont
   if (status === "notfound") {
     return (
       <section className="section festival-detail" aria-labelledby="festivalDetailHeading">
-        <Link href="/festivals" className="compare-back">
+        <BackLink href="/festivals" className="compare-back">
           ← 축제 목록으로
-        </Link>
+        </BackLink>
         <h1 className="section__title" id="festivalDetailHeading">
           축제 상세
         </h1>
@@ -86,9 +87,9 @@ export default function FestivalDetailContent({ festivalId }: FestivalDetailCont
   if (status === "error") {
     return (
       <section className="section festival-detail" aria-labelledby="festivalDetailHeading">
-        <Link href="/festivals" className="compare-back">
+        <BackLink href="/festivals" className="compare-back">
           ← 축제 목록으로
-        </Link>
+        </BackLink>
         <h1 className="section__title" id="festivalDetailHeading">
           축제 상세
         </h1>
@@ -115,9 +116,9 @@ export default function FestivalDetailContent({ festivalId }: FestivalDetailCont
 
   return (
     <section className="section festival-detail" aria-labelledby="festivalDetailHeading">
-      <Link href="/festivals" className="compare-back">
+      <BackLink href="/festivals" className="compare-back">
         ← 축제 목록으로
-      </Link>
+      </BackLink>
 
       <div className="festival-detail__photo">
         <PhotoCarousel

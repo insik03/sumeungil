@@ -55,8 +55,13 @@ export default function ConsentModal({ open, onDone }: { open: boolean; onDone: 
           약관 동의가 필요해요
         </h2>
         <p className="login-modal__sub">
-          이용약관과 개인정보처리방침이 새로 정리됐어요(시행 {TERMS_VERSION}). 계속 이용하려면 한 번
+          이용약관과 개인정보처리방침이 개정됐어요(버전 {TERMS_VERSION}). 계속 이용하려면 한 번
           확인하고 동의해주세요. 동의하지 않으면 로그아웃되고, 계정은 그대로 남아요.
+        </p>
+        <p className="login-modal__sub">
+          이번 변경은 네이버 로그인, 탈퇴 시 후기 삭제, 기존 스탬프 기록과 위치 기능 중단,
+          외부 AI 처리 안내를 반영합니다. 개인정보처리방침 확인은 별도 수집·이용 또는 국외이전 동의를 대신하지 않아요.
+          계정 삭제 등 권리 행사는 로그아웃 후에도 개인정보처리방침의 이메일로 요청할 수 있어요.
         </p>
         <label className="consent-check">
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
@@ -68,7 +73,7 @@ export default function ConsentModal({ open, onDone }: { open: boolean; onDone: 
             <a href="/privacy" target="_blank" rel="noopener noreferrer">
               개인정보처리방침
             </a>
-            을 확인했고 동의해요.
+            을 확인했으며, 이용약관에 동의해요.
           </span>
         </label>
         {error && (
