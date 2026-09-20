@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from ..deps import get_database
 from ..repositories import inquiry_repo
+from ..services import inquiry_notify
 from ..schemas.inquiry import CreateInquiryRequest, InquiryListResponse, InquirySummary
 from ..security.user_auth import UserIdentity
 from ..util.time import now_kst, to_iso_kst
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/api/v1/inquiries", tags=["inquiries"])
 @router.post("", response_model=InquirySummary, status_code=201)
 async def create_inquiry(
     req: CreateInquiryRequest,
+    background: BackgroundTasks,
     identity: UserIdentity = Depends(require_login),
 ):
     # 2026-08-18(qa-reviewer K-m1) — Pydantic min_length=1은 공백 하나(" ")도 통과시킨다.
@@ -52,6 +54,8 @@ async def create_inquiry(
         )
     )
     logger.info("문의 접수 id=%s user_id=%s", row["id"], identity.user_id)
+    # 새 문의 알림(슬랙 + 메일, 2026-09-20). 응답 뒤에 보내며 실패해도 접수에는 영향 없다. 내용·문의자 정보는 넣지 않는다.
+    background.add_task(inquiry_notify.notify_new_inquiry, int(row["id"]), str(row["created_at"]))
     return row
 
 

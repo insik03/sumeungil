@@ -240,10 +240,16 @@ export default function PrivacyPage() {
             <br />
             개인정보 보호책임자: 최지훈 (보안관리자, 숨은 팀)
             <br />
-            문의 이메일: dbdlstlr25@naver.com
+            문의 이메일: sumeungil@googlegroups.com
           </p>
 
           <h2>10. 국외이전 관련</h2>
+          <p>
+            이 처리방침의 문의 이메일(sumeungil@googlegroups.com)은 Google Groups(Google LLC)로 수신됩니다.
+            이용자가 이 주소로 보낸 메일의 내용과 발신 주소는 Google의 서버에서 처리될 수 있습니다.
+            또한 서비스는 새 고객문의가 접수되면 운영자에게 문의 번호와 접수 시각만 메일과 메신저(Slack)로
+            알리며, 문의 내용과 문의자의 이메일·계정 정보는 그 알림에 넣지 않습니다.
+          </p>
           <p>
             구글·카카오·네이버 로그인 과정에서 각 제공자는 이용자의 인증 요청을 처리하고,
             서비스는 인증 결과와 이용자가 제공을 허용한 계정 정보를 전달받습니다.

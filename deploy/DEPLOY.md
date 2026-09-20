@@ -783,7 +783,7 @@ docker compose logs backend | grep "share retention"
 | 갱신 | `certbot` 컨테이너가 12시간마다 `renew` 시도 (만료 30일 전부터 실제 갱신) |
 | 갱신 반영 | `/etc/cron.d/sumeungil-nginx-reload` 가 매일 04:17 `nginx -s reload` |
 | TLS | TLSv1.2 / TLSv1.3 만 허용 |
-| 안내 메일 | dbdlstlr25@naver.com (폐기·만료 통지 수신) |
+| 안내 메일 | sumeungil@googlegroups.com (폐기·만료 통지 수신; 2026-09-20 변경 — 서버 certbot 계정 이메일도 `certbot update_account --email` 로 바꿔야 실제 반영) |
 
 ### 건드리면 안 되는 것
 
