@@ -49,3 +49,18 @@ existing named volume and never use `down -v` or `--renew-anon-volumes` on it.
 
 OS security updates, SELinux enablement, NCP IAM/ACG and remote backups remain
 separate operational changes requiring compatibility/access validation.
+
+
+## DB/backup credential isolation
+
+PostgreSQL receives only POSTGRES_DB/USER/PASSWORD. The backup service receives
+those credentials plus explicitly listed backup/object-store settings. Do not
+restore `env_file: .env` on either service: the shared file contains application,
+OAuth and session secrets. Add any new backup setting explicitly and update the
+rendered-Compose regression test. BACKUP_DIR is fixed to the mounted /backups.
+
+Run `python3 deploy/security/verify_env_isolation.py` with Docker Compose installed;
+it renders only synthetic credentials and requires no running Docker daemon.
+Recreate the two containers to apply; preserve the database and backup volumes.
+Database recreation briefly interrupts DB connections: check readiness and the
+backend afterward. Keep a copy of the previous Compose file for rollback.

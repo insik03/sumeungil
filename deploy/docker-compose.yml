@@ -129,8 +129,12 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     # .env(POSTGRES_DB/USER/PASSWORD)에서 읽는다 — backend의 DATABASE_URL과 값이 일치해야 한다.
-    env_file:
-      - .env
+    # Only database bootstrap settings belong in this container. Never load the
+    # application .env wholesale: it also holds OAuth/API/session credentials.
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     # !!! 사용자 데이터 보존 !!! reviews/shared_courses/users/온보딩 프로필/AI 코스 전부
     # 여기 있다. 이 볼륨이 없으면 배포할 때마다 전부 사라진다(sumeungil-data와 동급 취급).
     volumes:
@@ -160,8 +164,25 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    env_file:
-      - .env
+    # Explicit allowlist: the backup process needs DB and optional object-store
+    # credentials, but must not receive application/OAuth/session secrets.
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_RETENTION_CHECK_SECONDS: ${BACKUP_RETENTION_CHECK_SECONDS:-300}
+      BACKUP_MAX_AGE_SECONDS: ${BACKUP_MAX_AGE_SECONDS:-93600}
+      BACKUP_S3_URI: ${BACKUP_S3_URI:-}
+      BACKUP_S3_SSE: ${BACKUP_S3_SSE:-AES256}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
     volumes:
       - ./backups:/backups
     depends_on:
