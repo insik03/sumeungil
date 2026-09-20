@@ -150,7 +150,7 @@ async def list_courses(
 
 
 async def list_inquiries(
-    db: Database, *, status: str, limit: int, offset: int
+    db: Database, *, status: str, limit: int, offset: int, operator: str = "", ip_hash: str = ""
 ) -> AdminInquiryListResponse:
     limit = _clamp(limit, 1, admin_repo.MAX_LIMIT)
     offset = max(0, offset)
@@ -158,6 +158,8 @@ async def list_inquiries(
     def _tx(conn: psycopg.Connection):
         rows = admin_repo.list_inquiries(conn, status=status, limit=limit, offset=offset)
         total = admin_repo.count_inquiries(conn, status=status)
+        admin_repo.record_privacy_access(conn, operator=operator, ip_hash=ip_hash,
+                                         resource="inquiries", rows=rows, offset=offset, status_filter=status)
         return rows, total
 
     rows, total = await db.aread(_tx)
@@ -166,7 +168,7 @@ async def list_inquiries(
     )
 
 
-async def list_users(db: Database, *, limit: int, offset: int) -> AdminUserListResponse:
+async def list_users(db: Database, *, limit: int, offset: int, operator: str = "", ip_hash: str = "") -> AdminUserListResponse:
     """회원 목록(2026-08-23, 대표 지시). email·외부 provider ID는 repo 단계에서부터
     아예 SELECT 하지 않는다 — "몇 명 가입했고 닉네임이 뭔지" 가벼운 현황용이다."""
     limit = _clamp(limit, 1, admin_repo.MAX_LIMIT)
@@ -175,11 +177,13 @@ async def list_users(db: Database, *, limit: int, offset: int) -> AdminUserListR
     def _tx(conn: psycopg.Connection):
         rows = admin_repo.list_users(conn, limit=limit, offset=offset, terms_version=TERMS_VERSION)
         total = admin_repo.count_users(conn)
+        admin_repo.record_privacy_access(conn, operator=operator, ip_hash=ip_hash,
+                                         resource="users", rows=rows, offset=offset)
         return rows, total
 
     rows, total = await db.aread(_tx)
     return AdminUserListResponse(
-        items=[AdminUserItem(**r) for r in rows], total=total, limit=limit, offset=offset
+        items=[AdminUserItem(**{k: v for k, v in r.items() if k != "audit_user_id"}) for r in rows], total=total, limit=limit, offset=offset
     )
 
 

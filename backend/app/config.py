@@ -237,6 +237,7 @@ class Settings:
         # 실패로 처리해 리뷰·공유·로그인 등 DB 의존 기능만 비활성화된다(조회 위주 기능은
         # 그대로 동작 — sqlite.py 시절부터의 "저장소 장애로 부팅을 막지 않는다" 원칙 유지).
         # 로컬 예: postgresql://sumeungil:<비밀번호>@localhost:5433/sumeungil
+        self.database_auto_migrate: bool = os.getenv("DATABASE_AUTO_MIGRATE", "true").lower() == "true"
         self.database_url: str = os.getenv("DATABASE_URL", "").strip()
         # 기능 킬스위치. 운영 중 남용이 발견되면 false 로 두고 재시작하면 쓰기·읽기 모두
         # 503 FEATURE_DISABLED 로 닫힌다(코드 배포 없이 차단).
