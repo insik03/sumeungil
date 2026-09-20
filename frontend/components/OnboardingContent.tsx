@@ -38,6 +38,8 @@ export default function OnboardingContent() {
   const loggedIn = useLoggedInName();
 
   const [text, setText] = useState("");
+  // 2026-09-20 — 자유 서술은 선택 사항이고, 동의(체크)해야 입력 칸이 열린다. 동의 없이는 문장이 저장·전송되지 않는다.
+  const [freeTextConsent, setFreeTextConsent] = useState(false);
   const [selected, setSelected] = useState<Record<string, Set<string>>>({});
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
@@ -109,6 +111,12 @@ export default function OnboardingContent() {
     setText(value);
   }, []);
 
+  const handleConsentChange = useCallback((checked: boolean) => {
+    setValidationMessage(null);
+    setFreeTextConsent(checked);
+    if (!checked) setText(""); // 동의를 거두면 이미 적은 문장도 버린다
+  }, []);
+
   const runAnalyze = useCallback((payload: LastSubmission) => {
     setLastSubmission(payload);
     setStep("loading");
@@ -120,7 +128,7 @@ export default function OnboardingContent() {
     analyzeOnboarding(payload, controller.signal)
       .then((res) => {
         // §B.5-7: 서버 저장 없이 sessionStorage에만 보관. 다음 단계(추천)가 여기서 읽는다.
-        saveOnboardingResult(res, payload.text);
+        saveOnboardingResult(res, payload.text, freeTextConsent);
         setResult(res);
         setStep("result");
       })
@@ -138,10 +146,14 @@ export default function OnboardingContent() {
         );
         setStep("error");
       });
-  }, []);
+  }, [freeTextConsent]);
+
+  // 저장(분석) 버튼: 키워드를 골랐거나, 동의한 뒤 자유 서술을 적었을 때만 켠다.
+  const hasChips = Object.values(selected).some((set) => set.size > 0);
+  const canSubmit = hasChips || (freeTextConsent && text.trim().length > 0);
 
   const handleSubmit = useCallback(() => {
-    const trimmed = text.trim();
+    const trimmed = freeTextConsent ? text.trim() : "";
     const chips = Object.values(selected).flatMap((s) => Array.from(s));
     if (!trimmed && chips.length === 0) {
       // §B.1 EMPTY_INPUT과 동일한 문구로 미리 안내 — 24초를 기다렸다 실패하지 않게 클라이언트에서 먼저 막는다.
@@ -150,7 +162,7 @@ export default function OnboardingContent() {
     }
     setValidationMessage(null);
     runAnalyze({ text: trimmed || undefined, chips: chips.length > 0 ? chips : undefined });
-  }, [text, selected, runAnalyze]);
+  }, [text, selected, freeTextConsent, runAnalyze]);
 
   const handleCancelLoading = useCallback(() => {
     abortRef.current?.abort();
@@ -216,7 +228,9 @@ export default function OnboardingContent() {
           selected={selected}
           onToggleChip={toggleChip}
           onSubmit={handleSubmit}
-          canSubmit={true}
+          consent={freeTextConsent}
+          onConsentChange={handleConsentChange}
+          canSubmit={canSubmit}
           validationMessage={validationMessage}
           onRetrySchema={() => setSchemaRetryTick((t) => t + 1)}
         />

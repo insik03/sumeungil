@@ -530,7 +530,8 @@ export default function CourseContent() {
   // 폴백한다. 비로그인이면(사실 이 화면 자체가 게이트로 막혀 있지만 방어적으로) 기존대로
   // sessionStorage만 본다.
   useEffect(() => {
-    setWish(loadOnboardingResult()?.text ?? null);
+    const stored = loadOnboardingResult();
+    setWish(stored?.textConsented ? (stored.text ?? null) : null); // 동의한 자유 서술만 Google 로 나간다
     if (!loggedIn) {
       setProfile(loadOnboardingResult()?.result ?? null);
       return;
@@ -641,7 +642,7 @@ export default function CourseContent() {
       .then((res) => {
         // §B.5-7과 동일 원칙 — sessionStorage 갱신 + profile state 갱신. profile이 바뀌면
         // 위 fetchCourse effect가 이미 [profile, ...] 의존성으로 자동 재호출한다(재구현 불필요).
-        saveOnboardingResult(res, trimmed);
+        saveOnboardingResult(res, trimmed, true); // 고른 칩을 이은 고정 문장(자유 서술 아님)
         setWish(trimmed);
         setProfile(res);
         setOpinionStatus("success");
