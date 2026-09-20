@@ -2601,21 +2601,24 @@ input:focus-visible,
   gap: var(--sp-4);
   margin-top: var(--sp-6);
 }
+/* 2026-09-20 대표 지시 — "축제 사진이 너무 커서 한눈에 안 들어온다, 0.75배(비율 유지)". 카드 폭을 0.75배로:
+   2열→3열(560px~), 3열→4열(900px~), 260px→195px(1200px~). 사진은 16:9 그대로라 높이도 함께 0.75배.
+   모바일 1열(<560px)은 폭이 좁아 텍스트가 뭉개지므로 그대로 둔다. */
 @media (min-width: 560px) {
   .festivals-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 @media (min-width: 900px) {
   .festivals-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 @media (min-width: 1200px) {
   /* §43 — 고정 4열 대신 auto-fill/minmax(전 페이지 컨테이너 스텝 확장과 동일 원칙, 03-design-spec.md
      §43). 260px는 이 그리드의 16:9 사진 + 제목/기간/주소 텍스트가 뭉개지지 않는 하한. */
   .festivals-grid {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
   }
 }
 /* 그리드 안에서는 카드가 가로 스크롤 카드보다 눈에 더 오래 머무르므로 사진 영역을 살짝 키운다
@@ -2623,9 +2626,7 @@ input:focus-visible,
    고정 px 높이(148px)였던 이전 값은 그리드 컬럼 폭이 1~4열로 바뀔 때마다 비율이 들쭉날쭉해져
    aspect-ratio로 교체했다(모바일 1열의 넓은 폭에서도 16:9로 일관된 크롭 유지). */
 .festivals-grid .festival-card__media {
-  /* 2026-09-20 대표 지시 — "사진이 너무 커서 한눈에 안 들어온다, 0.75배". 16:9 의 높이를 0.75배로
-     (16 / (9 × 0.75) = 64 / 27). 가로는 그대로라 열 수·카드 폭은 변하지 않는다. */
-  aspect-ratio: 64 / 27;
+  aspect-ratio: 16 / 9; /* 비율은 유지 — 카드 전체를 0.75배로 줄이는 건 위 열 수·minmax 가 맡는다 */
 }
 
 /* =========================================================================
