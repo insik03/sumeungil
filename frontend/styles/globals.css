@@ -7061,3 +7061,7 @@ input:focus-visible,
   .home-search-bar { padding-bottom: var(--sp-4); }
   .quick-menu { padding-top: var(--sp-4); }
 }
+
+/* 2026-09-20 — AI 코스짜기 선택 칩 그룹(동행·실내/실외·활동). */
+.course-choice { margin-top: var(--sp-3); }
+.course-choice__label { display: block; margin-bottom: var(--sp-1); font-size: var(--text-sm); font-weight: 700; color: var(--ink-muted); }
