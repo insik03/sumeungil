@@ -27,3 +27,6 @@ tsconfig.tsbuildinfo
 *.db-shm
 *.db-wal
 deploy/backups/
+
+# Generated source/AI cache; persisted by Docker volume, not Git.
+backend/data/ai-summaries/

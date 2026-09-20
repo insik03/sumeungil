@@ -124,6 +124,7 @@ _MERGE_TABLES: tuple[tuple[str, str | None], ...] = (
     ("ai_courses", None),
     ("inquiries", None),
     ("saved_spots", "spot_id"),
+    ("visit_stamps", "spot_id"),
     ("course_likes", "share_code"),
 )
 

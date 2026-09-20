@@ -1408,6 +1408,8 @@ export interface FestivalDetailResponse {
    * 않는다(빈 껍데기 금지, 지어내지 않음).
    */
   description?: string | null;
+  ai_summary?: string | null;
+  ai_provider?: string | null;
 }
 
 /**
@@ -2481,4 +2483,70 @@ export async function putSavedSpotRemote(
 
 export async function deleteSavedSpotRemote(spotId: number): Promise<void> {
   await savedSpotsRequest(`/${spotId}`, { method: "DELETE" }, "저장을 해제하지 못했습니다.");
+}
+
+// ---------------------------------------------------------------------------
+// 방문 스탬프 계정 보관함 — 2026-09-20(대표 지시 "기기가 아닌 계정, 브라우저 위치로 찍는 것"). 로그인 필수.
+// 좌표는 서버가 그 스팟과의 거리 대조에만 쓰고 저장하지 않는다(stampStorage.ts 참고).
+// ---------------------------------------------------------------------------
+export interface StampRemote {
+  spot_id: number;
+  name: string;
+  region_code: string;
+  region_name: string | null;
+  category: SpotCategory;
+  stamped_at: string;
+}
+
+async function stampsRequest(path: string, init: RequestInit, failMsg: string): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v1/stamps${path}`, {
+      ...init,
+      headers: { Accept: "application/json", ...(init.headers ?? {}) },
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK_UNAVAILABLE", failMsg);
+  }
+  if (!res.ok) {
+    let code = "UNKNOWN";
+    let message = failMsg;
+    try {
+      const body = (await res.json()) as { error?: { code?: string; message?: string } };
+      code = body.error?.code ?? code;
+      message = body.error?.message ?? message;
+    } catch {
+      /* 본문 없음 */
+    }
+    throw new ApiError(res.status, code, message);
+  }
+  return res;
+}
+
+export async function fetchStamps(): Promise<StampRemote[]> {
+  const res = await stampsRequest("", { method: "GET" }, "방문 스탬프를 불러오지 못했습니다.");
+  const body = (await res.json()) as { items?: StampRemote[] };
+  return body.items ?? [];
+}
+
+export async function postStampRemote(
+  spotId: number,
+  pos: { lat: number; lng: number; accuracy_m: number }
+): Promise<StampRemote> {
+  const res = await stampsRequest(
+    `/${spotId}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify(pos),
+    },
+    "스탬프를 찍지 못했습니다."
+  );
+  return (await res.json()) as StampRemote;
+}
+
+export async function deleteStampRemote(spotId: number): Promise<void> {
+  await stampsRequest(`/${spotId}`, { method: "DELETE" }, "스탬프를 지우지 못했습니다.");
 }

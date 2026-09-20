@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import asyncio
 import logging
 import psycopg
 
@@ -218,8 +219,8 @@ async def ai_status(cache: Cache, spot_repo: SpotRepository) -> AdminAiStatusRes
     last_429 = q.get("last_429_ts")
     last_ok = q.get("last_success_ts")
     return AdminAiStatusResponse(
-        provider=settings.llm_provider,
-        model=settings.gemini_model if settings.llm_provider == "gemini" else settings.ollama_model,
+        provider=settings.course_llm_provider,
+        model=settings.gemini_model if settings.course_llm_provider == "gemini" else settings.ollama_model,
         quota_429_last_hour=int(q.get("quota_429_last_hour") or 0),
         quota_429_last_24h=int(q.get("quota_429_last_24h") or 0),
         last_429_at=_iso(last_429),
@@ -228,7 +229,7 @@ async def ai_status(cache: Cache, spot_repo: SpotRepository) -> AdminAiStatusRes
         course_llm_used_today=used,
         course_llm_cap_global=settings.course_llm_daily_cap_global,
         course_llm_cap_per_user=settings.course_llm_daily_cap_per_user,
-        summaries_pregenerated=len(spot_detail_service._pregenerated_summaries()),
+        summaries_pregenerated=len(await asyncio.to_thread(spot_detail_service._pregenerated_summaries)),
         spots_total=len(spot_repo.all_spots()),
         csp_total=int(csp.get("total") or 0),
         csp_distinct=int(csp.get("distinct") or 0),

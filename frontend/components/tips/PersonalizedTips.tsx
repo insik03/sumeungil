@@ -75,7 +75,7 @@ export default function PersonalizedTips() {
   return (
     <div className="tips-group tips-group--ai">
       <span className="tips-category-label tips-group__label">
-        <GeminiMark /> 맞춤 팁
+        <GeminiMark provider="ollama" /> 맞춤 팁
       </span>
       <div className="tips-grid">
         {tips.map((tip) => (

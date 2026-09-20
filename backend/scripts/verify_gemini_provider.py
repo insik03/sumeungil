@@ -1,20 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Gemini 전환(2026-09-03) 결정적 회귀 — 네트워크·키 없이 돈다(CI 포함).
-
-확인하는 것:
-  1. LLM_PROVIDER=gemini 면 세 팩토리(온보딩·요약·팁)가 전부 Gemini 구현체를 준다
-  2. Ollama JSON 스키마 → Gemini responseSchema 변환(additionalProperties 제거, null → nullable)
-  3. 키가 비어 있을 때 세 경로가 예외 없이 폴백한다(룰 폴백 / None / [])
-  4. PII 프리필터(07-legal-review-gemini-api-전환.md §3-1): 주민번호·전화번호·이메일 마스킹,
-     날짜·금액 같은 숫자는 건드리지 않음, sanitize_free_text 경로에 실제로 물려 있음
-  5. Ollama messages → Gemini contents 변환(system → systemInstruction, assistant → model)
-"""
+"""Hybrid routing and Gemini schema/PII regression; no network calls."""
 from __future__ import annotations
 
 import asyncio
 import json
 import os
 import sys
+from unittest.mock import AsyncMock, patch
+import httpx
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -28,10 +21,10 @@ os.environ.setdefault("PUBLIC_DATA_API_KEY", "verify-only")
 from app.config import settings  # noqa: E402
 from app.ai import gemini_client  # noqa: E402
 from app.ai.injection_guard import PII_MASK, mask_pii, sanitize_free_text  # noqa: E402
-from app.ai.llm_provider import GeminiProvider, _tag_extraction_schema, create_provider_from_settings  # noqa: E402
+from app.ai.llm_provider import OllamaProvider, _tag_extraction_schema, create_provider_from_settings  # noqa: E402
 from app.ai.schemas import LLMExtractionError  # noqa: E402
-from app.ai.summarizer import GeminiSummarizer, create_summarizer_from_settings  # noqa: E402
-from app.ai.tips_generator import GeminiTipsGenerator, create_tips_generator_from_settings  # noqa: E402
+from app.ai.summarizer import GeminiSummarizer, OllamaSummarizer, create_summarizer_from_settings, create_course_summarizer_from_settings  # noqa: E402
+from app.ai.tips_generator import OllamaTipsGenerator, create_tips_generator_from_settings  # noqa: E402
 
 FAILS: list[str] = []
 
@@ -59,9 +52,9 @@ print("=== 1. 팩토리 스위치 ===")
 provider = create_provider_from_settings(settings)
 summarizer = create_summarizer_from_settings(settings)
 tips = create_tips_generator_from_settings(settings)
-check("온보딩 → GeminiProvider", isinstance(provider, GeminiProvider), type(provider).__name__)
-check("요약 → GeminiSummarizer", isinstance(summarizer, GeminiSummarizer), type(summarizer).__name__)
-check("팁 → GeminiTipsGenerator", isinstance(tips, GeminiTipsGenerator), type(tips).__name__)
+check("온보딩 → OllamaProvider", type(provider) is OllamaProvider, type(provider).__name__)
+check("요약 → OllamaSummarizer", type(summarizer) is OllamaSummarizer, type(summarizer).__name__)
+check("팁 → OllamaTipsGenerator", type(tips) is OllamaTipsGenerator, type(tips).__name__)
 
 print("=== 2. 스키마 변환 ===")
 g = gemini_client.to_gemini_schema(_tag_extraction_schema())
@@ -85,7 +78,11 @@ async def _fallbacks() -> None:
     check("코스 요약 None", await summarizer.summarize_course("1. 해운대 2. 동백섬") is None)
 
 
-asyncio.run(_fallbacks())
+with patch("httpx.AsyncClient.post", AsyncMock(side_effect=httpx.ConnectError("stub"))):
+    asyncio.run(_fallbacks())
+course = create_course_summarizer_from_settings(settings)
+check("코스 → Gemini", type(course) is GeminiSummarizer)
+check("코스 키 없음 → 폴백", asyncio.run(course.summarize_course("해운대 산책 코스")) is None)
 
 print("=== 4. PII 프리필터 ===")
 cases = {

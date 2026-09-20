@@ -13,6 +13,8 @@ __pycache__/
 # 시드 백업본(20MB+) — 런타임에 읽지 않는다. spots_seed.json 만 필요.
 app/spots/data/*.backup-*.json
 
-# 문서 / 일회성 검증 스크립트 — 런타임 불필요
+# 문서 / 검증 스크립트는 제외하고 운영 요약 배치만 포함한다.
 README.md
-scripts/
+scripts/*
+!scripts/build_spot_summaries.py
+!scripts/build_festival_summaries.py

@@ -10,6 +10,8 @@ MVP-5에서 핫플 vs 숨은길 1:1 대조 리포트(`POST /api/v1/compare`)를 
 - 계약 정본: [`../01-interface-contract.md`](../01-interface-contract.md) (응답 스키마는 이 문서가 정본)
 - 구현 범위: [`../00-impl-plan.md`](../00-impl-plan.md)
 
+현재 AI 역할 분리와 배치 실행은 [Hybrid AI 운영 문서](../docs/hybrid-ai-implementation.md)를 따른다.
+
 ## 엔드포인트
 
 | 메서드 | 경로 | 설명 |

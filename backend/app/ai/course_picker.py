@@ -172,10 +172,10 @@ def parse_result(content: str | None, allowed_ids: set[int], min_picks: int = PI
     for item in raw["picks"]:
         if not isinstance(item, dict):
             continue
-        try:
-            sid = int(item.get("id"))
-        except (TypeError, ValueError):
+        value = item.get("id")
+        if type(value) is not int and not (isinstance(value, str) and value.isdecimal()):
             continue
+        sid = int(value)
         if sid not in allowed_ids or sid in seen:
             logger.info("코스 선택기: 후보 밖/중복 id 폐기 id=%s", sid)
             continue

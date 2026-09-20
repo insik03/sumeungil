@@ -10,21 +10,13 @@ GET /api/v1/places/{content_id} 소관. 추천(recommend_service)과 달리 프�
   - recommended_for: 스팟 자체 태그(tags)/category/themes/is_hidden_gem 를 **enum→한국어 문구**로
     매핑해 생성. 외부 문자열·스팟명·overview 텍스트를 넣지 않는다(인젝션 표면 0).
 
-ai_summary 경로(2026-07-31, AI 커버리지 개선): 운영 서버는 저사양(2 vCPU)이라 7B 로컬 추론이
-50초+ 걸려 사실상 매 요청 LLM 미호출로 운영됐다(ai_summary 100% null). `backend/scripts/
-build_spot_summaries.py` 배치가 미리 만들어 둔 `app/spots/data/spot_summaries.json` 을 최우선
-으로 쓰도록 바꿔 **파일이 있으면 그 스팟은 LLM 호출이 0**이 된다. 순서: ① 사전 생성 파일
-→ ② 런타임 캐시(성공분 24h) → ③ 라이브 LLM(가능할 때만). 응답 스키마(ai_summary: str|null)는
-불변 — 어느 경로로 채워졌는지는 로그에만 남긴다(운영 확인용, 계약에 영향 없음).
+ai_summary는 영구 캐시의 로컬 배치 결과 또는 원문 발췌를 반환한다. 상세 조회는 LLM을 호출하지 않는다.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from functools import lru_cache
-from pathlib import Path
 
 from ..ai import tag_registry
 from ..ai.summarizer import Summarizer
@@ -34,6 +26,7 @@ from ..config import settings
 from ..clients.tourapi_detail_client import TourApiDetailError
 from ..regions.seed import REGIONS
 from ..repositories.congestion_repo import CongestionRepository
+from ..repositories.summary_repo import SummaryRepository
 from ..repositories.spot_repo import SpotRecord, SpotRepository
 from ..schemas.places import SpotDetail, SpotImage, SpotLocation, SpotThemes, VisitTip
 from ..spots.region_map import get_tourapi_region
@@ -269,43 +262,21 @@ async def build_images(content_id: int, photo: Photo, cache: Cache) -> list[Spot
 
 # ---------- ai_summary (로컬 LLM 3줄 요약, 부록 G additive) ----------
 
-# build_spot_summaries.py 산출물 경로(단일 소스). 스크립트와 이 상수가 어긋나면 배치가 만든
-# 파일을 서버가 못 찾는 사고가 나므로 이름을 그대로 맞춘다.
-PREGENERATED_SUMMARIES_PATH = (
-    Path(__file__).resolve().parent.parent / "spots" / "data" / "spot_summaries.json"
-)
+def _summary_repository() -> SummaryRepository:
+    return SummaryRepository(settings.summary_store_dir, settings.ollama_model)
 
 
-@lru_cache(maxsize=1)
-def _pregenerated_summaries() -> dict[str, str]:
-    """사전 생성 요약 파일을 프로세스 수명 동안 1회만 읽어 메모리 dict 로 유지.
-
-    파일이 없거나(N1: 아직 배치를 안 돌림) 깨져 있어도(N2: 파싱 실패) **앱은 죽지 않는다** —
-    빈 dict 를 반환해 하위 경로(런타임 캐시 → 라이브 LLM)로 그대로 폴백된다.
-    """
-    try:
-        raw = json.loads(PREGENERATED_SUMMARIES_PATH.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        logger.info("사전 생성 요약 파일 없음(%s) — 런타임/라이브 경로로 폴백", PREGENERATED_SUMMARIES_PATH)
-        return {}
-    except (OSError, ValueError) as exc:
-        logger.warning("사전 생성 요약 파일 파싱 실패(%s): %s — 런타임/라이브 경로로 폴백",
-                        PREGENERATED_SUMMARIES_PATH, exc)
-        return {}
-
-    raw_summaries = raw.get("summaries") if isinstance(raw, dict) else None
-    if not isinstance(raw_summaries, dict):
-        return {}
-
-    out: dict[str, str] = {}
-    for spot_id, entry in raw_summaries.items():
-        if not isinstance(entry, dict):
-            continue
-        summary = entry.get("summary")
-        if isinstance(summary, str) and summary.strip():
-            out[str(spot_id)] = summary
-    logger.info("사전 생성 요약 %d건 로드 완료(%s)", len(out), PREGENERATED_SUMMARIES_PATH)
-    return out
+def _pregenerated_summaries(ids: list[int] | None = None) -> dict[str, str]:
+    """Only versioned local results; legacy files lack source/model provenance."""
+    repo = _summary_repository()
+    if ids is None:
+        ids = [int(p.stem) for p in (repo.directory / "spot").glob("*.json") if p.stem.isdigit()]
+    result = {}
+    for sid in ids:
+        value = repo.current(repo.load("spot", sid))
+        if value:
+            result[str(sid)] = value
+    return result
 
 
 async def _get_ai_summary(
@@ -314,39 +285,8 @@ async def _get_ai_summary(
     summarizer: Summarizer | None,
     cache: Cache,
 ) -> tuple[str | None, str | None]:
-    """ai_summary 조립 → (summary, provider). **① 사전 생성 파일 → ② 런타임 캐시 → ③ 라이브 LLM** 순.
-
-    provider(QA 2026-09-05 P2): 라이브/런타임 캐시는 만든 시점의 settings.llm_provider
-    ("gemini"/"ollama"), 사전 생성 파일은 배치 산출물이라 None(출처 미상 → 프론트는 일반 "AI"
-    마크). 프론트가 모든 요약에 Gemini 마크를 붙이던 오표시를 막는다.
-
-    - 사전 생성 파일에 있으면 그대로 반환(LLM 호출 0, overview 유무와 무관 — 배치 시점엔
-      overview 가 있었다는 뜻이므로 지금 원천이 잠깐 흔들려도 정상 표시된다).
-    - overview 없음(현재 조회 기준) → None(요약을 만들지 않음, LLM 미호출).
-    - summarizer 미주입(비활성) → None(graceful).
-    - LLM 실패/타임아웃/빈응답 → None(원문 overview 는 호출부에서 그대로 유지). 실패는 캐시하지
-      않아 다음 클릭에 재시도(overview 원천 실패 처리와 동일 정책).
-    """
-    pregenerated = _pregenerated_summaries().get(str(content_id))
-    if pregenerated:
-        logger.debug("ai_summary source=pregenerated content_id=%s", content_id)
-        return pregenerated, None
-
-    if not overview or summarizer is None:
-        return None, None
-
-    key = f"spot_summary:{content_id}"
-    cached = await cache.get(key)
-    if cached is not None:
-        logger.debug("ai_summary source=runtime_cache content_id=%s", content_id)
-        return cached.get("summary"), cached.get("provider")  # 구 캐시 항목엔 provider 없음 → None
-
-    summary = await summarizer.summarize(overview)  # 내부에서 모든 오류를 None 으로 흡수
-    provider = settings.llm_provider if summary else None
-    if summary:
-        await cache.set(key, {"summary": summary, "provider": provider}, SUMMARY_CACHE_TTL_SEC)
-        logger.debug("ai_summary source=live_llm(%s) content_id=%s", provider, content_id)
-    return summary, provider
+    """Read preprocessed local summary, otherwise source excerpt. Never infer on request."""
+    return await asyncio.to_thread(_summary_repository().display, "spot", content_id, overview)
 
 
 # ---------- visit_tip (부록 M additive) — 이 스팟의 한적한 날/붐비는 날 ----------
@@ -407,8 +347,8 @@ async def build_spot_detail(
 ) -> SpotDetail:
     """content_id 로 SpotDetail 조립. 없으면 SpotNotFound.
 
-    summarizer 가 주어지면 overview 를 로컬 LLM 으로 3줄 요약해 ai_summary 에 담는다
-    (실패/없음 → null, 원문 overview 는 그대로). 미주입이면 ai_summary=null(하위호환).
+    ai_summary에는 검증된 배치 결과 또는 원문 발췌를 담는다.
+    summarizer 인자는 호출부 호환을 위해 유지하며 상세 조회에서 호출하지 않는다.
     """
     spot = spot_repo.by_id(content_id)
     if spot is None:

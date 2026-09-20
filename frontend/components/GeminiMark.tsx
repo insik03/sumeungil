@@ -8,7 +8,7 @@
  *
  * provider(QA 2026-09-05 P2): 응답에 `ai_provider` 가 있는 곳(스팟 상세)은 그 값으로 분기한다 —
  * "gemini" 가 아니면(ollama 배치 산출물·출처 미상) Gemini 별 대신 일반 "AI" 마크. prop 을 안 주는
- * 호출부(코스·팁·온보딩)는 라이브 생성이라 현재 provider 가 곧 Gemini 다.
+ * 호출부 중 코스만 기본 Gemini를 쓰며, 팁·온보딩은 provider="ollama"를 명시한다.
  */
 export default function GeminiMark({
   label = "Gemini",

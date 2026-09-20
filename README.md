@@ -34,13 +34,13 @@ ollama는 인증이 없고, backend를 직접 노출하면 레이트리밋을 �
 | 화면 | 경로 | 외부 호출 | LLM |
 |---|---|---|---|
 | 혼잡도 전광판 · 지역 추천 | nginx → backend → 캐시(인메모리, TTL) → 없으면 TourAPI·집중률·기상청 | 공공데이터포털 | 없음 — 취향·혼잡도·거리·날씨 점수화만 |
-| AI 취향 분석(온보딩) | 자유 서술 → 인젝션 가드·PII 마스킹 → Gemini JSON 태그 → 실패 시 규칙 기반 폴백 → postgres 프로필 저장 | Gemini API | 1회 · 로그인 필수 · 6회/분 |
+| AI 취향 분석(온보딩) | 자유 서술 → 인젝션 가드·PII 마스킹 → 로컬 Ollama JSON 태그 → 실패 시 규칙 기반 폴백 → postgres 프로필 저장 | 로컬 Ollama | 1회 · 로그인 필수 · 6회/분 |
 | AI 코스짜기 | 스팟 선정 → Tmap 구간 이동시간 **동시 호출**(`asyncio.gather`) → Gemini 코스 요약(타임아웃 시 요약 없이 응답) → 로그인 시 저장 | SK Tmap · Gemini | 요약 1회 · 24h 캐시 |
-| 개인화 여행 팁 | 취향·지역·날짜 키로 캐시 → 없으면 Gemini → 실패 시 정적 팁 | Gemini API | 조건부 · 킬스위치 |
+| 개인화 여행 팁 | 취향·지역·날짜 키로 캐시 → 없으면 Ollama → 실패 시 정적 팁 | 로컬 Ollama | 조건부 · 킬스위치 |
 | 로그인 | Google · Kakao OAuth 콜백 → 세션 쿠키(HttpOnly) | OAuth | 없음 |
 
-LLM(Gemini, `LLM_PROVIDER=ollama`면 로컬)이 도는 경로는 셋뿐이고(온보딩 · 코스 요약 · 여행 팁) 모두 **실패해도 화면이 깨지지 않는 폴백**이
-있다. nginx도 이 세 경로(`/api/v1/onboarding/`, `/api/v1/courses/`, `/api/v1/tips/`)만 따로 긴 타임아웃을 준다.
+일반 AI(온보딩·팁·관광지/축제 요약)는 로컬 Ollama, 코스 선택·설명은 Gemini를 사용한다.
+관광지/축제 상세 조회는 LLM을 호출하지 않는다. 배치 결과가 없거나 변경된 원문과 해시가 다르면 원문 발췌를 반환한다.
 backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이기 때문이다 — 트래픽이 늘면 `cache/base.py`
 인터페이스 뒤를 Redis로 바꾸고 워커를 늘린다.
 
@@ -69,8 +69,8 @@ backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
   <img alt="Pydantic" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white" />
   <img alt="Gemini" src="https://img.shields.io/badge/Gemini_API-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white" />
-  <img alt="Ollama" src="https://img.shields.io/badge/Ollama-Fallback-111111?style=for-the-badge&logo=ollama&logoColor=white" />
-  <img alt="Qwen" src="https://img.shields.io/badge/Qwen3.5-2B--4B_Q4-615CED?style=for-the-badge" />
+  <img alt="Ollama" src="https://img.shields.io/badge/Ollama-Preprocessing-111111?style=for-the-badge&logo=ollama&logoColor=white" />
+  <img alt="Qwen" src="https://img.shields.io/badge/Qwen3-4B_Instruct_Q4-615CED?style=for-the-badge" />
 </p>
 
 ### Data · Infrastructure
@@ -88,7 +88,7 @@ backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이
 |---|---|
 | **Next.js · React · TypeScript** | 반응형 웹 UI, 지도와 추천 결과 렌더링 |
 | **FastAPI · Pydantic** | REST API, 입력 계약 검증, 추천·코스 도메인 로직 |
-| **Gemini API** (Ollama 폴백) | 취향 추출, 스팟·코스 요약, 개인화 여행 팁 — `LLM_PROVIDER`로 전환. 자유서술은 PII 마스킹 후 전송 |
+| **Hybrid AI** | Ollama: 취향·팁·관광지/축제 요약. Gemini: 코스 선택·설명만. 자유서술은 PII 마스킹 후 전송 |
 | **PostgreSQL** | 회원, 취향 프로필, AI 코스, 후기와 공유 데이터 저장 |
 | **TourAPI · 기상청 · 지도 API** | 관광지, 혼잡도, 날씨, 이동 경로 원천 데이터 |
 | **Docker · Nginx** | 단일 VM(x86_64) 컨테이너 배포, TLS와 리버스 프록시 |
@@ -102,7 +102,7 @@ backend가 worker 1개인 이유는 레이트리밋과 캐시가 인메모리이
 cd backend
 pip install -r requirements.txt
 cp .env.example .env   # 필요한 키는 프로젝트 관리자에게 요청
-# LLM_PROVIDER=ollama 로 로컬 모델을 쓸 때만: ollama pull qwen3.5:4b-q4_K_M
+ollama pull qwen3:4b-instruct-2507-q4_K_M
 python -m uvicorn app.main:app --port 8000
 ```
 
@@ -185,3 +185,41 @@ git checkout -b feat/화면이름
 <div align="center">
   <sub>2026 관광데이터 활용 공모전 · 웹/앱 구현 부문 지정과제 출품작</sub>
 </div>
+
+## AI Architecture
+
+```text
+TourAPI / 표준 축제 데이터 → 원문 영구 저장
+    → Local LLM (Qwen3 4B / Ollama, 순차 배치)
+    → JSON 검증 → 해시·모델·프롬프트 버전과 함께 영구 캐시
+    → 상세 화면 / 관광지 후보 검색
+    → 제한된 후보 ID·로컬 요약 → Gemini 코스 선택
+    → 서버가 실제 관광지 데이터 결합 / Haversine·Tmap 이동 경로
+```
+
+반복적인 소개 요약은 사전에 로컬에서 처리하고 Gemini 호출은 코스 생성에 집중한다.
+관광지는 기존 JSON 저장 구조, 사용자 데이터는 기존 PostgreSQL을 유지하며 DB 스키마는 변경하지 않는다.
+요약과 원문은 `SUMMARY_STORE_DIR`의 파일 캐시에 저장한다. Docker에서는 기존 `/app/data` 볼륨을 사용한다.
+각 항목의 `sourceHash`, `modelName`, `promptVersion`, `generatedAt`으로 재사용 여부를 판정한다.
+동일 원문은 추론하지 않고, 원문/모델/프롬프트 변경 시 재생성한다. 저장은 항목마다 원자적으로 수행하며 배치 동시 실행은 OS 잠금으로 제한한다.
+
+```bash
+# backend/에서 실행. 실제 PUBLIC_DATA_API_KEY 및 로컬 Ollama 모델 필요.
+python scripts/build_spot_summaries.py --limit 50
+python scripts/build_festival_summaries.py --limit 50
+python scripts/build_spot_summaries.py --all --report-only
+# 실패 항목은 다음 배치 실행에서 재시도. 각 실행의 LLM 재시도는 최대 1회.
+python scripts/verify_hybrid_ai.py
+```
+
+기본 모델은 [Qwen3 4B Instruct 2507 Q4_K_M](https://ollama.com/library/qwen3:4b-instruct-2507-q4_K_M).
+기존 Ollama 컨테이너를 유지해 모델 로딩과 배포 경로를 재사용한다.
+CPU 서버 보호를 위해 동시 추론 1, context 4096, 최대 출력 512 tokens, Ollama 메모리 6GB·CPU 1.5 한도를 둔다.
+대상 서버의 실제 지연·RAM 피크·한국어 요약 품질은 별도 실측이 필요하다.
+
+`GEMINI_API_KEY`, 기존 `GEMINI_MODEL` 설정은 코스에만 사용한다. 키가 없으면 기존 규칙 기반 코스를 반환한다.
+`OLLAMA_BASE_URL`/`OLLAMA_MODEL` 또는 우선 적용되는 `LOCAL_LLM_URL`/`LOCAL_LLM_MODEL`로 로컬 서버를 설정한다.
+`LLM_PROVIDER` 전역 전환은 폐기했다. 과거 환경변수에 `gemini`가 남아 있어도 일반 AI가 Gemini로 전송되지 않는다.
+새 캐시에 없는 기존 사전 생성 요약은 해시·출처를 검증할 수 없어 사용하지 않으며, 배치로 다시 생성한다.
+
+운영 절차, 제약, 검증 방법은 [Hybrid AI 구현 문서](docs/hybrid-ai-implementation.md)를 참고한다.

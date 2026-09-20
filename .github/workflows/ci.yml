@@ -64,6 +64,11 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
       - run: python -m compileall -q app scripts
+      - name: Backend image and preprocessing commands
+        run: |
+          docker build -t sumeungil-backend-ci .
+          docker run --rm -e PUBLIC_DATA_API_KEY=verify-only --entrypoint python sumeungil-backend-ci scripts/build_spot_summaries.py --limit 1 --report-only
+          docker run --rm -e PUBLIC_DATA_API_KEY=verify-only --entrypoint python sumeungil-backend-ci scripts/build_festival_summaries.py --help
       - name: 결정적 회귀 스크립트 실행
         shell: bash
         run: |

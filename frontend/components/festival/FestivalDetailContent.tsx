@@ -145,7 +145,13 @@ export default function FestivalDetailContent({ festivalId }: FestivalDetailCont
 
       {/* §36.8(신규, 대표 피드백 후속) — description이 null/undefined면(구버전 백엔드 포함) 빈
           껍데기를 그리지 않고 섹션 자체를 생략한다(지어내지 않음). */}
-      {description && <FestivalDescription description={description} />}
+      {data.ai_summary && data.ai_provider === "ollama" && (
+        <section className="festival-section" aria-label="축제 핵심 요약">
+          <h2>AI 축제 핵심 요약</h2>
+          <p>{data.ai_summary}</p>
+        </section>
+      )}
+      {(description || data.ai_summary) && <FestivalDescription description={description || data.ai_summary!} />}
 
       <div className="festival-timing-card">
         <span className="festival-timing-card__eyebrow">방문 타이밍</span>
