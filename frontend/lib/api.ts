@@ -720,6 +720,24 @@ export interface VisitTip {
 }
 
 /** §G.1 — GET /api/v1/places/{content_id} 성공 응답. */
+/**
+ * 2026-09-20 — 그 **장소 좌표 기준** 지금 날씨(기상청 초단기실황 5km 격자).
+ * FestivalWeather(관광코스 날씨 D18, 시도 해상도, 축제 기간 강수확률)와는 다른 원천·다른 질문이다.
+ * 서버가 원천을 못 받으면 필드 자체가 null/없음 → 화면은 날씨 줄을 그리지 않는다(지어내지 않음).
+ */
+export interface LiveWeather {
+  /** "맑음" / "구름많음" / "흐림" / "비" / "눈" … 서버가 코드표로 정한 고정 문구다. */
+  condition: string;
+  /** 지금 비·눈이 오는가. 문구를 파싱하지 말고 이 불리언을 쓴다. */
+  precipitation: boolean;
+  temperature_c: number | null;
+  humidity_pct: number | null;
+  rain_1h_mm: number | null;
+  /** "YYYY-MM-DD HH:00"(KST). 언제 기준인지 화면에 함께 밝힌다. */
+  observed_at: string;
+  source: string;
+}
+
 export interface SpotDetail {
   id: number;
   name: string;
@@ -743,6 +761,8 @@ export interface SpotDetail {
   ai_summary: string | null;
   /** 요약을 만든 LLM("gemini"/"ollama"). null/미존재 = 출처 미상(사전 생성분·구버전 백엔드) → 일반 "AI" 마크. */
   ai_provider?: string | null;
+  /** 2026-09-20 — 이 스팟 좌표 기준 지금 날씨. null/미존재면 표시하지 않는다(구버전 백엔드 하위호환). */
+  live_weather?: LiveWeather | null;
   /** §31(신규) — "방문 타이밍" 카드 전용. null이면 카드 자체를 숨긴다(관광지·자연 외 카테고리는 항상 null). */
   visit_tip: VisitTip | null;
   /**
@@ -1379,6 +1399,8 @@ export interface FestivalDetailResponse {
   images: MediaImage[];
   timing: FestivalTiming;
   weather: FestivalWeather;
+  /** 2026-09-20 — 축제 지역 좌표 기준 지금 날씨. null/미존재면 표시하지 않는다. */
+  live_weather?: LiveWeather | null;
   /**
    * §36.8(신규, 03-design-spec.md 대표 피드백 후속) — TourAPI overview 정제본 또는 표준데이터
    * 축제내용(최대 1200자). optional인 이유는 timing/weather와 동일(하위호환) — 구버전 백엔드가

@@ -235,8 +235,11 @@ def test_openapi() -> None:
     detail = spec["paths"].get("/api/v1/festivals/{festival_id}", {}).get("get")
     check("GET /api/v1/festivals/{festival_id} 라우트 존재", detail is not None)
     props = schemas["FestivalDetailResponse"]["properties"]
-    check("FestivalDetailResponse 기존 6필드 + 요약/제공자",
-          set(props) == {"festival", "region", "description", "images", "timing", "weather", "ai_summary", "ai_provider"}, set(props))
+    # 2026-09-20 — live_weather 추가(그 지역 좌표 기준 "지금 날씨", 기상청 초단기실황).
+    # 기존 weather(D18 강수확률, 시도 해상도)는 그대로 둔다 — 다른 원천·다른 질문이다.
+    check("FestivalDetailResponse 기존 7필드 + 요약/제공자",
+          set(props) == {"festival", "region", "description", "images", "timing", "weather",
+                         "live_weather", "ai_summary", "ai_provider"}, set(props))
     check("Festival(부록 K) 필드 불변(7개)",
           set(schemas["Festival"]["properties"])
           == {"id", "title", "start_date", "end_date", "address", "image_url", "ongoing"})

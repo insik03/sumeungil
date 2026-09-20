@@ -33,7 +33,7 @@ from ..spots.region_map import get_tourapi_region
 from ..util.images import kto_credit, normalize_image_url
 from ..util.names import name_matches, norm_name
 from ..util.regions import resolve_area_cd
-from . import congestion_service, photo_service, recommend_service
+from . import congestion_service, live_weather_service, photo_service, recommend_service
 from .photo_service import NO_PHOTO, Photo
 
 logger = logging.getLogger("sumeungil.services.spot_detail")
@@ -374,6 +374,10 @@ async def build_spot_detail(
     # 부록 P.1: 슬라이드용 사진 목록(대표 + detailImage2). 기존 image_url/photo_credit 은 불변.
     images = await build_images(content_id, photo, cache)
 
+    # 2026-09-20 — 이 스팟 **좌표 기준** 지금 날씨(기상청 5km 격자). 같은 격자의 스팟들이
+    # 원천 호출 1건을 나눠 쓴다(30분 캐시). 실패·미확보면 null 이고 상세는 그대로 나간다.
+    live_weather = await live_weather_service.for_point(spot.lat, spot.lng, cache)
+
     return SpotDetail(
         id=spot.id,
         name=spot.name,
@@ -393,5 +397,6 @@ async def build_spot_detail(
         images=images,
         recommended_for=build_recommended_for(spot),
         visit_tip=visit_tip,
+        live_weather=live_weather,
         source="tourapi_local_store",
     )

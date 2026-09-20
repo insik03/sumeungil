@@ -35,13 +35,15 @@ def get_review(conn: psycopg.Connection, review_id: int) -> dict[str, Any] | Non
     return _row(conn.execute("SELECT * FROM reviews WHERE id = %s", (review_id,)).fetchone())
 
 
-def find_by_device_target(
-    conn: psycopg.Connection, *, device_id: str, target_type: str, target_id: str
+def find_by_user_target(
+    conn: psycopg.Connection, *, user_id: int, target_type: str, target_id: str
 ) -> dict[str, Any] | None:
+    """2026-09-20 — 기준이 device_id 에서 **계정**으로 바뀌었다. 기기를 바꿔도 같은 대상엔
+    후기가 하나다(ux_reviews_user_target)."""
     return _row(
         conn.execute(
-            "SELECT * FROM reviews WHERE device_id = %s AND target_type = %s AND target_id = %s",
-            (device_id, target_type, target_id),
+            "SELECT * FROM reviews WHERE user_id = %s AND target_type = %s AND target_id = %s",
+            (user_id, target_type, target_id),
         ).fetchone()
     )
 
@@ -53,33 +55,33 @@ def list_reviews(
     target_id: str,
     limit: int,
     offset: int,
-    viewer_device_id: str | None = None,
+    viewer_user_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """최신순. `hidden=1`(신고 누적 자동 숨김)은 **타인에게** 보이지 않는다.
 
     QA M-3(2026-08-01): 숨김 처리된 글이 작성자 화면에서도 사라지면, 작성자는 자기 글을
     수정·삭제할 수단이 없고 새로 쓰면 유니크 인덱스에 막혀(409) **자력 복구 경로가 0** 이 된다.
-    그래서 `viewer_device_id` 가 주어지면 그 기기가 쓴 글은 숨김이어도 포함한다.
+    그래서 `viewer_user_id` 가 주어지면 그 계정이 쓴 글은 숨김이어도 포함한다.
     (요약·평균·분포는 여전히 `hidden=0` 만 센다 — `rating_histogram` 은 손대지 않았다.)
 
     SQL 은 두 갈래로 **분기해서 하드코딩**한다. 하나로 합치면 viewer 가 없을 때
-    `device_id = NULL` 같은 미묘한 조건이 남는다 — 노출 판정은 애매함이 곧 사고다.
+    `user_id = NULL` 같은 미묘한 조건이 남는다 — 노출 판정은 애매함이 곧 사고다.
     """
-    if viewer_device_id:
+    if viewer_user_id:
         rows = conn.execute(
             """
-            SELECT id, nickname, rating, comment, created_at, updated_at, device_id, hidden
+            SELECT id, nickname, rating, comment, created_at, updated_at, user_id, hidden
               FROM reviews
-             WHERE target_type = %s AND target_id = %s AND (hidden = 0 OR device_id = %s)
+             WHERE target_type = %s AND target_id = %s AND (hidden = 0 OR user_id = %s)
              ORDER BY created_at DESC, id DESC
              LIMIT %s OFFSET %s
             """,
-            (target_type, target_id, viewer_device_id, limit, offset),
+            (target_type, target_id, viewer_user_id, limit, offset),
         ).fetchall()
     else:
         rows = conn.execute(
             """
-            SELECT id, nickname, rating, comment, created_at, updated_at, device_id, hidden
+            SELECT id, nickname, rating, comment, created_at, updated_at, user_id, hidden
               FROM reviews
              WHERE target_type = %s AND target_id = %s AND hidden = 0
              ORDER BY created_at DESC, id DESC
@@ -141,21 +143,25 @@ def insert_review(
     *,
     target_type: str,
     target_id: str,
+    user_id: int,
     device_id: str,
     nickname: str,
     rating: int,
     comment: str | None,
     now_iso: str,
 ) -> int:
-    """새 리뷰 id. 같은 기기+대상이 이미 있으면 `psycopg.errors.UniqueViolation`(유니크 인덱스)."""
+    """새 리뷰 id. 같은 **계정**+대상이 이미 있으면 `psycopg.errors.UniqueViolation`.
+
+    device_id 도 함께 남긴다 — 소유권 판정에는 쓰지 않지만 쓰기 쿼터가 기기 단위이고,
+    같은 계정이 여러 기기에서 쓴 글을 운영이 구분해야 할 때 근거가 된다."""
     cur = conn.execute(
         """
         INSERT INTO reviews
-            (target_type, target_id, device_id, nickname, rating, comment, created_at, updated_at, hidden)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
+            (target_type, target_id, user_id, device_id, nickname, rating, comment, created_at, updated_at, hidden)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0)
         RETURNING id
         """,
-        (target_type, target_id, device_id, nickname, rating, comment, now_iso, now_iso),
+        (target_type, target_id, user_id, device_id, nickname, rating, comment, now_iso, now_iso),
     )
     return int(cur.fetchone()["id"])
 

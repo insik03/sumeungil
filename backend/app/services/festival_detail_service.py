@@ -36,7 +36,7 @@ from ..schemas.places import (
     RecommendRegion,
     SpotImage,
 )
-from ..services import festival_service, photo_service
+from ..services import festival_service, live_weather_service, photo_service
 from ..services.rerank_service import THRESHOLD_ADVISE, THRESHOLD_SOFT
 from ..services.weather_provider import WeatherProvider
 from ..util.images import kto_credit
@@ -257,6 +257,7 @@ async def build_festival_detail(
     cache: Cache,
     weather_provider: WeatherProvider | None = None,
     today: date | None = None,
+    spot_repo=None,
 ) -> FestivalDetailResponse:
     """festival_id 로 축제 상세를 조립. 전국 캐시에 없으면 FestivalNotFound."""
     as_of = today or date.today()
@@ -287,6 +288,16 @@ async def build_festival_detail(
         SummaryRepository(settings.summary_store_dir, settings.ollama_model).display,
         "festival", festival.id, description,
     )
+    # 2026-09-20 — 축제 지역의 "지금 날씨". 위 weather 와 다른 질문이다:
+    #   weather(D18)      = "축제 **기간에** 비가 올 확률", 시도 해상도, 예보 범위 밖이면 불가
+    #   live_weather(격자) = "지금 이 지역에 비가 오는가", 5km 격자, 기간과 무관하게 항상 가능
+    # 축제 원천은 좌표를 안 주고 주소만 준다 → 그 시군구 스팟들의 좌표 중앙값을 지역 대표로 쓴다.
+    live_weather = None
+    if entry.region_code and spot_repo is not None:
+        point = live_weather_service.region_centroid(entry.region_code, spot_repo)
+        if point is not None:
+            live_weather = await live_weather_service.for_point(point[0], point[1], cache)
+
     return FestivalDetailResponse(
         ai_summary=summary,
         ai_provider=provider,
@@ -295,5 +306,6 @@ async def build_festival_detail(
         images=images,
         timing=timing,
         weather=weather,
+        live_weather=live_weather,
         description=description,
     )

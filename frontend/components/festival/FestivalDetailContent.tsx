@@ -8,6 +8,7 @@ import { FestivalGlyph, computeBadge, formatPeriod } from "../FestivalBanner";
 import PhotoCarousel from "../PhotoCarousel";
 import ReviewSection from "../reviews/ReviewSection";
 
+import LiveWeatherLine from "../weather/LiveWeatherLine";
 type Status = "loading" | "success" | "notfound" | "error";
 
 interface FestivalDetailContentProps {
@@ -164,11 +165,14 @@ export default function FestivalDetailContent({ festivalId }: FestivalDetailCont
 
       <div className="festival-weather-card">
         <span className="festival-weather-card__eyebrow">날씨</span>
+        {/* 2026-09-20 — 두 줄은 서로 다른 질문이다. 위: 이 지역에 **지금** 비가 오는가(초단기실황,
+            5km 격자). 아래: 축제 **기간에** 비가 올 확률(관광코스 날씨 D18, 시도 해상도). */}
+        <LiveWeatherLine weather={data.live_weather} />
         {weather.available && weather.summary ? (
           <p className="festival-weather-card__text">{weather.summary}</p>
         ) : (
           <p className="festival-weather-card__text festival-weather-card__text--muted">
-            {weather.notice ?? "날씨 정보를 확인할 수 없어요."}
+            {weather.notice ?? "축제 기간 강수 예보는 아직 확인할 수 없어요."}
           </p>
         )}
       </div>

@@ -37,10 +37,10 @@ from ..schemas.community import (
     TargetType,
 )
 from ..services import review_service
+from .auth_deps import optional_identity, require_login
 from .community_common import (
     check_write_quota,
     ensure_enabled,
-    read_device_id,
     require_device_id,
     session_display_name,
     to_response,
@@ -62,13 +62,16 @@ async def get_reviews(
 ):
     try:
         ensure_enabled()
+        # 읽기는 비로그인도 된다. 로그인 중이면 is_mine 판정과 "내 숨김글 보기"에만 쓴다.
+        # optional_identity 는 세션 검증 + DB 조회라 **한 번만** 부른다.
+        viewer = await optional_identity(request)
         return await review_service.list_reviews(
             db,
             target_type=target_type,
             target_id=target_id,
             limit=limit,
             offset=offset,
-            device_id=read_device_id(request),
+            viewer_user_id=viewer.user_id if viewer else None,
         )
     except Exception as exc:  # noqa: BLE001 — to_response 가 종류별로 분기한다
         return to_response(exc, context="reviews/list")
@@ -103,17 +106,22 @@ async def create_review(
 ):
     try:
         ensure_enabled()
+        # 2026-09-20 — 후기는 **로그인 필수**다. 종전엔 이 검사가 프론트에만 있어서
+        # X-Device-Id 헤더만 있으면 닉네임을 직접 지정해 비로그인으로 남길 수 있었다.
+        identity = await require_login(request)
         device_id = require_device_id(request)
         # 쿼터 초과 시 JSONResponse(429)를 그대로 반환한다 — 데코레이터의 201 은 무시된다.
         limited = check_write_quota(device_id, "review")
         if limited is not None:
             return limited
-        # QA M-1(2026-08-17) — 로그인 중이면 클라이언트가 보낸 nickname을 무시하고 서버가
-        # 확인한 표시 이름으로 덮어쓴다(session_display_name 참고). 비로그인은 기존 그대로.
+        # 닉네임은 **항상** 서버가 확인한 계정 표시 이름이다(클라이언트 값은 무시).
+        # 로그인이 필수가 된 이상 "비로그인은 기존 그대로" 분기는 더 이상 존재하지 않는다.
         logged_in_name = await session_display_name(request)
         if logged_in_name is not None:
             req = req.model_copy(update={"nickname": logged_in_name})
-        return await review_service.create_review(db, req=req, device_id=device_id)
+        return await review_service.create_review(
+            db, req=req, user_id=identity.user_id, device_id=device_id
+        )
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="reviews/create")
 
@@ -127,18 +135,19 @@ async def update_review(
 ):
     try:
         ensure_enabled()
+        identity = await require_login(request)
         device_id = require_device_id(request)
         limited = check_write_quota(device_id, "review")
         if limited is not None:
             return limited
-        # QA M-1 — 로그인 중이고 이번 요청이 실제로 nickname을 건드릴 때만 서버 확인값으로
-        # 덮어쓴다(model_fields_set 유지 — 건드리지 않은 필드는 여전히 "변경 없음"으로 남는다).
+        # QA M-1 — 이번 요청이 실제로 nickname 을 건드릴 때만 서버 확인값으로 덮어쓴다
+        # (model_fields_set 유지 — 건드리지 않은 필드는 여전히 "변경 없음"으로 남는다).
         if "nickname" in req.model_fields_set:
             logged_in_name = await session_display_name(request)
             if logged_in_name is not None:
                 req = req.model_copy(update={"nickname": logged_in_name})
         return await review_service.update_review(
-            db, review_id=review_id, req=req, device_id=device_id
+            db, review_id=review_id, req=req, user_id=identity.user_id
         )
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="reviews/update")
@@ -152,8 +161,8 @@ async def delete_review(
 ):
     try:
         ensure_enabled()
-        device_id = require_device_id(request)
-        await review_service.delete_review(db, review_id=review_id, device_id=device_id)
+        identity = await require_login(request)
+        await review_service.delete_review(db, review_id=review_id, user_id=identity.user_id)
         return {"deleted": True}
     except Exception as exc:  # noqa: BLE001
         return to_response(exc, context="reviews/delete")
@@ -175,6 +184,9 @@ async def report_review(
     """
     try:
         ensure_enabled()
+        # 신고도 로그인 필수 — 익명 대량 신고로 남의 후기를 숨길 수 있으면 안 된다.
+        # 중복 방지 기준(기기 + IP 가명 지문)은 F-03 그대로 둔다(스키마 무변경).
+        await require_login(request)
         device_id = require_device_id(request)
         limited = check_write_quota(device_id, "review")
         if limited is not None:

@@ -37,6 +37,11 @@ from _pg_test_helpers import drop_schema, isolated_database_url  # noqa: E402
 
 _ISOLATED_DSN, _BASE_DSN, _SCHEMA = isolated_database_url()
 os.environ["DATABASE_URL"] = _ISOLATED_DSN
+
+# 2026-09-20 — 후기 쓰기가 로그인 필수가 되면서 세션 서명키가 필요해졌다.
+# UserAuth.enabled 가 이 값으로 판정되고, 비어 있으면 require_login 이 항상 401 이다.
+os.environ.setdefault("USER_SESSION_SECRET", "verify-session-secret-not-for-prod")
+
 os.environ["SHARE_MAX_PER_DEVICE"] = "3"
 os.environ["SHARE_MAX_TOTAL"] = "10"
 os.environ["SHARE_RETENTION_DAYS"] = "180"
@@ -49,13 +54,32 @@ os.environ["REVIEW_WRITE_PER_MIN"] = "500"
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.deps import get_database  # noqa: E402
+from app.deps import get_database, get_user_auth  # noqa: E402
 from app.main import app  # noqa: E402
+from app.repositories import user_repo  # noqa: E402
 from app.services import share_service  # noqa: E402
 from app.util.time import now_kst, to_iso_kst  # noqa: E402
 
 client = TestClient(app)
 db = get_database()
+
+
+def login(sub: str, name: str) -> TestClient:
+    """세션 쿠키가 박힌 TestClient. 2026-09-20 부터 후기 쓰기·신고는 로그인 필수다."""
+    auth = get_user_auth()
+    user = db.write(
+        lambda conn: user_repo.upsert_login(
+            conn, provider="google", provider_sub=sub, email=f"{sub}@example.com",
+            email_verified=True, default_display_name=name,
+            now_iso="2026-09-20T00:00:00+09:00",
+        )
+    )
+    token, _ = auth.issue_token(
+        user_id=user["id"], email=user["email"], epoch=user_repo.session_epoch_of(user)
+    )
+    c = TestClient(app)
+    c.cookies.set(auth.cookie_name, token)
+    return c
 
 PASS: list[str] = []
 FAIL: list[str] = []
@@ -192,26 +216,29 @@ section("E. 숨김 리뷰 — 본인에게만 hidden:true 로 보인다 (M-3)")
 TARGET = {"target_type": "spot", "target_id": "555001"}
 OWNER, R1, R2, R3 = dev("owner"), dev("r1"), dev("r2"), dev("r3")
 OTHER = dev("other")
+# 2026-09-20 — 소유권이 계정 기준이므로 "본인/타인"도 계정으로 갈린다(기기 헤더는 쿼터용).
+c_owner, c_other = login("ret-owner", "작성자"), login("ret-other", "타인")
+c_r1, c_r2, c_r3 = login("ret-r1", "신고1"), login("ret-r2", "신고2"), login("ret-r3", "신고3")
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 5,
-                                         "comment": "좋았어요"}, headers=OWNER)
+r = c_owner.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 5,
+                                          "comment": "좋았어요"}, headers=OWNER)
 own_id = r.json()["review"]["id"]
 check("본인 리뷰 생성 201 + hidden:false", r.status_code == 201 and r.json()["review"]["hidden"] is False)
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "타인", "rating": 3},
-                headers=OTHER)
+r = c_other.post("/api/v1/reviews", json={**TARGET, "nickname": "타인", "rating": 3},
+                 headers=OTHER)
 other_id = r.json()["review"]["id"]
 
 before = client.get("/api/v1/reviews", params=TARGET).json()["summary"]
 
-for h in (R1, R2, R3):
-    client.post(f"/api/v1/reviews/{own_id}/report", json={"reason": "신고"}, headers=h)
+for c, h in ((c_r1, R1), (c_r2, R2), (c_r3, R3)):
+    c.post(f"/api/v1/reviews/{own_id}/report", json={"reason": "신고"}, headers=h)
 hidden_now = db.read(
     lambda conn: conn.execute("SELECT hidden FROM reviews WHERE id = %s", (own_id,)).fetchone()["hidden"]
 )
 check("신고 3건으로 자동 숨김 처리됨", int(hidden_now) == 1, str(hidden_now))
 
-mine = client.get("/api/v1/reviews", params=TARGET, headers=OWNER).json()
+mine = c_owner.get("/api/v1/reviews", params=TARGET).json()
 mine_ids = {i["id"]: i for i in mine["items"]}
 check("본인 목록에는 숨김 글이 포함된다", own_id in mine_ids, str(list(mine_ids)))
 check("본인 글 hidden:true + is_mine:true",
@@ -220,13 +247,13 @@ check("본인 글 hidden:true + is_mine:true",
 check("본인 목록의 타인 글은 hidden:false",
       mine_ids[other_id]["hidden"] is False and mine_ids[other_id]["is_mine"] is False)
 
-theirs = client.get("/api/v1/reviews", params=TARGET, headers=OTHER).json()
+theirs = c_other.get("/api/v1/reviews", params=TARGET).json()
 check("타인 목록에는 숨김 글이 없다", own_id not in {i["id"] for i in theirs["items"]},
       str([i["id"] for i in theirs["items"]]))
 anon = client.get("/api/v1/reviews", params=TARGET).json()
 check("헤더 없는 조회에도 숨김 글 없음", own_id not in {i["id"] for i in anon["items"]})
 check("어떤 응답에도 device_id 미노출",
-      "device_id" not in client.get("/api/v1/reviews", params=TARGET, headers=OWNER).text)
+      "device_id" not in c_owner.get("/api/v1/reviews", params=TARGET).text)
 
 # --------------------------------------------------------------------------
 section("F. 집계 무회귀 — 평균·분포·건수는 hidden 제외 (종전 계산과 동일)")
@@ -250,25 +277,25 @@ check("숨김 전 2건 → 숨김 후 1건(숨김분만 빠짐)",
 # --------------------------------------------------------------------------
 section("G. 409 REVIEW_EXISTS detail.hidden (M-3)")
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 4}, headers=OWNER)
+r = c_owner.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 4}, headers=OWNER)
 body = r.json()
 check("숨김 상태 재작성 → 409 + detail.hidden=true",
       r.status_code == 409 and body["error"]["code"] == "REVIEW_EXISTS"
       and body["error"]["detail"]["hidden"] is True, r.text)
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "타인", "rating": 2}, headers=OTHER)
+r = c_other.post("/api/v1/reviews", json={**TARGET, "nickname": "타인", "rating": 2}, headers=OTHER)
 body = r.json()
 check("정상 글 중복 → 409 + detail.hidden=false",
       r.status_code == 409 and body["error"]["detail"]["hidden"] is False, r.text)
 
 # 자력 복구: 숨김 글이라도 본인은 수정·삭제할 수 있다.
-r = client.patch(f"/api/v1/reviews/{own_id}", json={"comment": "고쳤어요"}, headers=OWNER)
+r = c_owner.patch(f"/api/v1/reviews/{own_id}", json={"comment": "고쳤어요"}, headers=OWNER)
 check("숨김 글 본인 수정 200 + hidden:true 유지",
       r.status_code == 200 and r.json()["hidden"] is True and r.json()["comment"] == "고쳤어요",
       r.text[:120])
-r = client.delete(f"/api/v1/reviews/{own_id}", headers=OWNER)
+r = c_owner.delete(f"/api/v1/reviews/{own_id}", headers=OWNER)
 check("숨김 글 본인 삭제 200", r.status_code == 200, str(r.status_code))
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 5}, headers=OWNER)
+r = c_owner.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 5}, headers=OWNER)
 check("삭제 후 새로 작성 가능 201(dead-end 해소)", r.status_code == 201, str(r.status_code))
 
 # --------------------------------------------------------------------------
