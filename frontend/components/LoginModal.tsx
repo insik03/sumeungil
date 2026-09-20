@@ -299,7 +299,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               </button>
             </div>
             <p className="login-modal__note">
-              로그인 제공자에게서 이메일·이름만 받아요. 처음 가입할 때 이용약관·개인정보처리방침 동의를 받은 뒤 가입이 완료돼요.
+              로그인 제공자에게서 계정 식별자와 허용된 이메일·표시 이름을 받아요. 개인정보처리방침을 확인하고 이용약관에 동의하면 가입이 완료돼요.
             </p>
           </>
         ) : (
@@ -308,7 +308,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
               약관 동의하고 가입 완료
             </h2>
             <p className="login-modal__sub">
-              로그인 인증은 됐어요. 이용약관·개인정보처리방침에 동의하고, 리뷰 등에 공개로 보일 표시 이름을
+              로그인 인증은 됐어요. 개인정보처리방침을 확인하고 이용약관에 동의한 뒤, 리뷰 등에 공개로 보일 표시 이름을
               정하면 가입이 완료돼요.
             </p>
             <label className="login-modal__label" htmlFor="loginNickname">
@@ -336,7 +336,7 @@ export default function LoginModal({ open, onClose, onLoggedIn, title, message }
                 <a href="/privacy" target="_blank" rel="noopener noreferrer">
                   개인정보처리방침
                 </a>
-                을 확인했고 동의해요. (만 14세 이상)
+                을 확인했으며, 이용약관에 동의해요. (만 14세 이상)
               </span>
             </label>
             {saveError && (
