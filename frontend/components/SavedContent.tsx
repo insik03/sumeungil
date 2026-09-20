@@ -74,7 +74,7 @@ export default function SavedContent() {
         )}
 
         {sorted.length > 0 && (
-          <div className="spot-grid" role="list">
+          <div className="spot-grid spot-grid--equal" role="list">
             {sorted.map((spot) => (
               <SavedSpotCard key={spot.id} spot={spot} onRemove={() => handleRemove(spot.id)} />
             ))}
