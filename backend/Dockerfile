@@ -30,7 +30,9 @@ COPY app ./app
 COPY scripts/build_spot_summaries.py scripts/build_festival_summaries.py scripts/build_spot_tags.py ./scripts/
 
 # 비루트 실행 — 컨테이너 탈출 시 피해면 축소. 코드는 읽기 전용으로만 쓰므로 소유권 변경 불필요.
-RUN useradd --create-home --uid 10001 appuser
+RUN find /app/app /app/scripts -type d -exec chmod 755 {} + \
+    && find /app/app /app/scripts -type f -exec chmod 644 {} + \
+    && useradd --create-home --uid 10001 appuser
 # SQLite 데이터 디렉터리(부록 R) — named volume 이 이 경로에 마운트된다. 도커는 **이미지에 존재하는
 # 디렉터리의 소유권을 빈 볼륨에 그대로 복사**하므로, 여기서 appuser 소유로 미리 만들어 두지 않으면
 # 볼륨이 root:root 로 생성돼 비루트 프로세스가 DB 파일을 못 연다
