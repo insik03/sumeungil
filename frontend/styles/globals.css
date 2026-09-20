@@ -7070,3 +7070,37 @@ input:focus-visible,
 /* 2026-09-20 — AI 코스짜기 선택 칩 그룹(동행·실내/실외·활동). */
 .course-choice { margin-top: var(--sp-3); }
 .course-choice__label { display: block; margin-bottom: var(--sp-1); font-size: var(--text-sm); font-weight: 700; color: var(--ink-muted); }
+
+/* 지금 날씨 한 줄 (2026-09-20) — 스팟 상세·축제 상세 공용(components/weather/LiveWeatherLine.tsx).
+   기상청 초단기실황 5km 격자라 "그 장소 기준"이다. 서버가 값을 못 받으면 이 요소 자체가 없다. */
+.live-weather {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.live-weather__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--g-50);
+  color: var(--g-700);
+  flex: 0 0 auto;
+}
+/* 비·눈이 오는 중일 때만 색을 바꾼다 — 평소엔 조용히 있어야 정보가 눈에 띈다. */
+.live-weather--rain .live-weather__icon {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.live-weather__meta {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}

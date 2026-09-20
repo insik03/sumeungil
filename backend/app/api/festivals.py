@@ -19,8 +19,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from ..cache.base import Cache
-from ..deps import get_cache, get_weather_provider
+from ..deps import get_cache, get_spot_repository, get_weather_provider
 from ..regions.nationwide import BLOCK_BY_KEY
+from ..repositories.spot_repo import SpotRepository
 from ..regions.seed import is_area_cd
 from ..schemas.places import FestivalDetailResponse, FestivalsResponse
 from ..services import festival_detail_service, festival_service
@@ -119,6 +120,7 @@ async def get_festival_detail(
     as_of: str | None = None,
     cache: Cache = Depends(get_cache),
     weather_provider: WeatherProvider = Depends(get_weather_provider),
+    spot_repo: SpotRepository = Depends(get_spot_repository),
 ):
     """축제 1건 상세. 전국 캐시에 없는 id 는 404 FESTIVAL_NOT_FOUND.
 
@@ -130,6 +132,8 @@ async def get_festival_detail(
             cache=cache,
             weather_provider=weather_provider,
             today=_parse_as_of(as_of),
+            # 축제는 좌표가 없어 그 시군구 스팟 좌표로 "지금 날씨" 지점을 잡는다.
+            spot_repo=spot_repo,
         )
     except FestivalNotFound:
         return _error(404, "FESTIVAL_NOT_FOUND", "해당 축제를 찾을 수 없습니다.")
