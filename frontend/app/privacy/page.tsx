@@ -236,9 +236,11 @@ export default function PrivacyPage() {
 
           <h2>9. 개인정보보호책임자 / 문의처</h2>
           <p>
-            운영 주체: 숨은 팀 · 개인정보 관련 문의 창구
+            운영 주체: 숨은 팀
             <br />
-            이메일: dbdlstlr25@naver.com
+            개인정보 보호책임자: 지훈 (숨은 팀)
+            <br />
+            문의 이메일: dbdlstlr25@naver.com
           </p>
 
           <h2>10. 국외이전 관련</h2>
