@@ -429,6 +429,12 @@ async def build_compare_response(
     # --- HOTSPOT(핫플) 확정 — 위에서 못 잡았거나 자기비교가 된 경우 ---
     if hotspot is not None and hotspot.spot_id == hidden_spot.id:
         hotspot = None  # 자기비교 방지
+        # 2026-09-20(qa-reviewer F-3) — source 도 함께 되돌린다. 안 그러면 아래 auto 경로가
+        # board 에서 전혀 다른 핫플을 잡아왔는데도 picked(= local_store)가 True 로 남아,
+        # "내가 고른 곳" 라벨이 사용자가 고르지 않은 스팟에 붙고 실제로 고른 스팟이 오른쪽
+        # "AI 가 찾은 대안"으로 간다 — #169 가 없애려던 좌우 역전 그대로다.
+        hotspot_source = "m2_board"
+
     if hotspot is None and hotspot_id is not None:
         hs = store_by_id.get(hotspot_id)
         if hs is not None and hs.id != hidden_spot.id:

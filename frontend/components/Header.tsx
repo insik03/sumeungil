@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ConsentModal from "./ConsentModal";
@@ -148,24 +148,31 @@ export default function Header() {
   // 로그인 상태 자체는 useLoggedInName()이 읽는다(authStorage 실시간 반영). 여기서는
   // 부팅 시 서버 세션 동기화만 1회 튼다. "계정 삭제" 버튼(과 그 2단계 확인 상태)은
   // 2026-08-17 대표 지시로 /mypage(MyPageContent.tsx)로 옮겨서 여기엔 더 없다.
-  useEffect(() => {
-    void syncSessionFromServer().then((info) => {
-      // QA M-2 — 부팅 시 1회, 서버 세션 진실과 로컬 캐시를 맞춘다. 2026-09-14: 약관 미동의면 동의 모달.
-      if (info?.authenticated && info.terms_agreed === false) setConsentOpen(true);
-      // 2026-09-16 — 저장한 스팟은 계정 데이터. 세션이 확인되면 로컬 캐시를 서버 보관함과 맞춘다.
-      if (info?.authenticated) void syncSavedSpotsFromServer();
-    });
+  // 부팅 시와 로그인 직후에 공통으로 도는 동기화. 2026-09-20(qa-reviewer F-2) — 예전엔 약관
+  // 미동의 검사가 부팅 이펙트에만 있어서, 세션 중에 로그인한 기존 미동의 회원에게는 그 페이지가
+  // 새로고침될 때까지 동의 모달이 뜨지 않았다(약관 개정 직후가 정확히 이 상황이다). #168 이
+  // LoginModal 의 기존 사용자 consent 호출을 걷어내고 "Header 가 묻는다"로 넘겼으므로, 두 경로
+  // 모두에서 같은 검사를 돌려야 공백이 없다.
+  const syncSession = useCallback(async () => {
+    const info = await syncSessionFromServer();
+    if (!info?.authenticated) return;
+    if (info.terms_agreed === false) setConsentOpen(true);
+    // 2026-09-16 — 저장한 스팟은 계정 데이터. 세션이 확인되면 로컬 캐시를 서버 보관함과 맞춘다.
+    void syncSavedSpotsFromServer();
   }, []);
 
-  // 로그인 모달로 방금 로그인한 경우(AUTH_CHANGED_EVENT)에도 한 번 맞춘다 — 비로그인 때 저장한 항목이
-  // 이때 계정으로 합쳐진다.
+  useEffect(() => {
+    void syncSession();
+  }, [syncSession]);
+
+  // 로그인 모달로 방금 로그인한 경우(AUTH_CHANGED_EVENT)에도 한 번 맞춘다.
   useEffect(() => {
     const onAuth = () => {
-      if (getNickname() !== null) void syncSavedSpotsFromServer();
+      if (getNickname() !== null) void syncSession();
     };
     window.addEventListener(AUTH_CHANGED_EVENT, onAuth);
     return () => window.removeEventListener(AUTH_CHANGED_EVENT, onAuth);
-  }, []);
+  }, [syncSession]);
 
   // 관리자 콘솔은 일반 서비스 셸을 공유하지 않는다(03-admin-console-design.md §4).
   //   - 운영 화면인 줄 모르고 조작하는 사고를 막으려면 시각적으로 확실히 갈라져야 한다.

@@ -1,6 +1,16 @@
-/** Account saves use the server as the source of truth. Guest saves remain local.
- * Account snapshots are memory-only and discarded on authentication changes.
- * Guest lists are never silently uploaded to a different account.
+/** 저장한 스팟 보관소 — **로그인 여부로 정본이 갈린다**(2026-09-16, #148/#163).
+ *
+ *  - 로그인: 서버(/api/v1/saved-spots)가 정본이다. 받아온 목록은 `accountSpots` 메모리에만 두고
+ *    localStorage 에 쓰지 않는다 — 다른 기기에서 지운 항목이 이 기기 캐시로 되살아나던 문제
+ *    (#163) 때문에 로컬→서버 업로드를 없앴고, 캐시까지 남기면 같은 부활 경로가 다시 생긴다.
+ *    메모리라 하드 리로드하면 비는데, `Header` 가 부팅·로그인 직후에 서버 동기화를 돌려 채운다.
+ *  - 비로그인(게스트): 종전대로 localStorage(STORAGE_KEY)가 정본. 이 목록은 **다른 계정으로
+ *    조용히 업로드되지 않는다** — 로그인한다고 게스트 저장이 그 계정 것이 되지는 않는다.
+ *
+ *  화면은 이 모듈을 직접 폴링하지 않고 `SAVED_SPOTS_CHANGED` 를 구독한다(SavedContent·
+ *  MyPageContent·SaveToggleButton·SpotDetailContent). 계정이 바뀌면 `AUTH_CHANGED_EVENT`
+ *  리스너가 메모리 목록과 `authGeneration` 을 무효화해, 진행 중이던 구계정 응답이 새 계정
+ *  목록을 오염시키지 못한다(frontend/scripts/verify_saved_spots.cjs 가 그 시나리오를 검증).
  */
 import { CongestionLevel, SpotCard, SpotCategory, deleteSavedSpotRemote, fetchSavedSpots, putSavedSpotRemote } from "./api";
 import { AUTH_CHANGED_EVENT, getNickname } from "./authStorage";
@@ -168,7 +178,8 @@ export function syncSavedSpotsFromServer(): Promise<SavedSpot[]> {
       await writes;
       if (generation !== authGeneration || !loggedIn()) return [];
       const remote = await fetchSavedSpots();
-      // Never re-upload a cache: it may contain another device's deleted items.
+      // 캐시를 다시 업로드하지 않는다 — 다른 기기에서 이미 지운 항목이 섞여 있을 수 있어,
+      // 올리는 순간 그 기기에서 되살아난다(#163 이 이 업로드 경로를 없앤 이유).
       if (generation !== authGeneration || !loggedIn() || getNickname() !== name) return [];
       if (revision !== startedRevision) return loadSavedSpots();
       confirmedSpots = [...remote];

@@ -42,7 +42,8 @@ def upsert(
     now_iso: str,
 ) -> dict[str, Any]:
     """같은 스팟을 다시 저장하면 저장 시각·스냅샷만 갱신한다(중복 행 없음)."""
-    # Serialize capacity checks per account within the write transaction.
+    # 저장 트랜잭션 안에서 계정 단위로 직렬화한다 — 상한 검사와 INSERT 사이에 다른 요청이
+    # 끼어들어 상한을 넘기지 못하게(FOR UPDATE).
     conn.execute("SELECT id FROM users WHERE id = %s FOR UPDATE", (user_id,))
     exists = conn.execute("SELECT 1 FROM saved_spots WHERE user_id = %s AND spot_id = %s", (user_id, spot_id)).fetchone()
     if not exists and count_by_user(conn, user_id=user_id) >= MAX_PER_USER:
