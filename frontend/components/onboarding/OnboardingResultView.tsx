@@ -37,7 +37,7 @@ export default function OnboardingResultView({
         <div className="onboard-result__head">
           <h2 className="onboard-result__title">
             {/* 룰 폴백(fallback_used)이면 Gemini 가 만든 게 아니므로 마크를 붙이지 않는다 */}
-            {!result.fallback_used && <GeminiMark label="" />}
+            {!result.fallback_used && <GeminiMark label="" provider="ollama" />}
             이렇게 이해했어요
           </h2>
           <p className="onboard-result__sub">

@@ -235,8 +235,8 @@ def test_openapi() -> None:
     detail = spec["paths"].get("/api/v1/festivals/{festival_id}", {}).get("get")
     check("GET /api/v1/festivals/{festival_id} 라우트 존재", detail is not None)
     props = schemas["FestivalDetailResponse"]["properties"]
-    check("FestivalDetailResponse 6필드",
-          set(props) == {"festival", "region", "description", "images", "timing", "weather"}, set(props))
+    check("FestivalDetailResponse 기존 6필드 + 요약/제공자",
+          set(props) == {"festival", "region", "description", "images", "timing", "weather", "ai_summary", "ai_provider"}, set(props))
     check("Festival(부록 K) 필드 불변(7개)",
           set(schemas["Festival"]["properties"])
           == {"id", "title", "start_date", "end_date", "address", "image_url", "ongoing"})

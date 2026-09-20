@@ -20,10 +20,13 @@ GET /api/v1/festivals/{festival_id} 소관. **새 원천을 하나도 추가하�
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import date
 
 from ..ai.injection_guard import normalize_unicode
 from ..cache.base import Cache
+from ..config import settings
+from ..repositories.summary_repo import SummaryRepository
 from ..clients import tourapi_detail_client
 from ..schemas.places import (
     Festival,
@@ -280,7 +283,13 @@ async def build_festival_detail(
     weather = await build_weather(festival, entry.region_code, as_of, weather_provider)
     description = await build_description(entry.description, festival, cache)
 
+    summary, provider = await asyncio.to_thread(
+        SummaryRepository(settings.summary_store_dir, settings.ollama_model).display,
+        "festival", festival.id, description,
+    )
     return FestivalDetailResponse(
+        ai_summary=summary,
+        ai_provider=provider,
         festival=festival,
         region=region,
         images=images,

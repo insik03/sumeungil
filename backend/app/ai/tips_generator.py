@@ -14,7 +14,7 @@
 안전(부록 Z.6 · §10.1): 프롬프트에 들어가는 값은 전부 서버가 만든 enum 코드·숫자·서버 상수
 라벨뿐이다. 사용자 자유 텍스트·스팟명·닉네임은 `TipFeatures` 에 아예 담기지 않으므로
 인젝션 표면이 0 이다. 이 파일에 "사용자 문자열을 받는 필드"를 추가하지 말 것.
-비용: 온보딩·코스 요약과 **같은 로컬 Ollama 모델**을 재사용한다(새 키·외부 API·비용 0).
+비용: 온보딩·관광지/축제 요약과 **같은 로컬 Ollama 모델**을 재사용한다(새 키·외부 API·비용 0).
 """
 
 from __future__ import annotations
@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
+
+from .local_client import post_chat
 
 from .tag_registry import REGISTRY
 
@@ -211,7 +213,7 @@ def _filter_unsupported_tips(
 
 
 class OllamaTipsGenerator:
-    """로컬 Ollama 구조화 출력 구현(온보딩·코스요약과 같은 모델)."""
+    """로컬 Ollama 구조화 출력 구현(온보딩·관광지요약과 같은 모델)."""
 
     def __init__(
         self,
@@ -249,13 +251,12 @@ class OllamaTipsGenerator:
         return _filter_unsupported_tips(parsed, features)
 
     async def _chat_content(self, payload: dict, timeout_sec: float) -> str | None:
-        """전송부만 — Gemini 구현체가 이 메서드만 바꿔 끼운다. 실패는 None(정적 폴백)."""
+        """공용 로컬 추론 전송부. 실패는 None(정적 폴백)."""
         # 툴/함수 호출을 전혀 부여하지 않는다(방어계층 4 — 온보딩 Provider 와 동일).
         try:
-            async with httpx.AsyncClient(timeout=timeout_sec) as client:
-                resp = await client.post(f"{self._base_url}/api/chat", json=payload)
+            resp = await post_chat(self._base_url, payload, timeout_sec)
         except httpx.HTTPError as exc:
-            logger.info("tips: Ollama 호출 실패(정적 폴백): %s", exc)
+            logger.info("tips: Ollama 호출 실패(정적 폴백): %s", type(exc).__name__)
             return None
         if resp.status_code != 200:
             logger.info("tips: Ollama 비정상 상태코드 %s(정적 폴백)", resp.status_code)
@@ -268,43 +269,7 @@ class OllamaTipsGenerator:
         return content if isinstance(content, str) else None
 
 
-class GeminiTipsGenerator(OllamaTipsGenerator):
-    """Google Gemini 구현체 (2026-09-03). 프롬프트·파싱·검증 필터는 부모 그대로, 전송부만 교체.
-
-    trip_context 에는 태그 코드·카테고리 분포·혼잡 레벨·강수확률만 들어간다(자유텍스트 미투입,
-    02-ai-strategy-현황.md) — 개인정보 없음.
-    """
-
-    def __init__(self, api_key: str, model: str, temperature: float = 0.0, timeout_cap_sec: float = 15.0) -> None:
-        super().__init__(base_url="", model=model, temperature=temperature)
-        self._api_key = api_key
-        self._timeout_cap_sec = timeout_cap_sec
-
-    async def _chat_content(self, payload: dict, timeout_sec: float) -> str | None:
-        from . import gemini_client  # 지연 import
-
-        try:
-            return await gemini_client.chat(
-                payload["messages"],
-                api_key=self._api_key,
-                model=self._model,
-                timeout_sec=min(timeout_sec, self._timeout_cap_sec),
-                temperature=self._temperature,
-                response_schema=payload.get("format"),
-            )
-        except gemini_client.GeminiError as exc:
-            logger.info("tips: Gemini 호출 실패(정적 폴백): %s", exc)
-            return None
-
-
 def create_tips_generator_from_settings(settings) -> TipsGenerator:  # noqa: ANN001
-    if getattr(settings, "llm_provider", "ollama") == "gemini":
-        return GeminiTipsGenerator(
-            api_key=settings.gemini_api_key,
-            model=settings.gemini_model,
-            temperature=settings.ollama_temperature,
-            timeout_cap_sec=settings.gemini_timeout_sec,
-        )
     return OllamaTipsGenerator(
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
@@ -315,7 +280,6 @@ def create_tips_generator_from_settings(settings) -> TipsGenerator:  # noqa: ANN
 
 
 __all__ = (
-    "GeminiTipsGenerator",
     "GeneratedTip",
     "OllamaTipsGenerator",
     "TIPS_SYSTEM_PROMPT",

@@ -345,7 +345,7 @@ async def _pick_with_llm(
             )
     if summarizer is None:
         return None
-    pre = spot_detail_service._pregenerated_summaries()  # 배치 사전 생성 요약(있는 스팟만)
+    pre = await asyncio.to_thread(spot_detail_service._pregenerated_summaries, [s.spot.id for s in ranked])
     candidates = []
     for s in ranked:
         themes = s.spot.themes or {}

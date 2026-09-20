@@ -59,7 +59,7 @@ async def health_v1(
 async def health_llm():
     """LLM 한도 상태 (2026-09-07) — 외부 감시(n8n)가 10분마다 폴링한다.
 
-    Gemini 무료 티어 하루 20회(#99)에 걸리면 온보딩·요약·코스 선택기가 조용히 폴백되므로,
+    Gemini 무료 티어 하루 20회(#99)에 걸리면 코스 선택·코스 설명이 조용히 폴백되므로,
     최근 1시간 안에 429 가 있으면 `fallback_suspected=true` 로 알린다. 키·개인정보·본문 없음.
     프로세스 메모리 기반이라 재시작 후엔 0 부터 센다(정직: 재시작 시각도 함께 준다).
     """
@@ -69,8 +69,8 @@ async def health_llm():
         return to_iso_kst(datetime.fromtimestamp(ts, tz=KST)) if ts else None
 
     return {
-        "provider": settings.llm_provider,
-        "model": settings.gemini_model if settings.llm_provider == "gemini" else settings.ollama_model,
+        "provider": settings.course_llm_provider,
+        "model": settings.gemini_model if settings.course_llm_provider == "gemini" else settings.ollama_model,
         "quota_429_last_hour": q["quota_429_last_hour"],
         "quota_429_last_24h": q["quota_429_last_24h"],
         "last_429_at": _iso(q["last_429_ts"]),

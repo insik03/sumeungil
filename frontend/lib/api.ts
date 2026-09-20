@@ -1386,6 +1386,8 @@ export interface FestivalDetailResponse {
    * 않는다(빈 껍데기 금지, 지어내지 않음).
    */
   description?: string | null;
+  ai_summary?: string | null;
+  ai_provider?: string | null;
 }
 
 /**

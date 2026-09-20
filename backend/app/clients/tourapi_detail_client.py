@@ -56,8 +56,8 @@ async def fetch_detail_common(content_id: int) -> dict | None:
         async with httpx.AsyncClient(timeout=settings.upstream_timeout_sec) as client:
             resp = await client.get(BASE_URL, params=params)
     except httpx.HTTPError as exc:
-        logger.warning("detailCommon2 호출 실패(contentId=%s): %s", content_id, exc)
-        raise TourApiDetailError(f"upstream request failed: {exc}") from exc
+        logger.warning("detailCommon2 호출 실패(contentId=%s): %s", content_id, type(exc).__name__)
+        raise TourApiDetailError(f"upstream request failed: {type(exc).__name__}") from exc
 
     if resp.status_code != 200:
         logger.warning("detailCommon2 비정상 상태코드 %s (contentId=%s)", resp.status_code, content_id)
@@ -105,8 +105,8 @@ async def fetch_detail_images(content_id: int, num_of_rows: int = 5) -> list[dic
         async with httpx.AsyncClient(timeout=settings.upstream_timeout_sec) as client:
             resp = await client.get(IMAGE_BASE_URL, params=params)
     except httpx.HTTPError as exc:
-        logger.warning("detailImage2 호출 실패(contentId=%s): %s", content_id, exc)
-        raise TourApiDetailError(f"upstream request failed: {exc}") from exc
+        logger.warning("detailImage2 호출 실패(contentId=%s): %s", content_id, type(exc).__name__)
+        raise TourApiDetailError(f"upstream request failed: {type(exc).__name__}") from exc
 
     if resp.status_code != 200:
         # 429 = 그 오퍼레이션의 일일 한도 초과. 상위는 캐시하지 않고 다음 날 재시도한다.
