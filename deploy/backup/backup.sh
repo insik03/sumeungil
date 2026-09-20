@@ -7,10 +7,15 @@ umask 077
 : "${POSTGRES_USER:?POSTGRES_USER is required}"
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 
-backup_dir=/backups
+backup_dir="${BACKUP_DIR:-/backups}"
 interval="${BACKUP_INTERVAL_SECONDS:-86400}"
-retention_days="${BACKUP_RETENTION_DAYS:-14}"
 mkdir -p "$backup_dir"
+
+# Expiry must not depend on a successful dump or object-store upload.
+sh /usr/local/bin/retention.sh &
+retention_pid=$!
+trap 'kill "$retention_pid" 2>/dev/null || true' EXIT
+trap 'exit 0' TERM INT
 
 upload_backup() {
   backup_file="$1"
@@ -63,13 +68,12 @@ while :; do
     fi
     echo "Backup completed: $backup_file"
 
-    find "$backup_dir" -type f \
-      \( -name 'sumeungil-*.dump' -o -name 'sumeungil-*.dump.sha256' \) \
-      -mtime "+$retention_days" -exec rm -f {} \;
   else
     rm -f "$partial"
     echo "ERROR: PostgreSQL backup failed" >&2
   fi
 
-  sleep "$interval"
+  kill -0 "$retention_pid" || { echo "ERROR: backup retention worker stopped" >&2; exit 1; }
+  sleep "$interval" &
+  wait $!
 done
