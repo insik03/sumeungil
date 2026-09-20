@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 
 from ..cache.base import Cache
 from ..deps import get_cache, get_weather_provider
+from ..regions.nationwide import BLOCK_BY_KEY
 from ..regions.seed import is_area_cd
 from ..schemas.places import FestivalDetailResponse, FestivalsResponse
 from ..services import festival_detail_service, festival_service
@@ -67,6 +68,10 @@ async def get_festivals(
     # 부록 Y additive(2026-08-11): 시도 전체 축제. region_code 가 오면 무시된다(더 좁은 지정 우선).
     # 형식 위반은 400 — 조용히 전국으로 떨어지면 사용자가 "경기 축제"를 본다고 착각한다.
     area_cd: str | None = None,
+    # 2026-09-20 additive: 9권역 key(gyeonggi…jeju). region_code·area_cd 가 오면 무시된다.
+    # 알 수 없는 key 는 area_cd 와 같은 이유로 400 — 조용히 전국으로 떨어지면 사용자가
+    # "이 권역 축제만 보고 있다"고 오인한다.
+    region_block: str | None = None,
     cache: Cache = Depends(get_cache),
 ):
     """축제 목록. 홈 배너(파라미터 없음)와 축제 전용 페이지가 같은 엔드포인트를 쓴다.
@@ -84,6 +89,8 @@ async def get_festivals(
             return _error(400, "INVALID_MONTH", "month 는 YYYY-MM 형식이어야 합니다.")
     if area_cd is not None and not is_area_cd(area_cd):
         return _error(400, "INVALID_AREA", "시도코드(area_cd)는 2자리 숫자여야 합니다.")
+    if region_block is not None and region_block.strip() not in BLOCK_BY_KEY:
+        return _error(400, "INVALID_REGION_BLOCK", "알 수 없는 권역입니다.")
 
     try:
         return await festival_service.build_festivals_response(
@@ -94,6 +101,7 @@ async def get_festivals(
             month=month,
             window_days=window_days,
             area_cd=area_cd,
+            region_block=region_block,
         )
     except Exception:  # noqa: BLE001
         logger.exception("festivals 처리 중 예기치 못한 오류")
