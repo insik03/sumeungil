@@ -393,6 +393,16 @@ class Settings:
         # 그래서 로컬 개발/기존 검증 스크립트의 ASGI 스택은 이 기능 도입 전과 동일하다.
         # 이 값은 시크릿이다 — .env 에만 두고 로그로 출력하지 않는다(config 전체 원칙).
         self.slack_webhook_url: str = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        # 새 고객문의 알림 메일(2026-09-20). SMTP_HOST 가 비면 메일은 꺼진 것(슬랙만). 값은 .env 에만 — 저장소에 두지 않는다.
+        self.smtp_host: str = os.getenv("SMTP_HOST", "").strip()
+        try:
+            self.smtp_port: int = int(os.getenv("SMTP_PORT", "587").strip() or "587")
+        except ValueError:
+            self.smtp_port = 587
+        self.smtp_user: str = os.getenv("SMTP_USER", "").strip()
+        self.smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+        self.smtp_from: str = os.getenv("SMTP_FROM", "").strip()
+        self.inquiry_notify_to: str = os.getenv("INQUIRY_NOTIFY_TO", "sumeungil@googlegroups.com").strip()
         # 같은 (경로, 예외) 조합을 이 창 안에서 1회만 알린다. 0 이면 매번 알린다(권장하지 않음 —
         # 원천 장애 한 건에 슬랙이 수백 줄로 잠긴다).
         self.slack_alert_dedup_window_sec: int = int(
