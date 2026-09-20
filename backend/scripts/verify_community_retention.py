@@ -277,25 +277,25 @@ check("숨김 전 2건 → 숨김 후 1건(숨김분만 빠짐)",
 # --------------------------------------------------------------------------
 section("G. 409 REVIEW_EXISTS detail.hidden (M-3)")
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 4}, headers=OWNER)
+r = c_owner.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 4}, headers=OWNER)
 body = r.json()
 check("숨김 상태 재작성 → 409 + detail.hidden=true",
       r.status_code == 409 and body["error"]["code"] == "REVIEW_EXISTS"
       and body["error"]["detail"]["hidden"] is True, r.text)
 
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "타인", "rating": 2}, headers=OTHER)
+r = c_other.post("/api/v1/reviews", json={**TARGET, "nickname": "타인", "rating": 2}, headers=OTHER)
 body = r.json()
 check("정상 글 중복 → 409 + detail.hidden=false",
       r.status_code == 409 and body["error"]["detail"]["hidden"] is False, r.text)
 
 # 자력 복구: 숨김 글이라도 본인은 수정·삭제할 수 있다.
-r = client.patch(f"/api/v1/reviews/{own_id}", json={"comment": "고쳤어요"}, headers=OWNER)
+r = c_owner.patch(f"/api/v1/reviews/{own_id}", json={"comment": "고쳤어요"}, headers=OWNER)
 check("숨김 글 본인 수정 200 + hidden:true 유지",
       r.status_code == 200 and r.json()["hidden"] is True and r.json()["comment"] == "고쳤어요",
       r.text[:120])
-r = client.delete(f"/api/v1/reviews/{own_id}", headers=OWNER)
+r = c_owner.delete(f"/api/v1/reviews/{own_id}", headers=OWNER)
 check("숨김 글 본인 삭제 200", r.status_code == 200, str(r.status_code))
-r = client.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 5}, headers=OWNER)
+r = c_owner.post("/api/v1/reviews", json={**TARGET, "nickname": "작성자", "rating": 5}, headers=OWNER)
 check("삭제 후 새로 작성 가능 201(dead-end 해소)", r.status_code == 201, str(r.status_code))
 
 # --------------------------------------------------------------------------
