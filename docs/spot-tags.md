@@ -18,7 +18,7 @@
 docker compose exec -d backend python scripts/build_spot_tags.py --all   # 백그라운드, 429 나면 저장하고 멈춤 → 다음날 이어서
 docker compose exec backend python scripts/build_spot_tags.py --report-only
 ```
-분당 25건(요약 배치와 같은 잠금·쿼터). 우선순위는 트렌딩 → 테마 컬렉션 → 숨은 스팟 → 나머지.
+분당 25건, **한 번 실행에 기본 150회까지**(`--max-api-calls`). TourAPI 일일 쿼터는 운영의 스팟 상세 조회와 나눠 쓰므로 배치가 다 쓰지 않게 한다(2026-09-20 소진 사고). 요약 배치와 같은 잠금·쿼터. 우선순위는 트렌딩 → 테마 컬렉션 → 숨은 스팟 → 나머지.
 
 ## 규칙 튜닝
 `spot_tagger._RULES` 의 (강한, 약한) 키워드. 강한 것은 1번, 약한 것은 2번 이상 나와야 인정. 바꾸면 `RULES_VERSION` 올리고 `verify_spot_tags.py` 통과 확인.
