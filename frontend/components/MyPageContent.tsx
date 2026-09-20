@@ -15,7 +15,7 @@ import {
 import { deleteAccount, setLoggedInName } from "../lib/authStorage";
 import { loadMySharedCourses } from "../lib/sharedCoursesStorage";
 import { SAVED_SPOTS_CHANGED, loadSavedSpots } from "../lib/savedSpotsStorage";
-import { STAMPS_CHANGED, loadStamps, STAMP_MILESTONES, syncStampsFromServer } from "../lib/stampStorage";
+import { STAMPS_CHANGED, loadStamps, syncStampsFromServer } from "../lib/stampStorage";
 import { useLoggedInName } from "../lib/useLoggedInName";
 import { syncSessionFromServer } from "../lib/authStorage";
 import LinkProviderButtons, { LinkOutcome, LinkProvider } from "./LinkProviderButtons";
@@ -245,8 +245,6 @@ export default function MyPageContent() {
     );
   }
 
-  const stampTier = currentStampTier(stampCount ?? 0);
-
   return (
     <section className="section" aria-labelledby="mypageHeading">
       <span className="eyebrow-pill eyebrow-pill--azure">마이페이지</span>
@@ -254,15 +252,7 @@ export default function MyPageContent() {
         마이페이지
       </h1>
 
-      <div className="compare-summary" style={{ marginTop: "var(--sp-4)" }}>
-        <p className="compare-summary__headline">반가워요, {nickname}님</p>
-        {stampTier && (
-          <div className="compare-summary__badges">
-            <span className="delta-badge delta-badge--fit">{stampTier} 배지 보유</span>
-          </div>
-        )}
-      </div>
-
+      {/* 2026-09-20 대표 지시 — "반가워요, x님" 색 배너(동/은/금 배지 표시 포함)는 없어도 된다. */}
       {view === "activity" ? (
         <>
           {/* §47.1(신규, 03-design-spec.md) — "여행 준비" 섹션. 새 색·새 컴포넌트 언어를
@@ -490,15 +480,6 @@ export default function MyPageContent() {
       )}
     </section>
   );
-}
-
-/** stampStorage.STAMP_MILESTONES(동 5/은 10/금 20)를 그대로 재사용 — 새 기준을 만들지 않는다. */
-function currentStampTier(count: number): string | null {
-  let tier: string | null = null;
-  for (const m of STAMP_MILESTONES) {
-    if (count >= m.threshold) tier = m.tier;
-  }
-  return tier;
 }
 
 /** href면 페이지 이동(다른 라우트), onClick이면 이 페이지 안에서 화면만 바꾼다("계정관리" —
