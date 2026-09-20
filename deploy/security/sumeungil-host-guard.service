@@ -1,0 +1,13 @@
+[Unit]
+Description=Sumeungil host RPC and LLMNR input guard
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/sumeungil-host-guard apply
+ExecStop=/usr/local/sbin/sumeungil-host-guard remove
+
+[Install]
+WantedBy=multi-user.target
