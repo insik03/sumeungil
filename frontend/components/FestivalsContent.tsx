@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ApiError, FestivalsResponse, ReviewSummary, fetchFestivals, fetchReviewsSummaryBulk } from "../lib/api";
 import { saveLastRegion } from "../lib/lastRegionStorage";
 import { FestivalCard } from "./FestivalBanner";
 import { FeaturedCardSkeleton } from "./FeaturedSpots";
 import FestivalRegionFilter, { FestivalRegion } from "./festivals/FestivalRegionFilter";
+import { REGION_BLOCKS } from "./regions/blocks";
+import { regionSelectionFromCode } from "./recommend/constants";
 import FestivalMonthFilter from "./festivals/FestivalMonthFilter";
 import FestivalStatusFilter, { FestivalStatusValue } from "./festivals/FestivalStatusFilter";
 
@@ -32,14 +35,96 @@ const MONTH_FILTER_WINDOW_DAYS = 365;
  * - 404/네트워크 실패(엔드포인트 미배포 등)는 홈 FestivalBanner처럼 조용히 숨기지 않고 에러
  *   카드 + 재시도 버튼으로 안내한다 — 이 페이지는 "축제 전용" 페이지라 실패를 숨기면 사용자가
  *   기능이 아예 없다고 오해할 수 있다(RecommendContent의 에러 처리와 동일 원칙).
+ *
+ * 2026-09-20 대표 지적 — "4번째 페이지에서 축제 보고 뒤로가기 하면 1번 페이지로 온다".
+ * 목록 상태(지역·월·상태·페이지)가 컴포넌트 state 라, 상세로 나가면서 언마운트되면 통째로
+ * 사라졌다. 넷 다 **URL 쿼리**로 옮긴다 — 뒤로가기가 그 URL 을 그대로 복원하므로 별도 저장소가
+ * 필요 없고, 링크를 공유해도 같은 화면이 뜬다. 페이지만 고치면 지역·월·상태는 그대로 날아가
+ * "4페이지로 돌아왔는데 내가 고른 지역이 아닌" 더 이상한 상태가 되므로 함께 옮겼다.
+ *
+ * 필터 변경은 router.replace 다(push 아님) — 칩을 누를 때마다 히스토리가 쌓이면 뒤로가기를
+ * 여러 번 눌러야 이 화면을 빠져나간다. 상세로 나가는 순간의 URL 이 곧 복원 대상이라 replace 로도
+ * 목적은 달성된다.
  */
+/** URL 쿼리 → 선택 지역. 권역 key 가 우선이고, 없으면 시군구 코드(검색으로 고른 경우)를 본다. */
+function regionFromQuery(block: string | null, region: string | null): FestivalRegion | null {
+  const b = block ? REGION_BLOCKS.find((x) => x.key === block) : undefined;
+  if (b) return { blockKey: b.key, sigunguCd: null, label: b.label, representativeCode: b.regionCode };
+  const sel = regionSelectionFromCode(region);
+  // 검색으로 고른 시군구는 라벨이 검색 응답에만 있었다. 칩 17개 안이면 그 라벨을, 아니면
+  // 중립 라벨("선택한 지역")을 쓴다 — 코드로부터 지명을 지어내지 않는다(§35와 같은 규칙).
+  if (sel) return { blockKey: null, sigunguCd: sel.sigunguCd, label: sel.label, representativeCode: sel.sigunguCd };
+  return null;
+}
+
+/** "YYYY-MM" 만 통과시킨다. 형식이 어긋난 쿼리는 무시(월 필터 없음)한다. */
+function monthFromQuery(value: string | null): string | null {
+  return value && /^\d{4}-\d{2}$/.test(value) ? value : null;
+}
+
+function statusFromQuery(value: string | null): FestivalStatusValue {
+  return value === "ongoing" || value === "upcoming" ? value : "all";
+}
+
+/** Suspense fallback — 목록 자리에 같은 스켈레톤을 깔아 경계 진입 시 화면이 튀지 않게 한다. */
+export function FestivalsLoadingSkeleton() {
+  return (
+    <section className="section" aria-labelledby="festivalsHeading">
+      <span className="eyebrow-pill eyebrow-pill--azure">전국 축제</span>
+      <h1 className="section__title" id="festivalsHeading">
+        전국 축제
+      </h1>
+      <div className="festivals-grid" role="list" aria-label="축제 정보 불러오는 중" aria-busy="true">
+        {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+          <FeaturedCardSkeleton key={i} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function FestivalsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // 목록 상태는 전부 URL 이 정본이다(위 docstring 참고). 컴포넌트 state 로 들고 있으면
+  // 상세로 나갔다 돌아올 때 통째로 사라진다.
+  const selectedRegion = useMemo(
+    () => regionFromQuery(searchParams.get("block"), searchParams.get("region")),
+    [searchParams]
+  );
+  const month = monthFromQuery(searchParams.get("month"));
+  const statusFilter = statusFromQuery(searchParams.get("status"));
+  const pageParam = Number(searchParams.get("page"));
+  const requestedPage = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+
+  /** 쿼리를 갈아끼운다. 기본값(전국·월없음·전체·1페이지)은 URL 에서 빼 주소를 깔끔하게 둔다. */
+  const writeQuery = useCallback(
+    (next: { region?: FestivalRegion | null; month?: string | null; status?: FestivalStatusValue; page?: number }) => {
+      const qs = new URLSearchParams(searchParams.toString());
+      const set = (k: string, v: string | null) => (v ? qs.set(k, v) : qs.delete(k));
+      if ("region" in next) {
+        set("block", next.region?.blockKey ?? null);
+        set("region", next.region?.sigunguCd ?? null);
+      }
+      if ("month" in next) set("month", next.month ?? null);
+      if ("status" in next) set("status", next.status && next.status !== "all" ? next.status : null);
+      // 지역·월·상태가 바뀌면 목록 자체가 달라지므로 페이지는 1로(종전 동작과 동일).
+      const page = "page" in next ? next.page ?? 1 : "region" in next || "month" in next || "status" in next ? 1 : requestedPage;
+      set("page", page > 1 ? String(page) : null);
+      const q = qs.toString();
+      // replace: 칩을 누를 때마다 히스토리가 쌓이면 뒤로가기로 화면을 못 빠져나간다.
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    },
+    [pathname, requestedPage, router, searchParams]
+  );
+
   // §27 "전국=기본" 요구사항은 그대로 유지(이 화면 자체의 기본값은 여전히 미선택/전국) — 대표
   // 지시(2026-08-17, 마지막 선택 지역을 기본 화면 기준으로)는 여기서 "고르면 기억한다" 쪽만
   // 적용한다. 다른 화면(홈 등)이 그 기억을 기본값으로 쓴다.
-  const [selectedRegion, setSelectedRegionState] = useState<FestivalRegion | null>(null);
   const setSelectedRegion = (region: FestivalRegion | null) => {
-    setSelectedRegionState(region);
+    writeQuery({ region });
     if (region) {
       // 다른 화면은 시군구 단위로만 지역을 받으므로 권역이면 그 대표 시군구를 넘긴다
       // (종전 시도 칩도 대표 시군구를 저장했으므로 동작 폭은 그대로다).
@@ -51,8 +136,8 @@ export default function FestivalsContent() {
       });
     }
   };
-  const [month, setMonth] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<FestivalStatusValue>("all");
+  const setMonth = (value: string | null) => writeQuery({ month: value });
+  const setStatusFilter = (value: FestivalStatusValue) => writeQuery({ status: value });
 
   const [status, setStatus] = useState<FetchStatus>("loading");
   const [data, setData] = useState<FestivalsResponse | null>(null);
@@ -104,12 +189,12 @@ export default function FestivalsContent() {
     return festivals;
   }, [data?.festivals, statusFilter]);
 
-  // 페이지 번호 — 필터·지역·월이 바뀌면 1페이지로.
-  const [page, setPage] = useState(1);
-  useEffect(() => {
-    setPage(1);
-  }, [selectedRegion, month, statusFilter]);
+  // 페이지 번호도 URL 이 정본이다. 필터가 바뀌면 writeQuery 가 1로 되돌린다.
   const pageCount = Math.max(1, Math.ceil(filteredFestivals.length / PAGE_SIZE));
+  // 링크로 들어온 ?page=99 나, 필터가 바뀌어 목록이 짧아진 경우를 마지막 페이지로 눌러 담는다
+  // (빈 화면을 보여주지 않는다). URL 은 그대로 두고 화면만 맞춘다.
+  const page = Math.min(requestedPage, pageCount);
+  const setPage = (n: number) => writeQuery({ page: n });
   const pageFestivals = filteredFestivals.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const retry = () => setRetryTick((t) => t + 1);
