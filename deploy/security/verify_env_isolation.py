@@ -10,7 +10,7 @@ compose = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 blocked = {"GEMINI_API_KEY", "GOOGLE_CLIENT_SECRET", "ADMIN_SESSION_SECRET",
            "USER_SESSION_SECRET", "SLACK_WEBHOOK_URL", "UNEXPECTED_PRIVATE_VALUE"}
 with tempfile.TemporaryDirectory() as directory:
-    envfile = Path(directory) / "audit.env"
+    envfile = Path(directory) / ".env"
     values = {key: "synthetic-do-not-propagate" for key in blocked}
     values.update(POSTGRES_DB="audit", POSTGRES_USER="audit", POSTGRES_PASSWORD="synthetic-db",
                   BACKUP_RETENTION_DAYS="9", AWS_ACCESS_KEY_ID="synthetic-object-key",
@@ -20,10 +20,14 @@ with tempfile.TemporaryDirectory() as directory:
     envfile.write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
     # Remove host overrides for variables under test. Compose only renders config.
     environment = {k: v for k, v in os.environ.items() if k not in values}
-    result = subprocess.run(["docker", "compose", "--env-file", str(envfile), "-f", str(compose),
+    result = subprocess.run(["docker", "compose", "--project-directory", directory,
+                             "--project-name", "sumeungil-env-audit",
+                             "--env-file", str(envfile), "-f", str(compose),
                              "config", "--no-env-resolution", "--format", "json"],
                             env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            universal_newlines=True, check=True)
+                            universal_newlines=True)
+    if result.returncode:
+        raise RuntimeError("Synthetic Compose rendering failed: " + result.stderr)
     services = json.loads(result.stdout)["services"]
     for name in ("postgres", "postgres-backup"):
         service = services[name]
