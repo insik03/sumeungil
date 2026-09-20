@@ -22,7 +22,8 @@ with tempfile.TemporaryDirectory() as directory:
     environment = {k: v for k, v in os.environ.items() if k not in values}
     result = subprocess.run(["docker", "compose", "--env-file", str(envfile), "-f", str(compose),
                              "config", "--no-env-resolution", "--format", "json"],
-                            env=environment, capture_output=True, text=True, check=True)
+                            env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            universal_newlines=True, check=True)
     services = json.loads(result.stdout)["services"]
     for name in ("postgres", "postgres-backup"):
         service = services[name]
