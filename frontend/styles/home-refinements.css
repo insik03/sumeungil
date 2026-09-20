@@ -37,10 +37,8 @@
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  box-shadow: none;
 }
-.page--home .quick-menu__icon::after { display: none; }
-.page--home .quick-menu__icon svg { width: 21px; height: 21px; }
+
 .page--home .quick-menu__label {
   white-space: normal;
   overflow: visible;
@@ -87,7 +85,7 @@
 @media (max-width: 1023px) {
   .page--home .home-search-bar { padding: 18px 14px 12px; }
   .page--home .quick-menu__item { flex-direction: row; justify-content: center; gap: 6px; }
-  .page--home .quick-menu__icon { flex: 0 0 30px; width: 30px; height: 34px; border: 0; background: transparent; }
+  .page--home .quick-menu__icon { flex: 0 0 30px; width: 30px; height: 30px; }
   .page--home .quick-menu__label { width: auto; font-size: 11px; text-align: left; }
 }
 @media (prefers-reduced-motion: reduce) {
