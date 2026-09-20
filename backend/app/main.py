@@ -446,7 +446,9 @@ app.include_router(tips.router)        # 부록 Z: 개인화 여행 팁(로그�
 app.include_router(visit.router)        # 부록 X: 페이지 조회 비콘(프론트가 처리하는 화면 경로 집계)
 app.include_router(csp_report.router)   # 2026-09-14: CSP Report-Only 위반 집계(/api/v1/csp-report, /health/csp)
 app.include_router(saved_spots.router)  # 2026-09-16: 저장한 스팟 계정 보관함(로그인 필수)
-app.include_router(stamps.router)  # 2026-09-20: 방문 스탬프 계정 보관함(로그인 필수, 위치 현장 인증)
+if os.getenv("STAMPS_ENABLED", "false").strip().lower() == "true":
+    # 2026-09-20 대표 지시로 접어 둠("지금은 내려놓고, 추후 추가하게 되면"). 켜면 위치를 받는 API 가 열린다.
+    app.include_router(stamps.router)  # 방문 스탬프 계정 보관함(로그인 필수, 위치 현장 인증)
 
 # 슬랙 슬래시 명령어 (2026-08-18) — **서명 검증 키가 없으면 등록하지 않는다.**
 # 이 엔드포인트는 인증 쿠키를 쓸 수 없어(슬랙 서버가 호출) 서명 검증이 유일한 방어선이다.

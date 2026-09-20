@@ -12,6 +12,7 @@
  */
 import { ApiError, SpotCategory, deleteStampRemote, fetchStamps, postStampRemote } from "./api";
 import { AUTH_CHANGED_EVENT, getNickname } from "./authStorage";
+import { STAMPS_ENABLED } from "./features";
 
 const LEGACY_STORAGE_KEY = "sumeungil:stamps:v1";
 export const STAMPS_CHANGED = "sumeungil:stamps-changed";
@@ -70,7 +71,7 @@ export function isSpotStamped(spotId: number): boolean {
 
 /** 서버 목록으로 메모리를 맞춘다. 동시에 여러 화면이 불러도 요청은 한 번만 나간다. */
 export function syncStampsFromServer(): Promise<Stamp[]> {
-  if (typeof window === "undefined" || !loggedIn()) return Promise.resolve(loadStamps());
+  if (!STAMPS_ENABLED || typeof window === "undefined" || !loggedIn()) return Promise.resolve(loadStamps());
   if (syncInFlight) return syncInFlight;
   const generation = authGeneration;
   syncInFlight = (async () => {

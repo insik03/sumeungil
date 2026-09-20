@@ -7,6 +7,7 @@ import { useLoginGate } from "./LoginGateProvider";
 import { SAVED_SPOTS_CHANGED, SavedSpot, loadSavedSpots, removeSavedSpot, syncSavedSpotsFromServer } from "../lib/savedSpotsStorage";
 import SavedSpotCard from "./saved/SavedSpotCard";
 import VisitStampsSection from "./saved/VisitStampsSection";
+import { STAMPS_ENABLED } from "../lib/features";
 import SharedCoursesSection from "./saved/SharedCoursesSection";
 import SavedAiCoursesSection from "./saved/SavedAiCoursesSection";
 
@@ -69,7 +70,7 @@ export default function SavedContent() {
 
         {spots !== null && sorted.length === 0 && loggedIn === null && (
           <div className="board-error" role="status">
-            <p className="board-error__msg">로그인하면 저장한 스팟과 방문 스탬프를 계정에 모아 볼 수 있어요.</p>
+            <p className="board-error__msg">로그인하면 저장한 스팟을 계정에 모아 볼 수 있어요.</p>
             <button type="button" className="btn btn--mint" onClick={() => requireLogin(() => undefined)}>
               로그인하기
             </button>
@@ -94,7 +95,7 @@ export default function SavedContent() {
         )}
       </section>
 
-      <VisitStampsSection />
+      {STAMPS_ENABLED && <VisitStampsSection />}
       <SharedCoursesSection />
       <SavedAiCoursesSection />
     </>
