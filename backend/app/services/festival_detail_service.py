@@ -20,10 +20,13 @@ GET /api/v1/festivals/{festival_id} 소관. **새 원천을 하나도 추가하�
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import date
 
 from ..ai.injection_guard import normalize_unicode
 from ..cache.base import Cache
+from ..config import settings
+from ..repositories.summary_repo import SummaryRepository
 from ..clients import tourapi_detail_client
 from ..schemas.places import (
     Festival,
@@ -281,6 +284,10 @@ async def build_festival_detail(
     weather = await build_weather(festival, entry.region_code, as_of, weather_provider)
     description = await build_description(entry.description, festival, cache)
 
+    summary, provider = await asyncio.to_thread(
+        SummaryRepository(settings.summary_store_dir, settings.ollama_model).display,
+        "festival", festival.id, description,
+    )
     # 2026-09-20 — 축제 지역의 "지금 날씨". 위 weather 와 다른 질문이다:
     #   weather(D18)      = "축제 **기간에** 비가 올 확률", 시도 해상도, 예보 범위 밖이면 불가
     #   live_weather(격자) = "지금 이 지역에 비가 오는가", 5km 격자, 기간과 무관하게 항상 가능
@@ -292,6 +299,8 @@ async def build_festival_detail(
             live_weather = await live_weather_service.for_point(point[0], point[1], cache)
 
     return FestivalDetailResponse(
+        ai_summary=summary,
+        ai_provider=provider,
         festival=festival,
         region=region,
         images=images,

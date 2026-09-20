@@ -1,7 +1,7 @@
-"""Google Gemini `generateContent` 얇은 클라이언트 (2026-09-03, 대표 결정 "전부 제미나이로").
+"""코스 생성 전용 Google Gemini `generateContent` 클라이언트.
 
 왜 SDK 대신 REST인가: 의존성 하나 안 늘리고(httpx 는 이미 있음), 기존 Ollama `/api/chat`
-호출부 세 곳(온보딩 태그추출 · 요약 · 팁)이 전부 "messages + 선택적 JSON 스키마 → content
+코스 호출부(선택 · 제목/요약)이 전부 "messages + 선택적 JSON 스키마 → content
 문자열" 모양이라, 같은 모양의 함수 하나면 세 클래스가 전송부만 바꿔 끼울 수 있다.
 
 호출 규약 (Ollama 와 동일하게 맞춤):
@@ -9,7 +9,7 @@
   - response_schema: Ollama `format` 에 넣던 JSON Schema 그대로 — Gemini 가 못 받는 키
     (`additionalProperties`, `["string","null"]` 식 type 배열)는 여기서 변환한다.
   - 반환: 모델이 낸 텍스트(content). 오류는 전부 GeminiError 로 승격 — 호출부가 각자
-    "룰 폴백 / 요약 생략 / 정적 팁" 으로 처리한다(값을 지어내지 않는다).
+    "규칙 기반 코스 / 설명 생략" 으로 처리한다(값을 지어내지 않는다).
 
 보안 규약 (기존 계층 그대로):
   - 툴/함수 호출을 부여하지 않는다. 시스템 프롬프트는 `systemInstruction` 로만 전달.
@@ -159,16 +159,23 @@ async def chat(
         body["systemInstruction"] = system
 
     url = f"{GEMINI_BASE_URL}/models/{model}:generateContent"
+    started = time.monotonic()
+    outcome = "failed"
     try:
-        async with httpx.AsyncClient(timeout=timeout_sec) as client:
-            resp = await client.post(url, json=body, headers={"x-goog-api-key": api_key})
-            if resp.status_code in (429, 503):
-                # 운영 실측에서 "high demand" 503 이 간헐적으로 온다 — 짧게 한 번만 재시도.
-                # (폴백이 있으니 더 끈질기게 붙잡지 않는다.)
-                await asyncio.sleep(0.8)
+        async with asyncio.timeout(timeout_sec):
+            async with httpx.AsyncClient(timeout=timeout_sec) as client:
                 resp = await client.post(url, json=body, headers={"x-goog-api-key": api_key})
-    except httpx.HTTPError as exc:
+                if resp.status_code in (429, 503):
+                    if resp.status_code == 429:
+                        _record_quota_hit()
+                    logger.info("gemini retry=1 status=%d", resp.status_code)
+                    await asyncio.sleep(0.8)
+                    resp = await client.post(url, json=body, headers={"x-goog-api-key": api_key})
+        outcome = str(resp.status_code)
+    except (httpx.HTTPError, TimeoutError) as exc:
         raise GeminiError(f"gemini request failed: {type(exc).__name__}") from exc
+    finally:
+        logger.info("gemini outcome=%s elapsed_ms=%d", outcome, (time.monotonic() - started) * 1000)
 
     if resp.status_code == 429:
         _record_quota_hit()

@@ -305,7 +305,7 @@ export default function SpotDetailContent({ contentId }: SpotDetailContentProps)
           // (globals.css .ai-summary 근거 주석). "AI가 생성한 콘텐츠"라는 정직 표시는 유지, 색은 그대로 재사용.
           <div className="ai-summary">
             <span className="ai-summary__label">
-              <GeminiMark provider={data.ai_provider} /> 3줄 요약
+              {data.ai_provider ? <><GeminiMark provider={data.ai_provider} /> 핵심 요약</> : "소개 발췌"}
             </span>
             <p className="ai-summary__text">{data.ai_summary}</p>
           </div>

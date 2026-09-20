@@ -23,7 +23,7 @@ from ..deps import (
     get_cache,
     get_congestion_repository,
     get_spot_repository,
-    get_summarizer,
+    get_course_summarizer,
 )
 from ..repositories.congestion_repo import CongestionRepository
 from ..repositories.spot_repo import SpotRepository
@@ -51,7 +51,7 @@ async def recommend_course(
     spot_repo: SpotRepository = Depends(get_spot_repository),
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     cache: Cache = Depends(get_cache),
-    summarizer: Summarizer = Depends(get_summarizer),
+    summarizer: Summarizer = Depends(get_course_summarizer),
     identity=Depends(require_login),
 ):
     """2026-08-17(대표 지시) — AI 코스짜기(추천 모드)도 로그인 필수."""
@@ -85,7 +85,7 @@ async def arrange_course(
     spot_repo: SpotRepository = Depends(get_spot_repository),
     congestion_repo: CongestionRepository = Depends(get_congestion_repository),
     cache: Cache = Depends(get_cache),
-    summarizer: Summarizer = Depends(get_summarizer),
+    summarizer: Summarizer = Depends(get_course_summarizer),
     _identity=Depends(require_login),
 ):
     """사용자가 고른 스팟(2~8개)의 방문 순서만 최적화한다 (부록 I §arrange).

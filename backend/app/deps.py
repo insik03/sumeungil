@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from .ai.llm_provider import LLMProvider, create_provider_from_settings
-from .ai.summarizer import Summarizer, create_summarizer_from_settings
+from .ai.summarizer import Summarizer, create_summarizer_from_settings, create_course_summarizer_from_settings
 from .ai.tips_generator import TipsGenerator, create_tips_generator_from_settings
 from .cache.base import Cache
 from .cache.memory import MemoryCache
@@ -61,7 +61,6 @@ def get_weather_provider() -> WeatherProvider:
 @lru_cache(maxsize=1)
 def get_llm_provider() -> LLMProvider:
     # MVP-3 온보딩: 로컬 Ollama 프로바이더 싱글턴(AI llm_provider.py 권장 배선).
-    # 상용 전환 시 create_provider_from_settings 내부에서 CloudProvider 로 교체(계약 불변).
     return create_provider_from_settings(settings)
 
 
@@ -159,5 +158,9 @@ def get_admin_login_limiter() -> SlidingWindowLimiter:
 @lru_cache(maxsize=1)
 def get_summarizer() -> Summarizer:
     # Phase2 부록 G: 소개글 3줄 요약용 로컬 Ollama 요약기 싱글턴(온보딩과 같은 모델 재사용, 비용 0).
-    # 상용 전환 시 create_summarizer_from_settings 내부에서 CloudProvider 로 교체(계약 불변).
     return create_summarizer_from_settings(settings)
+
+
+@lru_cache(maxsize=1)
+def get_course_summarizer() -> Summarizer:
+    return create_course_summarizer_from_settings(settings)

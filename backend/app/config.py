@@ -77,14 +77,10 @@ class Settings:
             and "*" not in self.cors_origins
         )
 
-        # --- LLM 제공자 선택 (2026-09-03, 대표 결정 "전부 제미나이로") ---
-        # "ollama"(로컬, 기본) | "gemini"(Google Gemini API). 온보딩 태그추출·스팟/코스 요약·
-        # 개인화 팁 네 경로가 전부 이 스위치를 따른다. gemini 인데 키가 비어 있으면 부팅은
-        # 되지만 모든 LLM 경로가 폴백(룰/요약 생략/정적 팁)으로만 돈다 — 시작 시 경고 로그.
-        # 운영 서버(CPU 2코어)의 로컬 추론이 초당 2.5토큰이라 요약·팁이 타임아웃 폴백으로
-        # 빠지던 문제의 해법. 국외이전 관련 조치는 07-legal-review-gemini-api-전환.md §3
-        # (PII 프리필터는 injection_guard.sanitize_free_text, 처리방침 §10 문구).
-        self.llm_provider: str = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+        # Hybrid routing is fixed by task. Legacy LLM_PROVIDER cannot route general AI to cloud.
+        self.llm_provider: str = "ollama"
+        self.course_llm_provider: str = "gemini"
+        self.summary_store_dir: str = os.getenv("SUMMARY_STORE_DIR", str(BACKEND_DIR / "data" / "ai-summaries"))
         self.gemini_api_key: str = os.getenv("GEMINI_API_KEY", "").strip()
         # 모델명은 Google AI Studio 의 현재 목록에서 확인 후 .env 로 고정한다. 2026-09-03 운영
         # 실측: gemini-2.5-flash 는 "no longer available to new users"(404) — API 가 안내한
@@ -95,17 +91,15 @@ class Settings:
 
         # --- MVP-3 온보딩 LLM (로컬 Ollama) ---
         # 08-interface-contract.md 부록B B.0/B.4 — 로컬 실행, API 키·국외이전 없음.
-        self.ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
-        # 2026-09-03 로컬 실측: qwen3.5 4B Q4가 관광 태그 스모크 테스트 F1 0.951로
-        # qwen2.5 7B(0.889)·qwen3.5 2B(0.787)보다 정확했다. 개발 기본값은 4B로 두되,
-        # CPU 2코어 운영 서버는 .env.production.example처럼 2B를 명시해 지연을 제한한다.
-        self.ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b-q4_K_M").strip()
+        self.ollama_base_url: str = os.getenv("LOCAL_LLM_URL", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).strip()
+        # Official Ollama 4B Instruct / Q4_K_M; target CPU measurements still required.
+        self.ollama_model: str = os.getenv("LOCAL_LLM_MODEL", os.getenv("OLLAMA_MODEL", "qwen3:4b-instruct-2507-q4_K_M")).strip()
         # 추출·요약은 창작보다 재현성이 중요하다. Ollama 구조화 출력 권장값과 같이 0을 쓴다.
         self.ollama_temperature: float = float(os.getenv("OLLAMA_TEMPERATURE", "0"))
         # Qwen 계열 thinking은 짧은 API 응답에 지연만 더하므로 기본 비활성화한다.
         self.ollama_think: bool = os.getenv("OLLAMA_THINK", "false").strip().lower() == "true"
         # 연속 요청의 모델 재로딩(콜드 스타트)을 줄인다. 빈 문자열이면 Ollama 기본값을 쓴다.
-        self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "10m").strip()
+        self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "-1").strip()
         # CPU 추론 부하 변동 여유로 30초. (부록B §B.6: 프론트 fetch
         # 타임아웃은 이보다 길게 — 프론트 60초로 이미 넉넉함.)
         self.ollama_timeout_sec: float = float(os.getenv("OLLAMA_TIMEOUT_SEC", "30"))
@@ -113,7 +107,7 @@ class Settings:
         # --- Phase 2 부록 G: 소개글 AI 3줄 요약(로컬 LLM 재사용, 비용 0) ---
         # 온보딩과 동일한 Ollama 모델/엔드포인트를 재사용한다(새 키·국외이전 없음).
         # 요약 실패/타임아웃은 ai_summary:null 로 graceful — 원문 overview 는 그대로 유지된다.
-        self.summary_timeout_sec: float = float(os.getenv("SUMMARY_TIMEOUT_SEC", "25"))
+        self.summary_timeout_sec: float = float(os.getenv("SUMMARY_TIMEOUT_SEC", "180"))
         # overview 는 KTO 외부 텍스트라 DoS/비용폭주 방지용 상한(요약 대상만 절단, 원문 overview 는 불변).
         self.summary_max_overview_chars: int = int(os.getenv("SUMMARY_MAX_OVERVIEW_CHARS", "1500"))
         # 성공 요약 캐시 TTL 24h — 매 클릭마다 LLM 을 돌리지 않는다(overview 캐시와 별도 키).
