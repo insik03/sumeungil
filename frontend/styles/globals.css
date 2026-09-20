@@ -6530,9 +6530,19 @@ input:focus-visible,
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
-.board-marquee:hover .board-marquee__track,
-.board-marquee:focus-within .board-marquee__track {
-  animation-play-state: paused; /* 읽고 싶을 때 붙잡을 수 있게 */
+/* 2026-09-20 대표 지적 "클릭했다고 멈추지 않았으면" — 종전엔 :focus-within 이라 카드를 한 번
+   클릭하면 그 카드가 포커스를 쥔 채 남아 띠가 계속 멈춰 있었다(마우스를 치워도 안 풀린다).
+   :has(:focus-visible) 로 바꾸면 **키보드로 들어왔을 때만** 멈춘다 — 탭으로 이동한 카드가
+   흘러가 버리는 건 막아야 하므로(WCAG 2.4.7) 이 경로는 남긴다.
+   hover 도 (hover: hover) 로 감싼다. 터치 기기는 탭한 지점에 hover 가 눌어붙어 같은 증상이
+   나서, 진짜 포인터가 있는 기기에서만 "읽으려고 올렸다"로 해석한다. */
+@media (hover: hover) and (pointer: fine) {
+  .board-marquee:hover .board-marquee__track {
+    animation-play-state: paused;
+  }
+}
+.board-marquee:has(:focus-visible) .board-marquee__track {
+  animation-play-state: paused;
 }
 .board-marquee__track > * {
   flex: 0 0 auto;
