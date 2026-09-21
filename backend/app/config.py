@@ -99,7 +99,9 @@ class Settings:
         # Qwen 계열 thinking은 짧은 API 응답에 지연만 더하므로 기본 비활성화한다.
         self.ollama_think: bool = os.getenv("OLLAMA_THINK", "false").strip().lower() == "true"
         # 연속 요청의 모델 재로딩(콜드 스타트)을 줄인다. 빈 문자열이면 Ollama 기본값을 쓴다.
-        self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "-1").strip()
+        # 2026-09-21 실측: 단위 없는 "-1" 은 Ollama 가 400(`missing unit in duration`)으로 거부해
+        # 온보딩·요약 호출이 전부 실패했다(룰 폴백으로 가려짐). 음수는 단위를 붙여야 "무제한"이다.
+        self.ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "-1m").strip()
         # CPU 추론 부하 변동 여유로 30초. (부록B §B.6: 프론트 fetch
         # 타임아웃은 이보다 길게 — 프론트 60초로 이미 넉넉함.)
         self.ollama_timeout_sec: float = float(os.getenv("OLLAMA_TIMEOUT_SEC", "30"))
