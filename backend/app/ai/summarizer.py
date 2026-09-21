@@ -35,7 +35,8 @@ COURSE_PACK_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
-SUMMARY_PROMPT_VERSION = "tourism-json-v1"
+# v2(2026-09-21): 후처리가 문단 응답을 문장 단위로 나누도록 바뀌어, v1 로 저장된 "120자 잘림" 요약을 무효화한다.
+SUMMARY_PROMPT_VERSION = "tourism-json-v2"
 SUMMARY_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {"summary": {"type": "string", "minLength": 30, "maxLength": 360}},
@@ -68,7 +69,9 @@ COURSE_SUMMARY_SYSTEM_PROMPT = """당신은 여행 코스 요약기입니다.
 # 코스 요약 총 길이 상한(한 문단 평문). 초과분은 문장 경계에서 잘라낸다.
 _MAX_COURSE_CHARS = 300
 _MAX_COURSE_SENTENCES = 3
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?。])\s*")
+# 문장 경계 = 마침표·물음표·느낌표 **뒤 공백**. 공백을 요구해야 "1.5km" 같은 소수점에서 안 갈라진다
+# (2026-09-21 이전 `\s*` 는 "1." / "5km" 로 쪼갰다). 전각 마침표(。) 뒤에는 보통 공백이 없어 예외.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|(?<=。)\s*")
 
 
 # ---------- 코스 제목+요약 동시 생성(부록 I.12) — LLM 호출 1회로 두 필드 ----------
@@ -200,9 +203,18 @@ def _postprocess(content: str) -> str | None:
         line = _LEADING_MARKER_RE.sub("", raw).strip().strip('"').strip()
         if not line:
             continue
-        if len(line) > _MAX_LINE_CHARS:
-            line = line[:_MAX_LINE_CHARS].rstrip()
-        lines.append(line)
+        # 모델이 "3줄" 지시를 무시하고 한 문단으로 답하면 한 줄이 상한을 넘는다. 2026-09-21 운영
+        # 실측: 그 줄을 120자에서 그대로 자르니 "…규모로 상연됩" 처럼 문장 중간에서 끊긴 요약이
+        # 저장됐다. 상한을 넘는 줄은 문장 단위로 나눠 각 문장을 한 줄로 취급하고, 그래도 긴
+        # 문장은 버린다(잘린 문장을 보여주느니 없는 편이 낫다).
+        pieces = _SENTENCE_SPLIT_RE.split(line) if len(line) > _MAX_LINE_CHARS else [line]
+        for piece in pieces:
+            piece = piece.strip()
+            if not piece or len(piece) > _MAX_LINE_CHARS:
+                continue
+            lines.append(piece)
+            if len(lines) >= MAX_SUMMARY_LINES:
+                break
         if len(lines) >= MAX_SUMMARY_LINES:
             break
     if not lines:
