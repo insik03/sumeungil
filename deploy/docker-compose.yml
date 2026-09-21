@@ -106,7 +106,8 @@ services:
     # 런타임 시크릿/설정. 이미지에는 굽지 않는다(.dockerignore 가 .env 제외).
     # config.py 는 /app/.env 가 없으면 프로세스 환경변수를 그대로 읽는다.
     env_file:
-      - .env
+      - path: ${BACKEND_ENV_FILE:-.env}
+        format: ${BACKEND_ENV_FORMAT:-}
     # 과거 SQLite 이관본을 잠시 보존하는 레거시 볼륨. 현재 사용자 데이터의 정본은
     # postgres 서비스의 postgres-data 볼륨이다.
     volumes:
@@ -168,8 +169,8 @@ services:
     # credentials, but must not receive application/OAuth/session secrets.
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_USER: ${BACKUP_DB_USER:-${POSTGRES_USER:?POSTGRES_USER is required}}
+      POSTGRES_PASSWORD: ${BACKUP_DB_PASSWORD:-${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}}
       BACKUP_DIR: /backups
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}

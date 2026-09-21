@@ -207,7 +207,7 @@ def list_users(
 ) -> list[dict[str, Any]]:
     rows = conn.execute(
         """
-        SELECT display_name AS nickname, created_at, last_login_at,
+        SELECT id AS audit_user_id, display_name AS nickname, created_at, last_login_at,
                CASE
                    WHEN google_sub IS NOT NULL THEN 'google'
                    WHEN kakao_sub  IS NOT NULL THEN 'kakao'
@@ -325,3 +325,14 @@ __all__ = (
     "set_review_hidden",
     "stats",
 )
+
+
+def record_privacy_access(conn, *, operator, ip_hash, resource, rows, offset, status_filter=""):
+    """Committed before disclosure; no names, emails, message bodies or session tokens."""
+    ids = [int(row["audit_user_id" if resource == "users" else "id"]) for row in rows]
+    conn.execute(
+        "INSERT INTO privacy_access_events "
+        "(operator, ip_hash, resource, target_ids, returned_count, page_offset, status_filter) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (operator or "unattributed", ip_hash, resource, ids, len(rows), offset, status_filter),
+    )

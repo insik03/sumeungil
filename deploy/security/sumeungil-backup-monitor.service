@@ -1,0 +1,11 @@
+[Unit]
+Description=Sumeungil backup freshness monitor
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/sumeungil/deploy/security/backup-monitor.py --dry-run
+User=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
