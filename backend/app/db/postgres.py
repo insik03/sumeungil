@@ -44,7 +44,7 @@ logger = logging.getLogger("sumeungil.db.postgres")
 
 T = TypeVar("T")
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # --- 스키마 (기동 시 CREATE TABLE IF NOT EXISTS 로 멱등 적용) ----------------------
 #
@@ -402,14 +402,30 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (user_id, spot_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS privacy_access_events (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        occurred_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        operator TEXT NOT NULL,
+        ip_hash TEXT NOT NULL,
+        resource TEXT NOT NULL CHECK (resource IN ('users', 'inquiries')),
+        target_ids BIGINT[] NOT NULL,
+        returned_count INTEGER NOT NULL CHECK (returned_count >= 0),
+        page_offset INTEGER NOT NULL CHECK (page_offset >= 0),
+        status_filter TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS privacy_access_events_at ON privacy_access_events(occurred_at)",
+
 )
 
 
 class Database:
     """PostgreSQL 커넥션 풀 핸들. 프로세스당 1 인스턴스(deps.get_database)."""
 
-    def __init__(self, dsn: str, *, min_size: int = 1, max_size: int = 5) -> None:
+    def __init__(self, dsn: str, *, min_size: int = 1, max_size: int = 5, auto_migrate: bool = True) -> None:
         self._dsn = dsn
+        self._auto_migrate = auto_migrate
         self._min_size = min_size
         self._max_size = max_size
         self._pool: ConnectionPool | None = None
@@ -437,7 +453,17 @@ class Database:
             open=False,
         )
         pool.open(wait=True, timeout=10.0)
-        self._apply_schema(pool)
+        try:
+            if self._auto_migrate:
+                self._apply_schema(pool)
+            else:
+                with pool.connection() as conn:
+                    row = conn.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()
+                    if row is None or row["v"] != SCHEMA_VERSION:
+                        raise RuntimeError("Schema migration required before runtime startup")
+        except Exception:
+            pool.close()
+            raise
         self._pool = pool
         logger.info("postgres 준비 완료 schema_version=%d", SCHEMA_VERSION)
         return pool

@@ -53,6 +53,7 @@ from .middleware.anomaly_alert import AnomalyAlertMiddleware
 from .middleware.error_alert import ErrorAlertMiddleware
 from .middleware.rate_limit import RateLimitMiddleware, build_limits_from_settings
 from .middleware.visit_log import VisitLogMiddleware
+from .middleware.private_response import PrivateResponseMiddleware
 from .repositories import visit_repo
 from .services import festival_service, share_service, slack_notify, slack_report
 from .util.time import now_kst
@@ -427,6 +428,8 @@ if settings.slack_webhook_url:
 # 그라파나(aitestbed.kr)는 prometheus를 nginx의 `/prom/`(Basic Auth) 뒤에서 조회한다 —
 # DB나 앱 내부를 직접 노출하지 않고도 응답시간·에러율·요청수 같은 운영 지표를 볼 수 있다.
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+app.add_middleware(PrivateResponseMiddleware)
 
 app.include_router(health.router)
 app.include_router(congestion.router)

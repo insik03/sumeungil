@@ -783,7 +783,7 @@ docker compose logs backend | grep "share retention"
 | 갱신 | `certbot` 컨테이너가 12시간마다 `renew` 시도 (만료 30일 전부터 실제 갱신) |
 | 갱신 반영 | `/etc/cron.d/sumeungil-nginx-reload` 가 매일 04:17 `nginx -s reload` |
 | TLS | TLSv1.2 / TLSv1.3 만 허용 |
-| 안내 메일 | sumeungil@googlegroups.com (폐기·만료 통지 수신; 2026-09-20 변경 — 서버 certbot 계정 이메일도 `certbot update_account --email` 로 바꿔야 실제 반영) |
+| 안내 메일 | 2026-09-20 실측: certbot 계정에 등록된 연락처는 없었다(문서의 이전 기재는 사실이 아님). `certbot update_account --email sumeungil@googlegroups.com` 은 성공 응답을 주지만 `show_account` 에는 계속 `none` — Let's Encrypt 가 만료 안내 메일을 중단해 연락처가 의미가 없다. **만료 감시는 메일이 아니라 갱신 로그·`docker compose logs certbot`·만료일 점검으로 한다** |
 
 ### 건드리면 안 되는 것
 
