@@ -170,12 +170,14 @@ class RunStats:
     attempted: int = 0
     success: int = 0
     no_overview: int = 0
+    short_skipped: int = 0
     llm_fail: int = 0
     already_cached: int = 0
     quota_aborted: bool = False
 
 
-async def run_batch(target_ids, spot_repo, store, summarizer, limiter, checkpoint_every=1) -> RunStats:
+async def run_batch(target_ids, spot_repo, store, summarizer, limiter, checkpoint_every=1,
+                    min_overview_chars: int = 0) -> RunStats:
     stats = RunStats()
     by_id = {s.id: s for s in spot_repo.all_spots()}
     with store.batch_lock():
@@ -188,6 +190,11 @@ async def run_batch(target_ids, spot_repo, store, summarizer, limiter, checkpoin
             except QuotaExhausted:
                 stats.quota_aborted = True
                 break
+            # 2026-09-21 대표 지시 "설명이 긴 것 위주로 3줄 요약": 짧은 소개글은 요약할 가치가 없고
+            # 화면에서도 원문 발췌로 충분하다. LLM(건당 30~75초)이 병목이라 여기서 거른다(API 호출은 이미 씀).
+            if overview is not None and len(overview) < min_overview_chars:
+                stats.short_skipped += 1
+                continue
             outcome = await process_one(store, summarizer, "spot", sid, overview)
             if outcome == "success":
                 stats.success += 1
@@ -197,8 +204,9 @@ async def run_batch(target_ids, spot_repo, store, summarizer, limiter, checkpoin
                 stats.no_overview += 1
             else:
                 stats.llm_fail += 1
-    logger.info("spot batch attempted=%d generated=%d cached=%d failed=%d no_source=%d",
-                stats.attempted, stats.success, stats.already_cached, stats.llm_fail, stats.no_overview)
+    logger.info("spot batch attempted=%d generated=%d cached=%d failed=%d no_source=%d short_skipped=%d",
+                stats.attempted, stats.success, stats.already_cached, stats.llm_fail, stats.no_overview,
+                stats.short_skipped)
     return stats
 
 
@@ -209,6 +217,8 @@ async def main() -> int:
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--rate-limit-per-min", type=int, default=25)
     parser.add_argument("--report-only", action="store_true")
+    parser.add_argument("--min-overview-chars", type=int, default=0,
+                        help="소개글이 이 글자 수보다 짧으면 요약하지 않는다(0=전부). 긴 설명 위주로 돌릴 때 사용")
     args = parser.parse_args()
     if not args.all and (args.limit is None or args.limit <= 0):
         parser.error("--limit 양수 또는 --all이 필요합니다")
@@ -228,7 +238,7 @@ async def main() -> int:
     ids = await build_priority_order(spots, args.region)
     ids = ids if args.all else ids[:args.limit]
     stats = await run_batch(ids, spots, store, create_summarizer_from_settings(settings),
-                            RateLimiter(args.rate_limit_per_min))
+                            RateLimiter(args.rate_limit_per_min), min_overview_chars=args.min_overview_chars)
     print(stats)
     return 1 if stats.quota_aborted or stats.llm_fail else 0
 
