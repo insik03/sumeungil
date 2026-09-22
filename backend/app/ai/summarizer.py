@@ -23,7 +23,8 @@ MAX_SUMMARY_LINES = 3
 # 요약 결과 한 줄이 과도하게 길어지는 것을 방지(정형 표시용 상한). 초과분은 잘라낸다.
 _MAX_LINE_CHARS = 120
 # 모델이 붙일 수 있는 머리 기호(불릿/번호)를 제거해 평문 3줄로 정규화한다.
-_LEADING_MARKER_RE = re.compile(r"^\s*(?:[-*•·]|\d+[.)])\s*")
+# 번호 머리기호는 뒤에 공백이 있어야 한다 — "1.5km 해변…" 을 "5km 해변…" 으로 깎던 버그(2026-09-22 자체 검사에서 발견).
+_LEADING_MARKER_RE = re.compile(r"^\s*(?:[-*•·]\s*|\d+[.)]\s+)")
 
 COURSE_PACK_OUTPUT_SCHEMA = {
     "type": "object",
@@ -71,7 +72,8 @@ _MAX_COURSE_CHARS = 300
 _MAX_COURSE_SENTENCES = 3
 # 문장 경계 = 마침표·물음표·느낌표 **뒤 공백**. 공백을 요구해야 "1.5km" 같은 소수점에서 안 갈라진다
 # (2026-09-21 이전 `\s*` 는 "1." / "5km" 로 쪼갰다). 전각 마침표(。) 뒤에는 보통 공백이 없어 예외.
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|(?<=。)\s*")
+# "앨버트 W. 테일러" 같은 영문 이니셜 뒤 마침표는 문장 끝이 아니다(2026-09-22 실측: 딜쿠샤 요약이 갈라짐).
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])(?<![A-Z]\.)\s+|(?<=。)\s*")
 
 
 # ---------- 코스 제목+요약 동시 생성(부록 I.12) — LLM 호출 1회로 두 필드 ----------
@@ -151,6 +153,13 @@ def _prepare_overview(overview: str, max_chars: int) -> str:
 # graceful 처리하므로(요약 없음) "깨진 요약을 보여주는 것"보다 낫다. 지어내지 않는 원칙과 같은 기조.
 _HTML_TAG_RE = re.compile(r"<\s*/?\s*[a-zA-Z][^>]*>")
 # 허용 문자: 한글 · 라틴 알파벳/숫자 · 공백 · 일반 문장부호/단위. 그 밖(한자, 성조 붙은 라틴 등)은 이물질.
+# 소문자만 6자 이상 이어진 라틴 낱말 = 영어 단어 혼입(2026-09-22 실측 "시골 풍경 alongside 다양한 공연").
+_LATIN_WORD_RE = re.compile(r"\b[a-z]{6,}\b")
+# 모델이 숫자와 단위 사이에 공백을 넣는다("42 년", "3 개", "제 6 폭포") — 436건 전부에서 관찰. 붙여 쓴다.
+_NUM_UNIT_SPACE_RE = re.compile(
+    r"(\d)\s+(?=(?:년|월|일|개|명|시|분|초|회|층|호|종|점|대|번|칸|동|평|마리|세|주|만|천|억|여|km|kg|cm|m|g|%)(?![A-Za-z]))"
+)
+_JE_NUM_RE = re.compile(r"제\s+(\d)")
 _ALLOWED_SUMMARY_CHARS = re.compile(
     "[가-힣㄰-㆏0-9A-Za-z\\s.,!?~%·・…\\-()\\[\\]{}:;'\"/&+#°×㎕-㏟]"
 )
@@ -161,6 +170,8 @@ def has_foreign_contamination(text: str) -> bool:
     if not text:
         return False
     if _HTML_TAG_RE.search(text):
+        return True
+    if _LATIN_WORD_RE.search(text):  # "alongside" 처럼 영어 낱말이 섞임(브랜드·약어는 대문자가 섞여 안 걸린다)
         return True
     return any(not _ALLOWED_SUMMARY_CHARS.match(ch) for ch in text)
 
@@ -207,19 +218,26 @@ def _postprocess(content: str) -> str | None:
         # 실측: 그 줄을 120자에서 그대로 자르니 "…규모로 상연됩" 처럼 문장 중간에서 끊긴 요약이
         # 저장됐다. 상한을 넘는 줄은 문장 단위로 나눠 각 문장을 한 줄로 취급하고, 그래도 긴
         # 문장은 버린다(잘린 문장을 보여주느니 없는 편이 낫다).
+        # 문장은 순서대로 담고, 상한을 넘는 문장을 만나면 거기서 멈춘다. 건너뛰고 뒤 문장을 담으면
+        # "또한 최신 기체와…" 처럼 앞이 잘린 조각이 요약이 된다(2026-09-22 실측 3건).
         pieces = _SENTENCE_SPLIT_RE.split(line) if len(line) > _MAX_LINE_CHARS else [line]
+        stop = False
         for piece in pieces:
             piece = piece.strip()
-            if not piece or len(piece) > _MAX_LINE_CHARS:
+            if not piece:
                 continue
+            if len(piece) > _MAX_LINE_CHARS:
+                stop = True
+                break
             lines.append(piece)
             if len(lines) >= MAX_SUMMARY_LINES:
+                stop = True
                 break
-        if len(lines) >= MAX_SUMMARY_LINES:
+        if stop:
             break
     if not lines:
         return None
-    out = "\n".join(lines)
+    out = _NUM_UNIT_SPACE_RE.sub(r"\1", _JE_NUM_RE.sub(r"제\1", "\n".join(lines)))
     if has_foreign_contamination(out):
         logger.info("요약에 비한국어/HTML 혼입 감지 → 폐기(ai_summary null 로 처리)")
         return None
