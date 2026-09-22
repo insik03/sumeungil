@@ -32,7 +32,8 @@ const LEVEL_META: Record<string, { label: string; badgeClass: string }> = {
 };
 
 type ThemeKey = "pet_allowed" | "barrier_free" | "wellness";
-const THEME_KEYS: ThemeKey[] = ["pet_allowed", "barrier_free", "wellness"];
+// 2026-09-22 대표 지시: 웰니스 데이터가 0건이라 항상 "정보없음"만 보여 칩에서 뺀다(타입·라벨은 유지).
+const THEME_KEYS: ThemeKey[] = ["pet_allowed", "barrier_free"];
 const THEME_LABEL_ON: Record<ThemeKey, string> = {
   pet_allowed: "반려동물 동반 가능",
   barrier_free: "무장애 접근 가능",
