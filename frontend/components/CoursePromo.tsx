@@ -182,10 +182,6 @@ export default function CoursePromo({ regionCode }: CoursePromoProps) {
           <br />
           오늘의 코스, AI가 짜드려요
         </h2>
-        <p className="course-promo__sub">
-          동행자와 분위기만 알려주면 핫플 대신 한적한 숨은 루트를 1:1로 비교해드려요. 혼잡도까지
-          반영한 나만의 코스를 지금 받아보세요.
-        </p>
         {/* §35(2026-07-31, 백로그 D21) — 이 배너가 이미 받고 있던 regionCode(사진 조회용)를
             CTA 링크에도 그대로 붙여, 홈에서 고른 지역이 /course로 이어지게 한다. 미선택이면
             withRegionCode가 href를 그대로 돌려줘 기존 동작과 동일하다. */}
