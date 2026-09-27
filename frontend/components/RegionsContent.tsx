@@ -307,10 +307,6 @@ export default function RegionsContent() {
       <section className="section regions-hero">
         <span className="eyebrow-pill eyebrow-pill--coral">전국 지역 허브</span>
         <h1 className="section__title">지역을 골라 숨은길을 둘러보세요</h1>
-        <p className="regions-hero__sub">
-          전국 17개 시도를 골라보세요. 사람이 몰리는 곳뿐 아니라, AI가 예상 혼잡도를 살펴 찾아낸
-          한적한 곳까지 함께 보여드려요.
-        </p>
 
         <SidoStrip selected={selectedSidoCode} onSelect={handleSelectSido} />
 

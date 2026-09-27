@@ -209,9 +209,6 @@ export default function OnboardingContent() {
           <br />
           취향을 살짝 알려주세요
         </h1>
-        <p className="onboard-hero__sub">
-          동행, 이동 방법, 좋아하는 분위기까지 — AI가 자유 서술과 키워드를 함께 읽고 정리해드려요.
-        </p>
       </section>
 
       {!loggedIn ? (
