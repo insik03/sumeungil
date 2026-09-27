@@ -118,10 +118,6 @@ export default function DeparturePlanner({ headingLevel = "h2" }: DeparturePlann
       <Heading className="section__title" id="plannerHeading">
         언제 떠나세요?
       </Heading>
-      <p className="planner__lead">
-        지역과 앞으로 한 달 안의 날짜를 고르면 그날 예상 혼잡도를 보여드려요. 날짜가 앞으로
-        사흘 안이면 날씨 예보도 함께 확인할 수 있어요.
-      </p>
 
       <form className="planner-form" onSubmit={handleSubmit}>
         <div className="planner-form__region">

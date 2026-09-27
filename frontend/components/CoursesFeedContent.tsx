@@ -187,7 +187,6 @@ export default function CoursesFeedContent() {
       <h1 className="section__title" id="coursesFeedHeading">
         다른 사람이 공유한 코스
       </h1>
-      <p className="tips-intro">다른 여행자가 만들어 공유한 코스를 구경해보세요.</p>
 
       <div className="course-mode-switch shared-course-sort" role="tablist" aria-label="정렬">
         <button

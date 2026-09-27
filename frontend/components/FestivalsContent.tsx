@@ -211,7 +211,6 @@ export default function FestivalsContent() {
           <span className="festivals-page__count">전체 {data.total}건</span>
         )}
       </div>
-      <p className="tips-intro">지역과 시기를 골라 전국의 축제 소식을 확인해보세요.</p>
 
       <div className="festivals-filter-bar">
         <FestivalRegionFilter selected={selectedRegion} onSelect={setSelectedRegion} />

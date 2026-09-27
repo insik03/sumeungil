@@ -84,9 +84,6 @@ export default function ThemesContent() {
       <h1 className="section__title" id="themesHeading">
         테마별 여행
       </h1>
-      <p className="tips-intro">
-        분위기와 목적으로 골라보는 여행지 모음이에요. 지역을 골라 그 지역만 모아볼 수도 있어요.
-      </p>
       <div className="board-header-row">
         <RegionDropdown
           options={REGION_OPTIONS}
