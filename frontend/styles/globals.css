@@ -3,10 +3,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap");
 @import "./tokens.css";
 @import "./home-refinements.css";
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../tailwind.config.js";
+@import "tailwindcss";
+@import "tw-animate-css";
 
 /* =========================================================================
    Base reset (variant-B 이식)

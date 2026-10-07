@@ -17,9 +17,9 @@ name: 의존성 취약점 감사 (npm audit / pip-audit)
 #   GitHub Actions 기본 셸(`bash -e`)이 그 실패를 그대로 잡 실패로 전파한다(추가 조치 불필요,
 #   `VAR=$(exit 1)` 이 실제로 -e 를 트리거하는 것을 로컬에서 실측 확인함). 스크립트가 죽는
 #   것과 "취약점 0건"을 절대 같은 결과로 보이게 하지 않는 게 이번 수정의 핵심이다.
-# - "알려진 채로 보류 중인" 건수(예: next@16 로만 고쳐지는 postcss/sharp)까지 매주 알리면
-#   알림 피로로 3주 안에 아무도 안 본다 — BASELINE 아래는 조용히 넘어가고 그 위로
-#   올라갈 때만(신규 발견) 알린다. next@16 업그레이드가 끝나면 이 숫자를 낮출 것.
+# - 기준선은 운영 의존성 감사가 0건인 현재 상태를 뜻한다. 새 High/Critical 취약점은
+#   한 건부터 Slack으로 알린다. 개발 전용 lint 체인의 알려진 경고는 운영 감사 범위에서
+#   제외한다(`--omit=dev`).
 
 on:
   schedule:
@@ -35,9 +35,9 @@ permissions:
   contents: read
 
 env:
-  # 2026-08-22 기준 알려진 미해결 건수(postcss 4건+sharp 1건, next@16 필요 — 이월 확정).
-  # next.js 메이저 업그레이드로 해소되면 0으로 낮출 것.
-  NPM_HIGH_BASELINE: 3
+  # 2026-10-08 Tailwind 4·Next/Sharp 패치로 기존 이월 건을 해소했다.
+  # 새 High/Critical 취약점은 한 건부터 즉시 알린다.
+  NPM_HIGH_BASELINE: 0
   PIP_VULNS_BASELINE: 0
 
 jobs:
