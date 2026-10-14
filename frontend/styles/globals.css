@@ -5649,6 +5649,13 @@ input:focus-visible,
   margin-bottom: var(--sp-2);
 }
 
+/* 상세 사진은 기존 컨테이너의 75% 폭으로 표시하고 원래 비율을 유지한다. */
+.spot-detail__photo > .photo-carousel,
+.festival-detail__photo > .photo-carousel {
+  width: 75%;
+  margin-inline: auto;
+}
+
 /* =========================================================================
    §36(신규) — 축제 상세 페이지(`/festival/[id]`, FestivalDetailContent.tsx). .spot-detail의
    1열 세로 섹션 스택 레이아웃을 그대로 승계한다(신규 레이아웃 발명 금지).
