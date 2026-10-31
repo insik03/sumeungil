@@ -9,7 +9,7 @@
 #   의존성(fastapi/uvicorn[standard]/httpx/pydantic)은 전부 aarch64 manylinux 휠이 있어
 #   컴파일러가 필요 없다. 혹시 휠이 없는 버전으로 올려 빌드가 깨지면 DEPLOY.md 트러블슈팅 참고.
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # .pyc 쓰지 않기 / stdout 즉시 flush(도커 로그가 밀리지 않게)
 ENV PYTHONDONTWRITEBYTECODE=1 \
